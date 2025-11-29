@@ -13,7 +13,7 @@ sqlparser = "0.59"
 
 # CLI
 clap = { version = "4.5", features = ["derive"] }
-colored = "2.1"
+colored = "3.0"
 
 # Error handling
 anyhow = "1.0"
