@@ -1,6 +1,4 @@
-# diesel-guard
-
-Catch unsafe PostgreSQL migrations in Diesel before they take down production.
+# Catch unsafe PostgreSQL migrations in Diesel before they take down production
 
 ## The Problem
 
@@ -15,7 +13,7 @@ Rails has 3 popular gems solving this (6.5k+ stars combined), but **Diesel has n
 ## Installation
 
 ```bash
-cargo install diesel-guard
+cargo install diesel_guard
 ```
 
 Or add to your project:

@@ -172,7 +172,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "diesel-guard"
+name = "diesel_derives"
+version = "2.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8587cbca3c929fb198e7950d761d31ca72b80aa6e07c1b7bec5879d187720436"
+dependencies = [
+ "diesel_table_macro_syntax",
+ "dsl_auto_type",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "diesel_guard"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -186,19 +199,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml 0.8.23",
-]
-
-[[package]]
-name = "diesel_derives"
-version = "2.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8587cbca3c929fb198e7950d761d31ca72b80aa6e07c1b7bec5879d187720436"
-dependencies = [
- "diesel_table_macro_syntax",
- "dsl_auto_type",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]

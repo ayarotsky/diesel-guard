@@ -1,5 +1,5 @@
 [package]
-name = "diesel-guard"
+name = "diesel_guard"
 version = "0.1.0"
 edition = "2021"
 authors = ["Alex Yarotsky <https://github.com/ayarotsky>"]
@@ -35,4 +35,4 @@ tempfile = "3.8"
 
 [features]
 default = []
-diesel-integration = ["diesel", "diesel_migrations"]
+diesel_integration = ["diesel", "diesel_migrations"]
