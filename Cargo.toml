@@ -9,7 +9,7 @@ repository = "https://github.com/ayarotsky/diesel-guard"
 
 [dependencies]
 # SQL parsing
-sqlparser = "0.53"
+sqlparser = "0.59"
 
 # CLI
 clap = { version = "4.5", features = ["derive"] }
