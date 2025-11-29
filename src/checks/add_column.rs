@@ -14,21 +14,16 @@ impl Check for AddColumnCheck {
         let mut violations = vec![];
 
         if let Statement::AlterTable {
-            name,
-            operations,
-            ..
+            name, operations, ..
         } = stmt
         {
             for op in operations {
-                if let AlterTableOperation::AddColumn {
-                    column_def,
-                    ..
-                } = op
-                {
+                if let AlterTableOperation::AddColumn { column_def, .. } = op {
                     // Check if column has a DEFAULT value
-                    let has_default = column_def.options.iter().any(|opt| {
-                        matches!(opt.option, ColumnOption::Default(_))
-                    });
+                    let has_default = column_def
+                        .options
+                        .iter()
+                        .any(|opt| matches!(opt.option, ColumnOption::Default(_)));
 
                     if has_default {
                         let column_name = &column_def.name;

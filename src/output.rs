@@ -21,7 +21,11 @@ impl OutputFormatter {
                 Severity::Warning => "⚠️",
             };
 
-            output.push_str(&format!("{} {}\n\n", severity_icon, violation.operation.red().bold()));
+            output.push_str(&format!(
+                "{} {}\n\n",
+                severity_icon,
+                violation.operation.red().bold()
+            ));
 
             output.push_str(&format!("{}\n", "Problem:".white().bold()));
             output.push_str(&format!("  {}\n\n", violation.problem));
