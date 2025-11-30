@@ -55,7 +55,7 @@ This is the Phase 1 MVP with core infrastructure:
 - ✅ SQL parser integration (sqlparser)
 - ✅ Error types and formatting
 - ✅ Basic CLI structure
-- ✅ Two checks working end-to-end: **ADD COLUMN with DEFAULT** and **DROP COLUMN**
+- ✅ Three checks working end-to-end: **ADD COLUMN with DEFAULT**, **DROP COLUMN**, and **ADD INDEX without CONCURRENTLY**
 
 ### Example Output
 
@@ -125,19 +125,77 @@ UPDATE users SET email = NULL;
 ALTER TABLE users DROP COLUMN email;
 ```
 
+### 3. ADD INDEX without CONCURRENTLY
+
+**Unsafe:**
+```sql
+CREATE INDEX idx_users_email ON users(email);
+CREATE UNIQUE INDEX idx_users_username ON users(username);
+```
+
+**Safe:**
+```sql
+-- Use CONCURRENTLY to avoid locking the table
+CREATE INDEX CONCURRENTLY idx_users_email ON users(email);
+CREATE UNIQUE INDEX CONCURRENTLY idx_users_username ON users(username);
+```
+
+**Important:** Because CONCURRENTLY cannot be run inside a transaction block, you need to add a `metadata.toml` file to your migration directory:
+
+```toml
+# migrations/2024_01_01_add_user_index/metadata.toml
+run_in_transaction = false
+```
+
+Without this configuration, Diesel will try to run the migration in a transaction and it will fail.
+
 ## Coming Soon (Phase 2)
 
-- ADD INDEX without CONCURRENTLY
 - ALTER COLUMN TYPE
 - ADD NOT NULL constraint
 
 ## Development
 
-### Run tests
+### Testing
+
+The project has comprehensive test coverage with both unit and integration tests.
+
+#### Run All Tests
 
 ```bash
 cargo test
 ```
+
+This runs:
+- **Unit tests** - Individual check modules, parser, and safety checker
+- **Integration tests** - Fixture files are automatically verified
+
+#### Run Specific Test Suites
+
+```bash
+# Run only unit tests (in src/)
+cargo test --lib
+
+# Run only integration tests (fixtures)
+cargo test --test fixtures_test
+
+# Run tests for a specific check
+cargo test add_column
+cargo test add_index
+cargo test drop_column
+```
+
+#### Test Structure
+
+**Unit Tests** (`src/checks/*.rs`):
+- Each check module has its own test suite
+- Uses shared test utilities from `src/checks/test_utils.rs`
+- Tests individual SQL statement parsing and violation detection
+
+**Integration Tests** (`tests/fixtures_test.rs`):
+- Automatically verifies all fixture files behave correctly
+- Tests both safe and unsafe migrations
+- Validates directory-level scanning
 
 ### Build
 
@@ -145,18 +203,14 @@ cargo test
 cargo build --release
 ```
 
-### Test on fixtures
+### Code Quality
 
 ```bash
-# Test all fixtures at once
-cargo run -- check tests/fixtures/
+# Format code
+cargo fmt
 
-# Test specific scenarios
-cargo run -- check tests/fixtures/add_column_safe/up.sql              # Should pass ✅
-cargo run -- check tests/fixtures/add_column_with_default/up.sql      # Should fail ❌
-cargo run -- check tests/fixtures/drop_column/up.sql                  # Should fail ❌
-cargo run -- check tests/fixtures/drop_column_if_exists/up.sql        # Should fail ❌
-cargo run -- check tests/fixtures/drop_multiple_columns/up.sql        # Should fail ❌
+# Run linter
+cargo clippy --all-targets --all-features -- -D warnings
 ```
 
 ## License
