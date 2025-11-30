@@ -1,0 +1,3 @@
+# Required for CREATE INDEX CONCURRENTLY
+# CONCURRENTLY cannot be run inside a transaction block
+run_in_transaction = false

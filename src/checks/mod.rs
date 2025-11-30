@@ -1,7 +1,12 @@
 mod add_column;
+mod add_index;
 mod drop_column;
 
+#[cfg(test)]
+mod test_utils;
+
 pub use add_column::AddColumnCheck;
+pub use add_index::AddIndexCheck;
 pub use drop_column::DropColumnCheck;
 
 use crate::error::Result;
@@ -25,7 +30,11 @@ pub struct CheckRegistry {
 impl CheckRegistry {
     pub fn new() -> Self {
         Self {
-            checks: vec![Box::new(AddColumnCheck), Box::new(DropColumnCheck)],
+            checks: vec![
+                Box::new(AddColumnCheck),
+                Box::new(AddIndexCheck),
+                Box::new(DropColumnCheck),
+            ],
         }
     }
 
@@ -59,6 +68,6 @@ mod tests {
     #[test]
     fn test_registry_creation() {
         let registry = CheckRegistry::new();
-        assert_eq!(registry.checks.len(), 2);
+        assert_eq!(registry.checks.len(), 3);
     }
 }

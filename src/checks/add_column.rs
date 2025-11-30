@@ -1,3 +1,12 @@
+//! Detection for ADD COLUMN with DEFAULT operations.
+//!
+//! This check identifies `ALTER TABLE` statements that add columns with DEFAULT
+//! values, which can cause table locks and performance issues on PostgreSQL < 11.
+//!
+//! On PostgreSQL versions before 11, adding a column with a DEFAULT value requires
+//! a full table rewrite to backfill the default value for existing rows. This locks
+//! the table for both reads and writes, which can take hours on large tables.
+
 use crate::checks::Check;
 use crate::error::Result;
 use crate::violation::Violation;
@@ -66,17 +75,7 @@ impl Check for AddColumnCheck {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlparser::dialect::PostgreSqlDialect;
-    use sqlparser::parser::Parser;
-
-    fn parse_sql(sql: &str) -> Statement {
-        let dialect = PostgreSqlDialect {};
-        Parser::parse_sql(&dialect, sql)
-            .expect("Failed to parse SQL")
-            .into_iter()
-            .next()
-            .expect("No statements found")
-    }
+    use crate::checks::test_utils::parse_sql;
 
     #[test]
     fn test_detects_add_column_with_default() {

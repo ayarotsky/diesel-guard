@@ -1,3 +1,16 @@
+//! Detection for DROP COLUMN operations.
+//!
+//! This check identifies `ALTER TABLE` statements that drop columns, which requires
+//! an exclusive lock and rewrites the entire table on PostgreSQL.
+//!
+//! Dropping a column acquires an ACCESS EXCLUSIVE lock and triggers a full table rewrite
+//! to remove the column data. This blocks all reads and writes for the duration of the
+//! operation, which can take hours on large tables.
+//!
+//! Unlike index creation, PostgreSQL does not support a CONCURRENTLY option for dropping
+//! columns. The recommended approach is to stage the removal: mark the column as unused
+//! in application code, deploy without references, and drop in a later migration.
+
 use crate::checks::Check;
 use crate::error::Result;
 use crate::violation::Violation;
@@ -68,17 +81,7 @@ impl Check for DropColumnCheck {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlparser::dialect::PostgreSqlDialect;
-    use sqlparser::parser::Parser;
-
-    fn parse_sql(sql: &str) -> Statement {
-        let dialect = PostgreSqlDialect {};
-        Parser::parse_sql(&dialect, sql)
-            .expect("Failed to parse SQL")
-            .into_iter()
-            .next()
-            .expect("No statements found")
-    }
+    use crate::checks::test_utils::parse_sql;
 
     #[test]
     fn test_detects_drop_column() {
