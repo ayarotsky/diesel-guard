@@ -55,7 +55,7 @@ This is the Phase 1 MVP with core infrastructure:
 - ✅ SQL parser integration (sqlparser)
 - ✅ Error types and formatting
 - ✅ Basic CLI structure
-- ✅ One check working end-to-end: **ADD COLUMN with DEFAULT**
+- ✅ Two checks working end-to-end: **ADD COLUMN with DEFAULT** and **DROP COLUMN**
 
 ### Example Output
 
@@ -104,9 +104,29 @@ UPDATE users SET admin = FALSE WHERE admin IS NULL;
 ALTER TABLE users ALTER COLUMN admin SET DEFAULT FALSE;
 ```
 
+### 2. DROP COLUMN
+
+**Unsafe:**
+```sql
+ALTER TABLE users DROP COLUMN email;
+```
+
+**Safe:**
+```sql
+-- Step 1: Mark column as unused in application code
+
+-- Step 2: Deploy application without column references
+
+-- Step 3: (Optional) Set column to NULL to reclaim space
+ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+UPDATE users SET email = NULL;
+
+-- Step 4: Drop in later migration after confirming unused
+ALTER TABLE users DROP COLUMN email;
+```
+
 ## Coming Soon (Phase 2)
 
-- DROP COLUMN detection
 - ADD INDEX without CONCURRENTLY
 - ALTER COLUMN TYPE
 - ADD NOT NULL constraint
@@ -128,11 +148,15 @@ cargo build --release
 ### Test on fixtures
 
 ```bash
-# Safe migration (should pass)
-cargo run -- check tests/fixtures/safe/up.sql
+# Test all fixtures at once
+cargo run -- check tests/fixtures/
 
-# Unsafe migration (should fail)
-cargo run -- check tests/fixtures/unsafe/up.sql
+# Test specific scenarios
+cargo run -- check tests/fixtures/add_column_safe/up.sql              # Should pass ✅
+cargo run -- check tests/fixtures/add_column_with_default/up.sql      # Should fail ❌
+cargo run -- check tests/fixtures/drop_column/up.sql                  # Should fail ❌
+cargo run -- check tests/fixtures/drop_column_if_exists/up.sql        # Should fail ❌
+cargo run -- check tests/fixtures/drop_multiple_columns/up.sql        # Should fail ❌
 ```
 
 ## License

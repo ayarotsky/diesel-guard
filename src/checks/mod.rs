@@ -1,6 +1,8 @@
 mod add_column;
+mod drop_column;
 
 pub use add_column::AddColumnCheck;
+pub use drop_column::DropColumnCheck;
 
 use crate::error::Result;
 use crate::violation::Violation;
@@ -23,7 +25,7 @@ pub struct CheckRegistry {
 impl CheckRegistry {
     pub fn new() -> Self {
         Self {
-            checks: vec![Box::new(AddColumnCheck)],
+            checks: vec![Box::new(AddColumnCheck), Box::new(DropColumnCheck)],
         }
     }
 
@@ -57,6 +59,6 @@ mod tests {
     #[test]
     fn test_registry_creation() {
         let registry = CheckRegistry::new();
-        assert_eq!(registry.checks.len(), 1);
+        assert_eq!(registry.checks.len(), 2);
     }
 }
