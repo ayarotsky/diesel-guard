@@ -198,64 +198,55 @@ ALTER TABLE users DROP CONSTRAINT email_not_null;
 
 **Note:** The VALIDATE step uses SHARE UPDATE EXCLUSIVE lock, which allows concurrent reads and writes but blocks other schema changes. This is much safer than the direct SET NOT NULL approach which requires a full table scan with ACCESS EXCLUSIVE lock.
 
-## Development
+## Coming Soon
 
-### Testing
+### Constraint & Lock-Related Checks
 
-The project has comprehensive test coverage with both unit and integration tests.
+- **ADD FOREIGN KEY constraint** - Blocks writes on both tables during validation. Requires multi-step approach with NOT VALID and separate VALIDATE CONSTRAINT.
 
-#### Run All Tests
+- **ADD UNIQUE constraint** - Blocks reads and writes while building the underlying unique index. Should use CREATE UNIQUE INDEX CONCURRENTLY instead.
 
-```bash
-cargo test
-```
+- **ADD CHECK constraint** - Blocks reads and writes while validating all existing rows against the constraint. Use NOT VALID then VALIDATE separately.
 
-This runs:
-- **Unit tests** - Individual check modules, parser, and safety checker
-- **Integration tests** - Fixture files are automatically verified
+- **DROP INDEX without CONCURRENTLY** - Acquires ACCESS EXCLUSIVE lock, blocking all queries on the table. Should use DROP INDEX CONCURRENTLY.
 
-#### Run Specific Test Suites
+- **REINDEX without CONCURRENTLY** - Acquires ACCESS EXCLUSIVE lock, blocking all reads and writes during index rebuild. Use REINDEX CONCURRENTLY (PostgreSQL 12+).
 
-```bash
-# Run only unit tests (in src/)
-cargo test --lib
+- **ADD EXCLUSION constraint** - Blocks reads and writes during validation of exclusion rules across all existing rows.
 
-# Run only integration tests (fixtures)
-cargo test --test fixtures_test
+- **ADD REFERENCE** - Combines non-concurrent index creation with foreign key validation, blocking operations on both tables.
 
-# Run tests for a specific check
-cargo test add_column
-cargo test add_index
-cargo test drop_column
-```
+### Schema & Data Migration Checks
 
-#### Test Structure
+- **RENAME COLUMN** - Causes errors in running application instances that cache column names. Requires multi-step migration with dual-writing.
 
-**Unit Tests** (`src/checks/*.rs`):
-- Each check module has its own test suite
-- Uses shared test utilities from `src/checks/test_utils.rs`
-- Tests individual SQL statement parsing and violation detection
+- **RENAME TABLE** - Causes errors in running application instances that reference the old table name. Use database views as intermediary.
 
-**Integration Tests** (`tests/fixtures_test.rs`):
-- Automatically verifies all fixture files behave correctly
-- Tests both safe and unsafe migrations
-- Validates directory-level scanning
+- **Adding stored GENERATED column** - Triggers full table rewrite with ACCESS EXCLUSIVE lock, blocking all reads and writes.
 
-### Build
+- **Adding JSON/JSONB column** - JSON columns lack equality operator in older PostgreSQL versions, breaking SELECT DISTINCT and other queries.
 
-```bash
-cargo build --release
-```
+### Data Safety & Best Practices
 
-### Code Quality
+- **Backfilling data in migrations** - Large UPDATE statements in migrations keep tables locked and can cause performance issues. Backfill outside migrations in batches.
 
-```bash
-# Format code
-cargo fmt
+- **Adding auto-increment column to existing table** - Adding SERIAL or auto-increment columns to existing tables triggers a full table rewrite.
 
-# Run linter
-cargo clippy --all-targets --all-features -- -D warnings
-```
+- **Primary key with short integer type** - Using SMALLINT or INT for primary keys creates risk of ID exhaustion on high-traffic tables. Use BIGINT instead.
+
+- **Indexes with more than 3 columns** - Wide indexes rarely improve performance and waste storage. Consider partial indexes or restructuring queries.
+
+- **Adding multiple foreign keys in one migration** - Multiple foreign keys in a single migration can block all involved tables simultaneously, multiplying lock contention.
+
+- **CREATE EXTENSION in migrations** - Installing extensions can have unexpected side effects and typically requires superuser privileges. Install extensions separately outside migrations.
+
+- **Unnamed constraints** - PostgreSQL generates random names for unnamed constraints, making future migrations difficult to write and maintain. Always explicitly name constraints.
+
+## Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing guide, and how to add new checks.
+
+For AI assistants working on this project, see [AGENTS.md](AGENTS.md) for detailed implementation patterns.
 
 ## License
 
