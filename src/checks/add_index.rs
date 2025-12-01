@@ -1,11 +1,11 @@
 //! Detection for CREATE INDEX without CONCURRENTLY.
 //!
 //! This check identifies `CREATE INDEX` statements that don't use the CONCURRENTLY
-//! option, which can cause table locks and downtime on production databases.
+//! option, which blocks write operations during the index build.
 //!
 //! Creating an index without CONCURRENTLY acquires a SHARE lock on the table, which
-//! blocks all write operations (INSERT, UPDATE, DELETE) for the duration of the index
-//! build. On large tables, this can take hours and cause significant downtime.
+//! blocks write operations (INSERT, UPDATE, DELETE) for the duration of the index
+//! build. Reads (SELECT) are still allowed. The duration depends on table size.
 //!
 //! Using CONCURRENTLY allows the index to be built while permitting concurrent writes,
 //! though it takes longer and cannot be run inside a transaction block.
@@ -40,8 +40,8 @@ impl Check for AddIndexCheck {
                 violations.push(Violation::new(
                     "ADD INDEX without CONCURRENTLY",
                     format!(
-                        "Creating {}index '{}' on table '{}' without CONCURRENTLY locks the table for writes. \
-                        This can cause downtime on production databases with active traffic.",
+                        "Creating {}index '{}' on table '{}' without CONCURRENTLY acquires a SHARE lock, blocking writes \
+                        (INSERT, UPDATE, DELETE) for the duration of the index build. Reads are still allowed.",
                         unique_str, index_name, table_name
                     ),
                     format!(
@@ -70,15 +70,15 @@ impl Check for AddIndexCheck {
 mod tests {
     use super::*;
     use crate::checks::test_utils::parse_sql;
+    use crate::{assert_allows, assert_detects_violation};
 
     #[test]
     fn test_detects_create_index_without_concurrently() {
-        let check = AddIndexCheck;
-        let stmt = parse_sql("CREATE INDEX idx_users_email ON users(email);");
-
-        let violations = check.check(&stmt).unwrap();
-        assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].operation, "ADD INDEX without CONCURRENTLY");
+        assert_detects_violation!(
+            AddIndexCheck,
+            "CREATE INDEX idx_users_email ON users(email);",
+            "ADD INDEX without CONCURRENTLY"
+        );
     }
 
     #[test]
@@ -94,28 +94,22 @@ mod tests {
 
     #[test]
     fn test_allows_create_index_with_concurrently() {
-        let check = AddIndexCheck;
-        let stmt = parse_sql("CREATE INDEX CONCURRENTLY idx_users_email ON users(email);");
-
-        let violations = check.check(&stmt).unwrap();
-        assert_eq!(violations.len(), 0);
+        assert_allows!(
+            AddIndexCheck,
+            "CREATE INDEX CONCURRENTLY idx_users_email ON users(email);"
+        );
     }
 
     #[test]
     fn test_allows_create_unique_index_with_concurrently() {
-        let check = AddIndexCheck;
-        let stmt = parse_sql("CREATE UNIQUE INDEX CONCURRENTLY idx_users_email ON users(email);");
-
-        let violations = check.check(&stmt).unwrap();
-        assert_eq!(violations.len(), 0);
+        assert_allows!(
+            AddIndexCheck,
+            "CREATE UNIQUE INDEX CONCURRENTLY idx_users_email ON users(email);"
+        );
     }
 
     #[test]
     fn test_ignores_other_statements() {
-        let check = AddIndexCheck;
-        let stmt = parse_sql("CREATE TABLE users (id SERIAL PRIMARY KEY);");
-
-        let violations = check.check(&stmt).unwrap();
-        assert_eq!(violations.len(), 0);
+        assert_allows!(AddIndexCheck, "CREATE TABLE users (id SERIAL PRIMARY KEY);");
     }
 }

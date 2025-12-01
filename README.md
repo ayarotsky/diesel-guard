@@ -55,7 +55,6 @@ This is the Phase 1 MVP with core infrastructure:
 - ✅ SQL parser integration (sqlparser)
 - ✅ Error types and formatting
 - ✅ Basic CLI structure
-- ✅ Three checks working end-to-end: **ADD COLUMN with DEFAULT**, **DROP COLUMN**, and **ADD INDEX without CONCURRENTLY**
 
 ### Example Output
 
@@ -149,9 +148,40 @@ run_in_transaction = false
 
 Without this configuration, Diesel will try to run the migration in a transaction and it will fail.
 
+### 4. ALTER COLUMN TYPE
+
+**Unsafe:**
+```sql
+ALTER TABLE users ALTER COLUMN age TYPE BIGINT;
+ALTER TABLE users ALTER COLUMN data TYPE JSONB USING data::JSONB;
+```
+
+**Safe:**
+```sql
+-- Multi-step approach:
+
+-- Step 1: Add new column with desired type
+ALTER TABLE users ADD COLUMN age_new BIGINT;
+
+-- Step 2: Backfill data in batches (outside migration)
+UPDATE users SET age_new = age::BIGINT;
+
+-- Step 3: Deploy application to use new column
+
+-- Step 4: Drop old column
+ALTER TABLE users DROP COLUMN age;
+
+-- Step 5: Rename new column
+ALTER TABLE users RENAME COLUMN age_new TO age;
+```
+
+**Note:** Some type changes are safe and don't require a table rewrite:
+- `VARCHAR(n)` to `VARCHAR(m)` where m > n (PostgreSQL 9.2+)
+- `VARCHAR` to `TEXT`
+- Numeric precision increases
+
 ## Coming Soon (Phase 2)
 
-- ALTER COLUMN TYPE
 - ADD NOT NULL constraint
 
 ## Development

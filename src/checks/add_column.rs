@@ -41,8 +41,8 @@ impl Check for AddColumnCheck {
                         violations.push(Violation::new(
                             "ADD COLUMN with DEFAULT",
                             format!(
-                                "Adding column '{}' with DEFAULT locks table '{}' while backfilling on PostgreSQL < 11. \
-                                This can take hours on large tables and block all reads/writes.",
+                                "Adding column '{}' with DEFAULT on table '{}' requires a full table rewrite on PostgreSQL < 11, \
+                                which acquires an ACCESS EXCLUSIVE lock. On large tables, this can take significant time and block all operations.",
                                 column_name, table_name
                             ),
                             format!(
@@ -75,33 +75,30 @@ impl Check for AddColumnCheck {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::checks::test_utils::parse_sql;
+    use crate::{assert_allows, assert_detects_violation};
 
     #[test]
     fn test_detects_add_column_with_default() {
-        let check = AddColumnCheck;
-        let stmt = parse_sql("ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;");
-
-        let violations = check.check(&stmt).unwrap();
-        assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].operation, "ADD COLUMN with DEFAULT");
+        assert_detects_violation!(
+            AddColumnCheck,
+            "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;",
+            "ADD COLUMN with DEFAULT"
+        );
     }
 
     #[test]
     fn test_allows_add_column_without_default() {
-        let check = AddColumnCheck;
-        let stmt = parse_sql("ALTER TABLE users ADD COLUMN admin BOOLEAN;");
-
-        let violations = check.check(&stmt).unwrap();
-        assert_eq!(violations.len(), 0);
+        assert_allows!(
+            AddColumnCheck,
+            "ALTER TABLE users ADD COLUMN admin BOOLEAN;"
+        );
     }
 
     #[test]
     fn test_ignores_other_statements() {
-        let check = AddColumnCheck;
-        let stmt = parse_sql("CREATE TABLE users (id SERIAL PRIMARY KEY);");
-
-        let violations = check.check(&stmt).unwrap();
-        assert_eq!(violations.len(), 0);
+        assert_allows!(
+            AddColumnCheck,
+            "CREATE TABLE users (id SERIAL PRIMARY KEY);"
+        );
     }
 }

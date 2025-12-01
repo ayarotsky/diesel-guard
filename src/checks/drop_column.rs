@@ -1,14 +1,14 @@
 //! Detection for DROP COLUMN operations.
 //!
 //! This check identifies `ALTER TABLE` statements that drop columns, which requires
-//! an exclusive lock and rewrites the entire table on PostgreSQL.
+//! an ACCESS EXCLUSIVE lock and typically rewrites the table.
 //!
-//! Dropping a column acquires an ACCESS EXCLUSIVE lock and triggers a full table rewrite
-//! to remove the column data. This blocks all reads and writes for the duration of the
-//! operation, which can take hours on large tables.
+//! Dropping a column acquires an ACCESS EXCLUSIVE lock, blocking all operations.
+//! On many PostgreSQL versions, this triggers a table rewrite to physically remove the
+//! column data, with duration depending on table size.
 //!
-//! Unlike index creation, PostgreSQL does not support a CONCURRENTLY option for dropping
-//! columns. The recommended approach is to stage the removal: mark the column as unused
+//! PostgreSQL does not support a CONCURRENTLY option for dropping columns.
+//! The recommended approach is to stage the removal: mark the column as unused
 //! in application code, deploy without references, and drop in a later migration.
 
 use crate::checks::Check;
@@ -46,8 +46,8 @@ impl Check for DropColumnCheck {
                         violations.push(Violation::new(
                             "DROP COLUMN",
                             format!(
-                                "Dropping column '{}' from table '{}' requires an exclusive lock and rewrites the table. \
-                                This can take hours on large tables and blocks all reads/writes during the operation.",
+                                "Dropping column '{}' from table '{}' requires an ACCESS EXCLUSIVE lock, blocking all operations. \
+                                This typically triggers a table rewrite with duration depending on table size.",
                                 column_name_str, table_name
                             ),
                             format!(
@@ -81,43 +81,39 @@ impl Check for DropColumnCheck {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::checks::test_utils::parse_sql;
+    use crate::{assert_allows, assert_detects_violation};
 
     #[test]
     fn test_detects_drop_column() {
-        let check = DropColumnCheck;
-        let stmt = parse_sql("ALTER TABLE users DROP COLUMN email;");
-
-        let violations = check.check(&stmt).unwrap();
-        assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].operation, "DROP COLUMN");
+        assert_detects_violation!(
+            DropColumnCheck,
+            "ALTER TABLE users DROP COLUMN email;",
+            "DROP COLUMN"
+        );
     }
 
     #[test]
     fn test_detects_drop_column_if_exists() {
-        let check = DropColumnCheck;
-        let stmt = parse_sql("ALTER TABLE users DROP COLUMN IF EXISTS email;");
-
-        let violations = check.check(&stmt).unwrap();
-        assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].operation, "DROP COLUMN");
+        assert_detects_violation!(
+            DropColumnCheck,
+            "ALTER TABLE users DROP COLUMN IF EXISTS email;",
+            "DROP COLUMN"
+        );
     }
 
     #[test]
     fn test_ignores_other_operations() {
-        let check = DropColumnCheck;
-        let stmt = parse_sql("ALTER TABLE users ADD COLUMN email VARCHAR(255);");
-
-        let violations = check.check(&stmt).unwrap();
-        assert_eq!(violations.len(), 0);
+        assert_allows!(
+            DropColumnCheck,
+            "ALTER TABLE users ADD COLUMN email VARCHAR(255);"
+        );
     }
 
     #[test]
     fn test_ignores_other_statements() {
-        let check = DropColumnCheck;
-        let stmt = parse_sql("CREATE TABLE users (id SERIAL PRIMARY KEY);");
-
-        let violations = check.check(&stmt).unwrap();
-        assert_eq!(violations.len(), 0);
+        assert_allows!(
+            DropColumnCheck,
+            "CREATE TABLE users (id SERIAL PRIMARY KEY);"
+        );
     }
 }
