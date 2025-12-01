@@ -48,14 +48,6 @@ diesel-guard check migrations/ --format json
 diesel-guard check migrations/ --allow-unsafe
 ```
 
-## Phase 1 Complete ✅
-
-This is the Phase 1 MVP with core infrastructure:
-
-- ✅ SQL parser integration (sqlparser)
-- ✅ Error types and formatting
-- ✅ Basic CLI structure
-
 ### Example Output
 
 ```
@@ -84,7 +76,7 @@ Safe alternative:
 
 ## Currently Supported Checks
 
-### 1. ADD COLUMN with DEFAULT
+### ADD COLUMN with DEFAULT
 
 **Unsafe:**
 ```sql
@@ -103,7 +95,7 @@ UPDATE users SET admin = FALSE WHERE admin IS NULL;
 ALTER TABLE users ALTER COLUMN admin SET DEFAULT FALSE;
 ```
 
-### 2. DROP COLUMN
+### DROP COLUMN
 
 **Unsafe:**
 ```sql
@@ -124,7 +116,7 @@ UPDATE users SET email = NULL;
 ALTER TABLE users DROP COLUMN email;
 ```
 
-### 3. ADD INDEX without CONCURRENTLY
+### ADD INDEX without CONCURRENTLY
 
 **Unsafe:**
 ```sql
@@ -148,7 +140,7 @@ run_in_transaction = false
 
 Without this configuration, Diesel will try to run the migration in a transaction and it will fail.
 
-### 4. ALTER COLUMN TYPE
+### ALTER COLUMN TYPE
 
 **Unsafe:**
 ```sql
@@ -180,9 +172,31 @@ ALTER TABLE users RENAME COLUMN age_new TO age;
 - `VARCHAR` to `TEXT`
 - Numeric precision increases
 
-## Coming Soon (Phase 2)
+### ADD NOT NULL constraint
 
-- ADD NOT NULL constraint
+**Unsafe:**
+```sql
+ALTER TABLE users ALTER COLUMN email SET NOT NULL;
+```
+
+**Safe:**
+```sql
+-- Multi-step approach for large tables:
+
+-- Step 1: Add CHECK constraint without validating existing rows
+ALTER TABLE users ADD CONSTRAINT email_not_null CHECK (email IS NOT NULL) NOT VALID;
+
+-- Step 2: Validate constraint separately (allows concurrent operations)
+ALTER TABLE users VALIDATE CONSTRAINT email_not_null;
+
+-- Step 3: Add NOT NULL constraint (instant if CHECK exists)
+ALTER TABLE users ALTER COLUMN email SET NOT NULL;
+
+-- Step 4: Optionally drop redundant CHECK constraint
+ALTER TABLE users DROP CONSTRAINT email_not_null;
+```
+
+**Note:** The VALIDATE step uses SHARE UPDATE EXCLUSIVE lock, which allows concurrent reads and writes but blocks other schema changes. This is much safer than the direct SET NOT NULL approach which requires a full table scan with ACCESS EXCLUSIVE lock.
 
 ## Development
 

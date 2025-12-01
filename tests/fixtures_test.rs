@@ -15,7 +15,11 @@ fn fixture_path(name: &str) -> String {
 #[test]
 fn test_safe_fixtures_pass() {
     let checker = SafetyChecker::new();
-    let safe_fixtures = vec!["add_column_safe", "add_index_with_concurrently"];
+    let safe_fixtures = vec![
+        "add_column_safe",
+        "add_index_with_concurrently",
+        "drop_not_null",
+    ];
 
     for fixture in safe_fixtures {
         let path = fixture_path(fixture);
@@ -42,6 +46,17 @@ fn test_add_column_with_default_detected() {
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
     assert_eq!(violations[0].operation, "ADD COLUMN with DEFAULT");
+}
+
+#[test]
+fn test_add_not_null_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("add_not_null");
+
+    let violations = checker.check_file(Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(violations[0].operation, "ADD NOT NULL constraint");
 }
 
 #[test]
@@ -141,27 +156,27 @@ fn test_check_entire_fixtures_directory() {
         .check_directory(Path::new("tests/fixtures"))
         .unwrap();
 
-    // We have 10 fixtures total:
-    // - 2 safe: add_column_safe, add_index_with_concurrently
-    // - 8 unsafe: add_column_with_default, add_index_without_concurrently,
+    // We have 11 fixtures total:
+    // - 3 safe: add_column_safe, add_index_with_concurrently, drop_not_null
+    // - 9 unsafe: add_column_with_default, add_not_null, add_index_without_concurrently,
     //             add_unique_index_without_concurrently, alter_column_type,
     //             alter_column_type_with_using, drop_column,
     //             drop_column_if_exists, drop_multiple_columns
     //
-    // Total violations: 9 (7 files with 1 violation + drop_multiple_columns with 2)
+    // Total violations: 10 (8 files with 1 violation + drop_multiple_columns with 2)
 
     let total_violations: usize = results.iter().map(|(_, v)| v.len()).sum();
 
     assert_eq!(
         results.len(),
-        8,
-        "Expected violations in 8 files, got {}",
+        9,
+        "Expected violations in 9 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 9,
-        "Expected 9 total violations (drop_multiple_columns has 2), got {}",
+        total_violations, 10,
+        "Expected 10 total violations (drop_multiple_columns has 2), got {}",
         total_violations
     );
 }

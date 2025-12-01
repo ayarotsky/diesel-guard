@@ -1,5 +1,6 @@
 mod add_column;
 mod add_index;
+mod add_not_null;
 mod alter_column_type;
 mod drop_column;
 
@@ -8,6 +9,7 @@ mod test_utils;
 
 pub use add_column::AddColumnCheck;
 pub use add_index::AddIndexCheck;
+pub use add_not_null::AddNotNullCheck;
 pub use alter_column_type::AlterColumnTypeCheck;
 pub use drop_column::DropColumnCheck;
 
@@ -35,6 +37,7 @@ impl CheckRegistry {
             checks: vec![
                 Box::new(AddColumnCheck),
                 Box::new(AddIndexCheck),
+                Box::new(AddNotNullCheck),
                 Box::new(AlterColumnTypeCheck),
                 Box::new(DropColumnCheck),
             ],
@@ -71,6 +74,6 @@ mod tests {
     #[test]
     fn test_registry_creation() {
         let registry = CheckRegistry::new();
-        assert_eq!(registry.checks.len(), 4);
+        assert_eq!(registry.checks.len(), 5);
     }
 }
