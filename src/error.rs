@@ -10,6 +10,9 @@ pub enum DieselGuardError {
 
     #[error("Unsafe migration detected: {0}")]
     UnsafeMigration(String),
+
+    #[error("Configuration error: {0}")]
+    ConfigError(#[from] crate::config::ConfigError),
 }
 
 pub type Result<T> = std::result::Result<T, DieselGuardError>;

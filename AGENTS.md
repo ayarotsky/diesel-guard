@@ -418,6 +418,13 @@ cargo clippy --all-targets --all-features -- -D warnings
 
 # Build release binary
 cargo build --release
+
+# Initialize config file (for testing)
+cargo run -- init
+cargo run -- init --force  # overwrite existing
+
+# Check migrations
+cargo run -- check tests/fixtures/
 ```
 
 ## Additional Resources

@@ -1,8 +1,11 @@
 use clap::{Parser, Subcommand};
 use diesel_guard::output::OutputFormatter;
-use diesel_guard::SafetyChecker;
+use diesel_guard::{Config, SafetyChecker};
+use std::fs;
 use std::path::PathBuf;
 use std::process::exit;
+
+const CONFIG_TEMPLATE: &str = include_str!("../diesel-guard.toml.example");
 
 #[derive(Parser)]
 #[command(name = "diesel-guard")]
@@ -27,6 +30,13 @@ enum Commands {
         #[arg(long)]
         allow_unsafe: bool,
     },
+
+    /// Initialize diesel-guard configuration file
+    Init {
+        /// Overwrite existing config file if it exists
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 fn main() {
@@ -38,7 +48,17 @@ fn main() {
             format,
             allow_unsafe,
         } => {
-            let checker = SafetyChecker::new();
+            // Load configuration with explicit error handling
+            let config = match Config::load() {
+                Ok(config) => config,
+                Err(e) => {
+                    eprintln!("Error loading configuration: {}", e);
+                    eprintln!("Using default configuration.");
+                    Config::default()
+                }
+            };
+
+            let checker = SafetyChecker::with_config(config);
 
             let results = match checker.check_path(&path) {
                 Ok(results) => results,
@@ -70,6 +90,37 @@ fn main() {
 
             if !allow_unsafe && total_violations > 0 {
                 exit(1);
+            }
+        }
+
+        Commands::Init { force } => {
+            let config_path = PathBuf::from("diesel-guard.toml");
+
+            // Check if config file already exists
+            let file_existed = config_path.exists();
+            if file_existed && !force {
+                eprintln!("Error: diesel-guard.toml already exists in current directory");
+                eprintln!("Use --force to overwrite the existing file");
+                exit(1);
+            }
+
+            // Write config template to file
+            match fs::write(&config_path, CONFIG_TEMPLATE) {
+                Ok(_) => {
+                    if file_existed {
+                        println!("✓ Overwrote diesel-guard.toml");
+                    } else {
+                        println!("✓ Created diesel-guard.toml");
+                    }
+                    println!();
+                    println!("Next steps:");
+                    println!("1. Edit diesel-guard.toml to customize your configuration");
+                    println!("2. Run 'diesel-guard check <path>' to check your migrations");
+                }
+                Err(e) => {
+                    eprintln!("Error: Failed to write config file: {}", e);
+                    exit(1);
+                }
             }
         }
     }

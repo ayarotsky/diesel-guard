@@ -1,4 +1,5 @@
 use crate::checks::CheckRegistry;
+use crate::config::Config;
 use crate::error::Result;
 use crate::parser::SqlParser;
 use crate::violation::Violation;
@@ -8,13 +9,26 @@ use std::path::Path;
 pub struct SafetyChecker {
     parser: SqlParser,
     registry: CheckRegistry,
+    config: Config,
 }
 
 impl SafetyChecker {
+    /// Create with configuration loaded from diesel-guard.toml
+    /// Falls back to defaults if config file doesn't exist or has errors
     pub fn new() -> Self {
+        let config = Config::load().unwrap_or_else(|e| {
+            eprintln!("Warning: Failed to load config: {}. Using defaults.", e);
+            Config::default()
+        });
+        Self::with_config(config)
+    }
+
+    /// Create with specific configuration (useful for testing)
+    pub fn with_config(config: Config) -> Self {
         Self {
             parser: SqlParser::new(),
-            registry: CheckRegistry::new(),
+            registry: CheckRegistry::with_config(&config),
+            config,
         }
     }
 
@@ -40,7 +54,15 @@ impl SafetyChecker {
                 let path = entry.path();
 
                 if path.is_dir() {
-                    // Check for up.sql in migration directories
+                    // Extract directory name for timestamp filtering
+                    let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+                    // Skip if migration is before start_after threshold
+                    if !self.config.should_check_migration(dir_name) {
+                        continue;
+                    }
+
+                    // Check up.sql (always checked if migration passes filter)
                     let up_sql = path.join("up.sql");
                     if up_sql.exists() {
                         let violations = self.check_file(&up_sql)?;
@@ -48,7 +70,20 @@ impl SafetyChecker {
                             results.push((up_sql.display().to_string(), violations));
                         }
                     }
+
+                    // Check down.sql (only if check_down is enabled)
+                    if self.config.check_down {
+                        let down_sql = path.join("down.sql");
+                        if down_sql.exists() {
+                            let violations = self.check_file(&down_sql)?;
+                            if !violations.is_empty() {
+                                results.push((down_sql.display().to_string(), violations));
+                            }
+                        }
+                    }
                 } else if path.extension().and_then(|s| s.to_str()) == Some("sql") {
+                    // Individual SQL files (not in migration directories)
+                    // These are always checked regardless of config
                     let violations = self.check_file(&path)?;
                     if !violations.is_empty() {
                         results.push((path.display().to_string(), violations));
@@ -99,5 +134,19 @@ mod tests {
         let sql = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 1);
+    }
+
+    #[test]
+    fn test_with_disabled_checks() {
+        let config = Config {
+            disable_checks: vec!["AddColumnCheck".to_string()],
+            ..Default::default()
+        };
+        let checker = SafetyChecker::with_config(config);
+
+        // This would normally trigger AddColumnCheck
+        let sql = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
+        let violations = checker.check_sql(sql).unwrap();
+        assert_eq!(violations.len(), 0); // Check is disabled
     }
 }

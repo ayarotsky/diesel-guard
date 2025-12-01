@@ -13,6 +13,7 @@ pub use add_not_null::AddNotNullCheck;
 pub use alter_column_type::AlterColumnTypeCheck;
 pub use drop_column::DropColumnCheck;
 
+use crate::config::Config;
 use crate::error::Result;
 use crate::violation::Violation;
 use sqlparser::ast::Statement;
@@ -32,16 +33,33 @@ pub struct CheckRegistry {
 }
 
 impl CheckRegistry {
+    /// Create registry with all checks enabled (uses default config)
     pub fn new() -> Self {
-        Self {
-            checks: vec![
-                Box::new(AddColumnCheck),
-                Box::new(AddIndexCheck),
-                Box::new(AddNotNullCheck),
-                Box::new(AlterColumnTypeCheck),
-                Box::new(DropColumnCheck),
-            ],
+        Self::with_config(&Config::default())
+    }
+
+    /// Create registry with configuration-based filtering
+    pub fn with_config(config: &Config) -> Self {
+        let mut checks: Vec<Box<dyn Check>> = vec![];
+
+        // Conditionally register each check based on config
+        if config.is_check_enabled("AddColumnCheck") {
+            checks.push(Box::new(AddColumnCheck));
         }
+        if config.is_check_enabled("AddIndexCheck") {
+            checks.push(Box::new(AddIndexCheck));
+        }
+        if config.is_check_enabled("AddNotNullCheck") {
+            checks.push(Box::new(AddNotNullCheck));
+        }
+        if config.is_check_enabled("AlterColumnTypeCheck") {
+            checks.push(Box::new(AlterColumnTypeCheck));
+        }
+        if config.is_check_enabled("DropColumnCheck") {
+            checks.push(Box::new(DropColumnCheck));
+        }
+
+        Self { checks }
     }
 
     /// Check a single statement against all registered checks
@@ -75,5 +93,44 @@ mod tests {
     fn test_registry_creation() {
         let registry = CheckRegistry::new();
         assert_eq!(registry.checks.len(), 5);
+    }
+
+    #[test]
+    fn test_registry_with_disabled_checks() {
+        let config = Config {
+            disable_checks: vec!["AddColumnCheck".to_string()],
+            ..Default::default()
+        };
+
+        let registry = CheckRegistry::with_config(&config);
+        assert_eq!(registry.checks.len(), 4); // One check disabled
+    }
+
+    #[test]
+    fn test_registry_with_multiple_disabled_checks() {
+        let config = Config {
+            disable_checks: vec!["AddColumnCheck".to_string(), "DropColumnCheck".to_string()],
+            ..Default::default()
+        };
+
+        let registry = CheckRegistry::with_config(&config);
+        assert_eq!(registry.checks.len(), 3); // Two checks disabled
+    }
+
+    #[test]
+    fn test_registry_with_all_checks_disabled() {
+        let config = Config {
+            disable_checks: vec![
+                "AddColumnCheck".to_string(),
+                "AddIndexCheck".to_string(),
+                "AddNotNullCheck".to_string(),
+                "AlterColumnTypeCheck".to_string(),
+                "DropColumnCheck".to_string(),
+            ],
+            ..Default::default()
+        };
+
+        let registry = CheckRegistry::with_config(&config);
+        assert_eq!(registry.checks.len(), 0); // All checks disabled
     }
 }

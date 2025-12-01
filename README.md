@@ -48,6 +48,79 @@ diesel-guard check migrations/ --format json
 diesel-guard check migrations/ --allow-unsafe
 ```
 
+## Configuration
+
+diesel_guard can be configured using a `diesel-guard.toml` file in your project root.
+
+### Initialize Configuration
+
+Create a configuration file with all available options documented:
+
+```bash
+diesel-guard init
+```
+
+This creates a `diesel-guard.toml` file in your current directory with all configuration options commented and documented. If the file already exists, use `--force` to overwrite:
+
+```bash
+diesel-guard init --force
+```
+
+### Configuration File
+
+Alternatively, manually create a `diesel-guard.toml` file in the same directory where you run `diesel-guard`:
+
+```toml
+# Skip migrations before this timestamp
+start_after = "2024_01_01_000000"
+
+# Also check down.sql files
+check_down = true
+
+# Disable specific checks
+disable_checks = ["AddColumnCheck"]
+```
+
+If the configuration file is missing, diesel_guard will use default values (check all migrations, only `up.sql`, all checks enabled).
+
+If the configuration file has errors (invalid TOML syntax, invalid values), diesel_guard will print a warning and use default values.
+
+### Configuration Options
+
+#### `start_after` (Optional)
+
+Skip checking migrations created before a specific timestamp. Useful when retrofitting diesel_guard into an existing project with old migrations you don't want to fix.
+
+- **Format**: `"YYYY_MM_DD_HHMMSS"` (matching Diesel migration directory timestamp prefix)
+- **Default**: None (all migrations are checked)
+- **Example**: `start_after = "2024_01_01_000000"`
+
+**How it works**: Diesel migration directories are named like `2024_01_01_000000_create_users`. The configuration compares the first 19 characters (the timestamp) and only checks migrations created **after** the specified timestamp.
+
+#### `check_down` (Boolean)
+
+Whether to check `down.sql` files in addition to `up.sql` files. By default, only `up.sql` files are checked since they represent forward migrations that will run in production.
+
+- **Default**: `false`
+- **Example**: `check_down = true`
+
+**Use case**: Enable this if you want to ensure your rollback migrations are also safe for production.
+
+#### `disable_checks` (Array of Strings)
+
+Selectively disable specific safety checks. Check names are the Rust struct names from the codebase.
+
+- **Valid names**:
+  - `AddColumnCheck` - ADD COLUMN with DEFAULT
+  - `AddIndexCheck` - CREATE INDEX without CONCURRENTLY
+  - `AddNotNullCheck` - ALTER COLUMN SET NOT NULL
+  - `AlterColumnTypeCheck` - ALTER COLUMN TYPE
+  - `DropColumnCheck` - DROP COLUMN
+- **Default**: `[]` (all checks enabled)
+- **Example**: `disable_checks = ["AddColumnCheck", "DropColumnCheck"]`
+
+**Use case**: Disable checks if you have specific reasons to allow certain operations (e.g., your PostgreSQL version makes some operations safe, or you're working on a low-traffic database).
+
 ### Example Output
 
 ```
@@ -212,10 +285,6 @@ ALTER TABLE users DROP CONSTRAINT email_not_null;
 
 - **REINDEX without CONCURRENTLY** - Acquires ACCESS EXCLUSIVE lock, blocking all reads and writes during index rebuild. Use REINDEX CONCURRENTLY (PostgreSQL 12+).
 
-- **ADD EXCLUSION constraint** - Blocks reads and writes during validation of exclusion rules across all existing rows.
-
-- **ADD REFERENCE** - Combines non-concurrent index creation with foreign key validation, blocking operations on both tables.
-
 ### Schema & Data Migration Checks
 
 - **RENAME COLUMN** - Causes errors in running application instances that cache column names. Requires multi-step migration with dual-writing.
@@ -227,8 +296,6 @@ ALTER TABLE users DROP CONSTRAINT email_not_null;
 - **Adding JSON/JSONB column** - JSON columns lack equality operator in older PostgreSQL versions, breaking SELECT DISTINCT and other queries.
 
 ### Data Safety & Best Practices
-
-- **Backfilling data in migrations** - Large UPDATE statements in migrations keep tables locked and can cause performance issues. Backfill outside migrations in batches.
 
 - **Adding auto-increment column to existing table** - Adding SERIAL or auto-increment columns to existing tables triggers a full table rewrite.
 
