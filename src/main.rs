@@ -1,8 +1,9 @@
+use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use diesel_guard::output::OutputFormatter;
 use diesel_guard::{Config, SafetyChecker};
+use miette::{IntoDiagnostic, Result};
 use std::fs;
-use std::path::PathBuf;
 use std::process::exit;
 
 const CONFIG_TEMPLATE: &str = include_str!("../diesel-guard.toml.example");
@@ -20,7 +21,7 @@ enum Commands {
     /// Check migrations for unsafe operations
     Check {
         /// Path to migration file or directory
-        path: PathBuf,
+        path: Utf8PathBuf,
 
         /// Output format (text or json)
         #[arg(long, default_value = "text")]
@@ -39,7 +40,17 @@ enum Commands {
     },
 }
 
-fn main() {
+fn main() -> Result<()> {
+    miette::set_hook(Box::new(|_| {
+        Box::new(
+            miette::MietteHandlerOpts::new()
+                .terminal_links(true)
+                .unicode(true)
+                .context_lines(3)
+                .build(),
+        )
+    }))?;
+
     let cli = Cli::parse();
 
     match cli.command {
@@ -52,7 +63,7 @@ fn main() {
             let config = match Config::load() {
                 Ok(config) => config,
                 Err(e) => {
-                    eprintln!("Error loading configuration: {}", e);
+                    eprintln!("Warning: {}", e);
                     eprintln!("Using default configuration.");
                     Config::default()
                 }
@@ -60,13 +71,7 @@ fn main() {
 
             let checker = SafetyChecker::with_config(config);
 
-            let results = match checker.check_path(&path) {
-                Ok(results) => results,
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    exit(1);
-                }
-            };
+            let results = checker.check_path(&path)?;
 
             if results.is_empty() {
                 OutputFormatter::print_summary(0);
@@ -94,7 +99,7 @@ fn main() {
         }
 
         Commands::Init { force } => {
-            let config_path = PathBuf::from("diesel-guard.toml");
+            let config_path = Utf8PathBuf::from("diesel-guard.toml");
 
             // Check if config file already exists
             let file_existed = config_path.exists();
@@ -105,23 +110,21 @@ fn main() {
             }
 
             // Write config template to file
-            match fs::write(&config_path, CONFIG_TEMPLATE) {
-                Ok(_) => {
-                    if file_existed {
-                        println!("✓ Overwrote diesel-guard.toml");
-                    } else {
-                        println!("✓ Created diesel-guard.toml");
-                    }
-                    println!();
-                    println!("Next steps:");
-                    println!("1. Edit diesel-guard.toml to customize your configuration");
-                    println!("2. Run 'diesel-guard check <path>' to check your migrations");
-                }
-                Err(e) => {
-                    eprintln!("Error: Failed to write config file: {}", e);
-                    exit(1);
-                }
+            fs::write(&config_path, CONFIG_TEMPLATE)
+                .into_diagnostic()
+                .map_err(|e| miette::miette!("Failed to write config file: {}", e))?;
+
+            if file_existed {
+                println!("✓ Overwrote diesel-guard.toml");
+            } else {
+                println!("✓ Created diesel-guard.toml");
             }
+            println!();
+            println!("Next steps:");
+            println!("1. Edit diesel-guard.toml to customize your configuration");
+            println!("2. Run 'diesel-guard check <path>' to check your migrations");
         }
     }
+
+    Ok(())
 }

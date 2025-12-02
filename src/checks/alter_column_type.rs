@@ -11,85 +11,77 @@
 //! Type changes with USING clauses always require a full rewrite.
 
 use crate::checks::Check;
-use crate::error::Result;
 use crate::violation::Violation;
 use sqlparser::ast::{AlterColumnOperation, AlterTableOperation, Statement};
 
 pub struct AlterColumnTypeCheck;
 
 impl Check for AlterColumnTypeCheck {
-    fn name(&self) -> &str {
-        "alter_column_type"
-    }
-
-    fn check(&self, stmt: &Statement) -> Result<Vec<Violation>> {
-        let mut violations = vec![];
-
-        if let Statement::AlterTable {
+    fn check(&self, stmt: &Statement) -> Vec<Violation> {
+        let Statement::AlterTable {
             name, operations, ..
         } = stmt
-        {
-            for op in operations {
-                if let AlterTableOperation::AlterColumn {
+        else {
+            return vec![];
+        };
+
+        let table_name = name.to_string();
+
+        operations
+            .iter()
+            .filter_map(|op| {
+                let AlterTableOperation::AlterColumn {
                     column_name,
-                    op:
-                        AlterColumnOperation::SetDataType {
-                            data_type, using, ..
-                        },
-                } = op
-                {
-                    let table_name = name.to_string();
-                    let column_name_str = column_name.to_string();
-                    let new_type = data_type.to_string();
+                    op: AlterColumnOperation::SetDataType { data_type, using, .. },
+                } = op else {
+                    return None;
+                };
 
-                    let using_clause = if using.is_some() {
-                        "\n\nNote: This migration includes a USING clause, which always triggers a full table rewrite."
-                    } else {
-                        ""
-                    };
+                let column_name_str = column_name.to_string();
+                let new_type = data_type.to_string();
 
-                    violations.push(Violation::new(
-                        "ALTER COLUMN TYPE",
-                        format!(
-                            "Changing column '{}' type to '{}' on table '{}' typically requires an ACCESS EXCLUSIVE lock and \
-                            may trigger a full table rewrite, blocking all operations. Duration depends on table size and the specific type change.{}",
-                            column_name_str, new_type, table_name, using_clause
-                        ),
-                        format!(
-                            "For safer type changes, consider a multi-step approach:\n\n\
-                             1. Add a new column with the desired type:\n   \
-                             ALTER TABLE {} ADD COLUMN {}_new {};\n\n\
-                             2. Backfill data in batches (outside migration):\n   \
-                             UPDATE {} SET {}_new = {}::{};\n\n\
-                             3. Deploy application code to use the new column.\n\n\
-                             4. Drop the old column in a later migration:\n   \
-                             ALTER TABLE {} DROP COLUMN {};\n\n\
-                             5. Rename the new column:\n   \
-                             ALTER TABLE {} RENAME COLUMN {}_new TO {};\n\n\
-                             Note: Some type changes are safe:\n\
-                             - VARCHAR(n) to VARCHAR(m) where m > n (PostgreSQL 9.2+)\n\
-                             - VARCHAR to TEXT\n\
-                             - Numeric precision increases\n\n\
-                             Always test on a production-sized dataset to verify the impact.",
-                            table_name,
-                            column_name_str,
-                            new_type,
-                            table_name,
-                            column_name_str,
-                            column_name_str,
-                            new_type,
-                            table_name,
-                            column_name_str,
-                            table_name,
-                            column_name_str,
-                            column_name_str
-                        ),
-                    ));
-                }
-            }
-        }
+                let using_clause = if using.is_some() {
+                    "\n\nNote: This migration includes a USING clause, which always triggers a full table rewrite."
+                } else {
+                    ""
+                };
 
-        Ok(violations)
+                Some(Violation::new(
+                    "ALTER COLUMN TYPE",
+                    format!(
+                        "Changing column '{column}' type to '{new_type}' on table '{table}' typically requires an ACCESS EXCLUSIVE lock and \
+                        may trigger a full table rewrite, blocking all operations. Duration depends on table size and the specific type change.{using_clause}",
+                        column = column_name_str, new_type = new_type, table = table_name, using_clause = using_clause
+                    ),
+                    format!(r#"For safer type changes, consider a multi-step approach:
+
+1. Add a new column with the desired type:
+   ALTER TABLE {table} ADD COLUMN {column}_new {new_type};
+
+2. Backfill data in batches (outside migration):
+   UPDATE {table} SET {column}_new = {column}::{new_type};
+
+3. Deploy application code to use the new column.
+
+4. Drop the old column in a later migration:
+   ALTER TABLE {table} DROP COLUMN {column};
+
+5. Rename the new column:
+   ALTER TABLE {table} RENAME COLUMN {column}_new TO {column};
+
+Note: Some type changes are safe:
+- VARCHAR(n) to VARCHAR(m) where m > n (PostgreSQL 9.2+)
+- VARCHAR to TEXT
+- Numeric precision increases
+
+Always test on a production-sized dataset to verify the impact."#,
+                        table = table_name,
+                        column = column_name_str,
+                        new_type = new_type
+                    ),
+                ))
+            })
+            .collect()
     }
 }
 
@@ -113,7 +105,7 @@ mod tests {
         let check = AlterColumnTypeCheck;
         let stmt = parse_sql("ALTER TABLE users ALTER COLUMN data TYPE JSONB USING data::JSONB;");
 
-        let violations = check.check(&stmt).unwrap();
+        let violations = check.check(&stmt);
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].operation, "ALTER COLUMN TYPE");
         assert!(violations[0].problem.contains("USING clause"));

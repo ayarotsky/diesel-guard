@@ -1,11 +1,11 @@
 [package]
-name = "diesel_guard"
+name = "diesel-guard"
 version = "0.1.0"
 edition = "2021"
 authors = ["Alex Yarotsky <https://github.com/ayarotsky>"]
 description = "Catch unsafe PostgreSQL migrations in Diesel before they take down production"
 license = "MIT"
-repository = "https://github.com/ayarotsky/diesel_guard"
+repository = "https://github.com/ayarotsky/diesel-guard"
 
 [dependencies]
 # SQL parsing
@@ -16,7 +16,6 @@ clap = { version = "4.5", features = ["derive"] }
 colored = "3.0"
 
 # Error handling
-anyhow = "1.0"
 thiserror = "2.0"
 
 # Serialization
@@ -25,6 +24,19 @@ serde_json = "1.0"
 
 # Config file
 toml = "0.9"
+
+# Path handling
+camino = "1.1"
+walkdir = "2.4"
+
+# Validation
+regex = "1.10"
+
+# Error reporting
+miette = { version = "7.0", features = ["fancy"] }
+
+# Derive macros
+derive_more = { version = "1.0", features = ["display", "from", "error"] }
 
 # Diesel integration (optional features)
 diesel = { version = "2.2", optional = true }

@@ -1,127 +1,27 @@
-# Catch unsafe PostgreSQL migrations in Diesel before they take down production
+# Diesel Guard
 
-## The Problem
+Catch unsafe PostgreSQL migrations in Diesel before they take down production.
 
-Diesel migrations are powerful but dangerous. One bad migration can:
-- Lock tables for hours
-- Crash running app instances
-- Cause data loss
-- Take down production
-
-Rails has 3 popular gems solving this (6.5k+ stars combined), but **Diesel has nothing**.
+✓ Detects operations that lock tables or cause downtime<br>
+✓ Provides safe alternatives for each unsafe operation<br>
+✓ Works with any Diesel project - zero configuration required<br>
+✓ Supports safety-assured blocks for verified operations<br>
 
 ## Installation
 
-```bash
-cargo install diesel_guard
+```sh
+cargo install diesel-guard
 ```
 
-Or add to your project:
+## How It Works
 
-```bash
-cargo install --path .
-```
+Diesel Guard analyzes your migration SQL and catches dangerous operations before they reach production.
 
-## Usage
-
-### Check a single migration
-
-```bash
+```sh
 diesel-guard check migrations/2024_01_01_create_users/up.sql
 ```
 
-### Check all migrations
-
-```bash
-diesel-guard check migrations/
-```
-
-### JSON output for CI/CD
-
-```bash
-diesel-guard check migrations/ --format json
-```
-
-### Allow unsafe operations
-
-```bash
-diesel-guard check migrations/ --allow-unsafe
-```
-
-## Configuration
-
-diesel_guard can be configured using a `diesel-guard.toml` file in your project root.
-
-### Initialize Configuration
-
-Create a configuration file with all available options documented:
-
-```bash
-diesel-guard init
-```
-
-This creates a `diesel-guard.toml` file in your current directory with all configuration options commented and documented. If the file already exists, use `--force` to overwrite:
-
-```bash
-diesel-guard init --force
-```
-
-### Configuration File
-
-Alternatively, manually create a `diesel-guard.toml` file in the same directory where you run `diesel-guard`:
-
-```toml
-# Skip migrations before this timestamp
-start_after = "2024_01_01_000000"
-
-# Also check down.sql files
-check_down = true
-
-# Disable specific checks
-disable_checks = ["AddColumnCheck"]
-```
-
-If the configuration file is missing, diesel_guard will use default values (check all migrations, only `up.sql`, all checks enabled).
-
-If the configuration file has errors (invalid TOML syntax, invalid values), diesel_guard will print a warning and use default values.
-
-### Configuration Options
-
-#### `start_after` (Optional)
-
-Skip checking migrations created before a specific timestamp. Useful when retrofitting diesel_guard into an existing project with old migrations you don't want to fix.
-
-- **Format**: `"YYYY_MM_DD_HHMMSS"` (matching Diesel migration directory timestamp prefix)
-- **Default**: None (all migrations are checked)
-- **Example**: `start_after = "2024_01_01_000000"`
-
-**How it works**: Diesel migration directories are named like `2024_01_01_000000_create_users`. The configuration compares the first 19 characters (the timestamp) and only checks migrations created **after** the specified timestamp.
-
-#### `check_down` (Boolean)
-
-Whether to check `down.sql` files in addition to `up.sql` files. By default, only `up.sql` files are checked since they represent forward migrations that will run in production.
-
-- **Default**: `false`
-- **Example**: `check_down = true`
-
-**Use case**: Enable this if you want to ensure your rollback migrations are also safe for production.
-
-#### `disable_checks` (Array of Strings)
-
-Selectively disable specific safety checks. Check names are the Rust struct names from the codebase.
-
-- **Valid names**:
-  - `AddColumnCheck` - ADD COLUMN with DEFAULT
-  - `AddIndexCheck` - CREATE INDEX without CONCURRENTLY
-  - `AddNotNullCheck` - ALTER COLUMN SET NOT NULL
-  - `AlterColumnTypeCheck` - ALTER COLUMN TYPE
-  - `DropColumnCheck` - DROP COLUMN
-- **Default**: `[]` (all checks enabled)
-- **Example**: `disable_checks = ["AddColumnCheck", "DropColumnCheck"]`
-
-**Use case**: Disable checks if you have specific reasons to allow certain operations (e.g., your PostgreSQL version makes some operations safe, or you're working on a low-traffic database).
-
-### Example Output
+When it finds an unsafe operation, you'll see:
 
 ```
 ❌ Unsafe migration detected in migrations/2024_01_01_create_users/up.sql
@@ -129,8 +29,8 @@ Selectively disable specific safety checks. Check names are the Rust struct name
 ❌ ADD COLUMN with DEFAULT
 
 Problem:
-  Adding column 'admin' with DEFAULT locks table 'users' while backfilling on PostgreSQL < 11.
-  This can take hours on large tables and block all reads/writes.
+  Adding column 'admin' with DEFAULT on table 'users' requires a full table rewrite on PostgreSQL < 11,
+  which acquires an ACCESS EXCLUSIVE lock. On large tables, this can take significant time and block all operations.
 
 Safe alternative:
   1. Add the column without a default:
@@ -143,123 +43,143 @@ Safe alternative:
      ALTER TABLE users ALTER COLUMN admin SET DEFAULT <value>;
 
   Note: For PostgreSQL 11+, this is safe if the default is a constant value.
-
-❌ 1 unsafe migration(s) detected
 ```
 
-## Currently Supported Checks
+## Checks
 
-### ADD COLUMN with DEFAULT
+### Adding a column with a default value
 
-**Unsafe:**
+#### Bad
+
+In PostgreSQL versions before 11, adding a column with a default value requires a full table rewrite. This acquires an ACCESS EXCLUSIVE lock and can take hours on large tables, blocking all reads and writes.
+
 ```sql
 ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
 ```
 
-**Safe:**
+#### Good
+
+Add the column first, backfill the data separately, then add the default:
+
 ```sql
--- Step 1: Add column without default
+-- Migration 1: Add column without default
 ALTER TABLE users ADD COLUMN admin BOOLEAN;
 
--- Step 2: Backfill in batches (outside migration)
+-- Outside migration: Backfill in batches
 UPDATE users SET admin = FALSE WHERE admin IS NULL;
 
--- Step 3: Add default for new rows
+-- Migration 2: Add default for new rows only
 ALTER TABLE users ALTER COLUMN admin SET DEFAULT FALSE;
 ```
 
-### DROP COLUMN
+**Note:** For PostgreSQL 11+, adding a column with a constant default value is instant and safe.
 
-**Unsafe:**
+### Dropping a column
+
+#### Bad
+
+Dropping a column acquires an ACCESS EXCLUSIVE lock and typically triggers a table rewrite. This blocks all operations and can cause errors if application code is still referencing the column.
+
 ```sql
 ALTER TABLE users DROP COLUMN email;
 ```
 
-**Safe:**
+#### Good
+
+Remove references from application code first, then drop the column in a later migration:
+
 ```sql
 -- Step 1: Mark column as unused in application code
+-- Deploy application code changes first
 
--- Step 2: Deploy application without column references
-
--- Step 3: (Optional) Set column to NULL to reclaim space
+-- Step 2: (Optional) Set to NULL to reclaim space
 ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
 UPDATE users SET email = NULL;
 
--- Step 4: Drop in later migration after confirming unused
+-- Step 3: Drop in later migration after confirming it's unused
 ALTER TABLE users DROP COLUMN email;
 ```
 
-### ADD INDEX without CONCURRENTLY
+PostgreSQL doesn't support `DROP COLUMN CONCURRENTLY`, so the table rewrite is unavoidable. Staging the removal minimizes risk.
 
-**Unsafe:**
+### Adding an index non-concurrently
+
+#### Bad
+
+Creating an index without CONCURRENTLY acquires a SHARE lock, blocking all write operations (INSERT, UPDATE, DELETE) for the duration of the index build.
+
 ```sql
 CREATE INDEX idx_users_email ON users(email);
 CREATE UNIQUE INDEX idx_users_username ON users(username);
 ```
 
-**Safe:**
+#### Good
+
+Use CONCURRENTLY to allow concurrent writes during the index build:
+
 ```sql
--- Use CONCURRENTLY to avoid locking the table
 CREATE INDEX CONCURRENTLY idx_users_email ON users(email);
 CREATE UNIQUE INDEX CONCURRENTLY idx_users_username ON users(username);
 ```
 
-**Important:** Because CONCURRENTLY cannot be run inside a transaction block, you need to add a `metadata.toml` file to your migration directory:
+**Important:** CONCURRENTLY cannot run inside a transaction block. Add a `metadata.toml` file to your migration directory:
 
 ```toml
 # migrations/2024_01_01_add_user_index/metadata.toml
 run_in_transaction = false
 ```
 
-Without this configuration, Diesel will try to run the migration in a transaction and it will fail.
+### Changing column type
 
-### ALTER COLUMN TYPE
+#### Bad
 
-**Unsafe:**
+Changing a column's type typically requires an ACCESS EXCLUSIVE lock and triggers a full table rewrite, blocking all operations.
+
 ```sql
 ALTER TABLE users ALTER COLUMN age TYPE BIGINT;
 ALTER TABLE users ALTER COLUMN data TYPE JSONB USING data::JSONB;
 ```
 
-**Safe:**
-```sql
--- Multi-step approach:
+#### Good
 
--- Step 1: Add new column with desired type
+Use a multi-step approach with a new column:
+
+```sql
+-- Migration 1: Add new column
 ALTER TABLE users ADD COLUMN age_new BIGINT;
 
--- Step 2: Backfill data in batches (outside migration)
+-- Outside migration: Backfill in batches
 UPDATE users SET age_new = age::BIGINT;
 
--- Step 3: Deploy application to use new column
-
--- Step 4: Drop old column
+-- Migration 2: Swap columns
 ALTER TABLE users DROP COLUMN age;
-
--- Step 5: Rename new column
 ALTER TABLE users RENAME COLUMN age_new TO age;
 ```
 
-**Note:** Some type changes are safe and don't require a table rewrite:
-- `VARCHAR(n)` to `VARCHAR(m)` where m > n (PostgreSQL 9.2+)
-- `VARCHAR` to `TEXT`
-- Numeric precision increases
+**Safe type changes** (no rewrite on PostgreSQL 9.2+):
+- Increasing VARCHAR length: `VARCHAR(50)` → `VARCHAR(100)`
+- Converting to TEXT: `VARCHAR(255)` → `TEXT`
+- Increasing numeric precision
 
-### ADD NOT NULL constraint
+### Adding a NOT NULL constraint
 
-**Unsafe:**
+#### Bad
+
+Adding a NOT NULL constraint requires scanning the entire table to verify all values are non-null. This acquires an ACCESS EXCLUSIVE lock and blocks all operations.
+
 ```sql
 ALTER TABLE users ALTER COLUMN email SET NOT NULL;
 ```
 
-**Safe:**
-```sql
--- Multi-step approach for large tables:
+#### Good
 
+For large tables, use a CHECK constraint approach that allows concurrent operations:
+
+```sql
 -- Step 1: Add CHECK constraint without validating existing rows
 ALTER TABLE users ADD CONSTRAINT email_not_null CHECK (email IS NOT NULL) NOT VALID;
 
--- Step 2: Validate constraint separately (allows concurrent operations)
+-- Step 2: Validate separately (uses SHARE UPDATE EXCLUSIVE lock)
 ALTER TABLE users VALIDATE CONSTRAINT email_not_null;
 
 -- Step 3: Add NOT NULL constraint (instant if CHECK exists)
@@ -269,51 +189,157 @@ ALTER TABLE users ALTER COLUMN email SET NOT NULL;
 ALTER TABLE users DROP CONSTRAINT email_not_null;
 ```
 
-**Note:** The VALIDATE step uses SHARE UPDATE EXCLUSIVE lock, which allows concurrent reads and writes but blocks other schema changes. This is much safer than the direct SET NOT NULL approach which requires a full table scan with ACCESS EXCLUSIVE lock.
+The VALIDATE step allows concurrent reads and writes, only blocking other schema changes. On PostgreSQL 12+, NOT NULL constraints are more efficient, but this approach still provides better control.
+
+## Usage
+
+### Check a single migration
+
+```sh
+diesel-guard check migrations/2024_01_01_create_users/up.sql
+```
+
+### Check all migrations
+
+```sh
+diesel-guard check migrations/
+```
+
+### JSON output for CI/CD
+
+```sh
+diesel-guard check migrations/ --format json
+```
+
+### Allow unsafe operations
+
+```sh
+diesel-guard check migrations/ --allow-unsafe
+```
+
+## Configuration
+
+Create a `diesel-guard.toml` file in your project root to customize behavior.
+
+### Initialize configuration
+
+Generate a documented configuration file:
+
+```sh
+diesel-guard init
+```
+
+Use `--force` to overwrite an existing file:
+
+```sh
+diesel-guard init --force
+```
+
+### Configuration options
+
+```toml
+# Skip migrations before this timestamp (format: YYYY_MM_DD_HHMMSS)
+start_after = "2024_01_01_000000"
+
+# Also check down.sql files (default: false)
+check_down = true
+
+# Disable specific checks
+disable_checks = ["AddColumnCheck"]
+```
+
+#### Available check names
+
+- `AddColumnCheck` - ADD COLUMN with DEFAULT
+- `AddIndexCheck` - CREATE INDEX without CONCURRENTLY
+- `AddNotNullCheck` - ALTER COLUMN SET NOT NULL
+- `AlterColumnTypeCheck` - ALTER COLUMN TYPE
+- `DropColumnCheck` - DROP COLUMN
+
+## Safety Assured
+
+When you've manually verified an operation is safe, use `safety-assured` comment blocks to bypass checks:
+
+```sql
+-- safety-assured:start
+ALTER TABLE users DROP COLUMN deprecated_column;
+ALTER TABLE posts DROP COLUMN old_field;
+-- safety-assured:end
+```
+
+### Multiple blocks
+
+```sql
+-- safety-assured:start
+ALTER TABLE users DROP COLUMN email;
+-- safety-assured:end
+
+-- This will be checked normally
+CREATE INDEX users_email_idx ON users(email);
+
+-- safety-assured:start
+ALTER TABLE posts DROP COLUMN body;
+-- safety-assured:end
+```
+
+### When to use safety-assured
+
+**Only use when you've taken proper precautions:**
+
+1. **For DROP COLUMN:**
+   - Stopped reading/writing the column in application code
+   - Deployed those changes to production
+   - Verified no references remain in your codebase
+
+2. **For other operations:**
+   ```sql
+   -- safety-assured:start
+   -- Safe because: table is empty, deployed in maintenance window
+   ALTER TABLE new_table ADD COLUMN status TEXT DEFAULT 'pending';
+   -- safety-assured:end
+   ```
+
+Diesel Guard will error if blocks are mismatched:
+
+```
+Error: Unclosed 'safety-assured:start' at line 1
+```
 
 ## Coming Soon
 
-### Constraint & Lock-Related Checks
+### Constraint & lock-related
 
-- **ADD FOREIGN KEY constraint** - Blocks writes on both tables during validation. Requires multi-step approach with NOT VALID and separate VALIDATE CONSTRAINT.
+- **ADD FOREIGN KEY constraint** - Blocks writes during validation; use NOT VALID + separate VALIDATE
+- **ADD UNIQUE constraint** - Blocks reads/writes; use CREATE UNIQUE INDEX CONCURRENTLY instead
+- **ADD CHECK constraint** - Blocks during validation; use NOT VALID then VALIDATE separately
+- **DROP INDEX without CONCURRENTLY** - Blocks all queries; use DROP INDEX CONCURRENTLY
+- **REINDEX without CONCURRENTLY** - Blocks reads/writes; use REINDEX CONCURRENTLY (PostgreSQL 12+)
 
-- **ADD UNIQUE constraint** - Blocks reads and writes while building the underlying unique index. Should use CREATE UNIQUE INDEX CONCURRENTLY instead.
+### Schema & data migration
 
-- **ADD CHECK constraint** - Blocks reads and writes while validating all existing rows against the constraint. Use NOT VALID then VALIDATE separately.
+- **RENAME COLUMN** - Causes errors in running instances; requires multi-step migration
+- **RENAME TABLE** - Causes errors in running instances; use database views as intermediary
+- **Adding stored GENERATED column** - Triggers full table rewrite with ACCESS EXCLUSIVE lock
+- **Adding JSON/JSONB column** - Can break SELECT DISTINCT in older PostgreSQL versions
 
-- **DROP INDEX without CONCURRENTLY** - Acquires ACCESS EXCLUSIVE lock, blocking all queries on the table. Should use DROP INDEX CONCURRENTLY.
+### Data safety & best practices
 
-- **REINDEX without CONCURRENTLY** - Acquires ACCESS EXCLUSIVE lock, blocking all reads and writes during index rebuild. Use REINDEX CONCURRENTLY (PostgreSQL 12+).
-
-### Schema & Data Migration Checks
-
-- **RENAME COLUMN** - Causes errors in running application instances that cache column names. Requires multi-step migration with dual-writing.
-
-- **RENAME TABLE** - Causes errors in running application instances that reference the old table name. Use database views as intermediary.
-
-- **Adding stored GENERATED column** - Triggers full table rewrite with ACCESS EXCLUSIVE lock, blocking all reads and writes.
-
-- **Adding JSON/JSONB column** - JSON columns lack equality operator in older PostgreSQL versions, breaking SELECT DISTINCT and other queries.
-
-### Data Safety & Best Practices
-
-- **Adding auto-increment column to existing table** - Adding SERIAL or auto-increment columns to existing tables triggers a full table rewrite.
-
-- **Primary key with short integer type** - Using SMALLINT or INT for primary keys creates risk of ID exhaustion on high-traffic tables. Use BIGINT instead.
-
-- **Indexes with more than 3 columns** - Wide indexes rarely improve performance and waste storage. Consider partial indexes or restructuring queries.
-
-- **Adding multiple foreign keys in one migration** - Multiple foreign keys in a single migration can block all involved tables simultaneously, multiplying lock contention.
-
-- **CREATE EXTENSION in migrations** - Installing extensions can have unexpected side effects and typically requires superuser privileges. Install extensions separately outside migrations.
-
-- **Unnamed constraints** - PostgreSQL generates random names for unnamed constraints, making future migrations difficult to write and maintain. Always explicitly name constraints.
+- **Auto-increment on existing table** - SERIAL columns trigger full table rewrite
+- **Short integer primary keys** - SMALLINT/INT risk ID exhaustion; use BIGINT
+- **Wide indexes** - Indexes with 3+ columns rarely help; consider partial indexes
+- **Multiple foreign keys** - Can block all involved tables simultaneously
+- **CREATE EXTENSION** - Often requires superuser; install outside migrations
+- **Unnamed constraints** - Makes future migrations difficult; always name constraints explicitly
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing guide, and how to add new checks.
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and testing guide.
 
 For AI assistants working on this project, see [AGENTS.md](AGENTS.md) for detailed implementation patterns.
+
+## Credits
+
+Inspired by [strong_migrations](https://github.com/ankane/strong_migrations) by Andrew Kane
 
 ## License
 

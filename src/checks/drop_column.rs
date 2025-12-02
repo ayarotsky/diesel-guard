@@ -12,69 +12,66 @@
 //! in application code, deploy without references, and drop in a later migration.
 
 use crate::checks::Check;
-use crate::error::Result;
 use crate::violation::Violation;
 use sqlparser::ast::{AlterTableOperation, Statement};
 
 pub struct DropColumnCheck;
 
 impl Check for DropColumnCheck {
-    fn name(&self) -> &str {
-        "drop_column"
-    }
-
-    fn check(&self, stmt: &Statement) -> Result<Vec<Violation>> {
-        let mut violations = vec![];
-
-        if let Statement::AlterTable {
+    fn check(&self, stmt: &Statement) -> Vec<Violation> {
+        let Statement::AlterTable {
             name, operations, ..
         } = stmt
-        {
-            for op in operations {
-                if let AlterTableOperation::DropColumn {
-                    column_names,
-                    if_exists,
-                    ..
-                } = op
-                {
-                    let table_name = name.to_string();
+        else {
+            return vec![];
+        };
 
-                    // Report a violation for each column being dropped
-                    for column_name in column_names {
+        let table_name = name.to_string();
+
+        operations
+            .iter()
+            .filter_map(|op| {
+                let AlterTableOperation::DropColumn { column_names, if_exists, .. } = op else {
+                    return None;
+                };
+
+                // Report a violation for each column being dropped
+                let violations: Vec<_> = column_names
+                    .iter()
+                    .map(|column_name| {
                         let column_name_str = column_name.to_string();
 
-                        violations.push(Violation::new(
+                        Violation::new(
                             "DROP COLUMN",
                             format!(
-                                "Dropping column '{}' from table '{}' requires an ACCESS EXCLUSIVE lock, blocking all operations. \
+                                "Dropping column '{column}' from table '{table}' requires an ACCESS EXCLUSIVE lock, blocking all operations. \
                                 This typically triggers a table rewrite with duration depending on table size.",
-                                column_name_str, table_name
+                                column = column_name_str, table = table_name
                             ),
-                            format!(
-                                "1. Mark the column as unused in your application code first.\n\n\
-                                 2. Deploy the application without the column references.\n\n\
-                                 3. (Optional) Set column to NULL to reclaim space:\n   \
-                                 ALTER TABLE {} ALTER COLUMN {} DROP NOT NULL;\n   \
-                                 UPDATE {} SET {} = NULL;\n\n\
-                                 4. Drop the column in a later migration after confirming it's unused:\n   \
-                                 ALTER TABLE {} DROP COLUMN {}{};\n\n\
-                                 Note: PostgreSQL doesn't support DROP COLUMN CONCURRENTLY. \
-                                 The rewrite is unavoidable but staging the removal reduces risk.",
-                                table_name,
-                                column_name_str,
-                                table_name,
-                                column_name_str,
-                                table_name,
-                                column_name_str,
-                                if *if_exists { " IF EXISTS" } else { "" }
-                            ),
-                        ));
-                    }
-                }
-            }
-        }
+                            format!(r#"1. Mark the column as unused in your application code first.
 
-        Ok(violations)
+2. Deploy the application without the column references.
+
+3. (Optional) Set column to NULL to reclaim space:
+   ALTER TABLE {table} ALTER COLUMN {column} DROP NOT NULL;
+   UPDATE {table} SET {column} = NULL;
+
+4. Drop the column in a later migration after confirming it's unused:
+   ALTER TABLE {table} DROP COLUMN {column}{if_exists};
+
+Note: PostgreSQL doesn't support DROP COLUMN CONCURRENTLY. The rewrite is unavoidable but staging the removal reduces risk."#,
+                                table = table_name,
+                                column = column_name_str,
+                                if_exists = if *if_exists { " IF EXISTS" } else { "" }
+                            ),
+                        )
+                    })
+                    .collect();
+
+                Some(violations)
+            })
+            .flatten()
+            .collect()
     }
 }
 

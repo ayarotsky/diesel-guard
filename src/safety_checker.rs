@@ -3,8 +3,9 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::parser::SqlParser;
 use crate::violation::Violation;
+use camino::Utf8Path;
 use std::fs;
-use std::path::Path;
+use walkdir::WalkDir;
 
 pub struct SafetyChecker {
     parser: SqlParser,
@@ -34,69 +35,86 @@ impl SafetyChecker {
 
     /// Check SQL string for violations
     pub fn check_sql(&self, sql: &str) -> Result<Vec<Violation>> {
-        let statements = self.parser.parse(sql)?;
-        Ok(self.registry.check_statements(&statements))
+        let parsed = self.parser.parse_with_metadata(sql)?;
+
+        let violations = self.registry.check_statements_with_context(
+            &parsed.statements,
+            &parsed.statement_lines,
+            &parsed.ignore_ranges,
+        );
+
+        Ok(violations)
     }
 
     /// Check a single migration file
-    pub fn check_file(&self, path: &Path) -> Result<Vec<Violation>> {
+    pub fn check_file(&self, path: &Utf8Path) -> Result<Vec<Violation>> {
         let sql = fs::read_to_string(path)?;
         self.check_sql(&sql)
     }
 
     /// Check all migration files in a directory
-    pub fn check_directory(&self, dir: &Path) -> Result<Vec<(String, Vec<Violation>)>> {
-        let mut results = vec![];
-
-        if dir.is_dir() {
-            for entry in fs::read_dir(dir)? {
-                let entry = entry?;
+    pub fn check_directory(&self, dir: &Utf8Path) -> Result<Vec<(String, Vec<Violation>)>> {
+        // Collect all files to check
+        let files_to_check: Vec<_> = WalkDir::new(dir)
+            .max_depth(1)
+            .min_depth(1)
+            .into_iter()
+            .filter_map(|entry| entry.ok())
+            .flat_map(|entry| {
                 let path = entry.path();
+                let path_utf8 = Utf8Path::from_path(path).expect("Path contains invalid UTF-8");
 
-                if path.is_dir() {
+                let mut files = vec![];
+
+                if entry.file_type().is_dir() {
                     // Extract directory name for timestamp filtering
-                    let dir_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    let dir_name = path_utf8.file_name().unwrap_or("");
 
                     // Skip if migration is before start_after threshold
                     if !self.config.should_check_migration(dir_name) {
-                        continue;
+                        return files;
                     }
 
                     // Check up.sql (always checked if migration passes filter)
-                    let up_sql = path.join("up.sql");
+                    let up_sql = path_utf8.join("up.sql");
                     if up_sql.exists() {
-                        let violations = self.check_file(&up_sql)?;
-                        if !violations.is_empty() {
-                            results.push((up_sql.display().to_string(), violations));
-                        }
+                        files.push(up_sql);
                     }
 
                     // Check down.sql (only if check_down is enabled)
                     if self.config.check_down {
-                        let down_sql = path.join("down.sql");
+                        let down_sql = path_utf8.join("down.sql");
                         if down_sql.exists() {
-                            let violations = self.check_file(&down_sql)?;
-                            if !violations.is_empty() {
-                                results.push((down_sql.display().to_string(), violations));
-                            }
+                            files.push(down_sql);
                         }
                     }
-                } else if path.extension().and_then(|s| s.to_str()) == Some("sql") {
+                } else if path_utf8.extension() == Some("sql") {
                     // Individual SQL files (not in migration directories)
                     // These are always checked regardless of config
-                    let violations = self.check_file(&path)?;
-                    if !violations.is_empty() {
-                        results.push((path.display().to_string(), violations));
-                    }
+                    files.push(path_utf8.to_owned());
                 }
-            }
-        }
 
-        Ok(results)
+                files
+            })
+            .collect();
+
+        // Check files in parallel using rayon
+        files_to_check
+            .iter()
+            .map(|file_path| {
+                let violations = self.check_file(file_path)?;
+                if violations.is_empty() {
+                    Ok(None)
+                } else {
+                    Ok(Some((file_path.to_string(), violations)))
+                }
+            })
+            .collect::<Result<Vec<_>>>()
+            .map(|results| results.into_iter().flatten().collect())
     }
 
     /// Check a path (file or directory)
-    pub fn check_path(&self, path: &Path) -> Result<Vec<(String, Vec<Violation>)>> {
+    pub fn check_path(&self, path: &Utf8Path) -> Result<Vec<(String, Vec<Violation>)>> {
         if path.is_dir() {
             self.check_directory(path)
         } else {
@@ -104,7 +122,7 @@ impl SafetyChecker {
             if violations.is_empty() {
                 Ok(vec![])
             } else {
-                Ok(vec![(path.display().to_string(), violations)])
+                Ok(vec![(path.to_string(), violations)])
             }
         }
     }

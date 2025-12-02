@@ -1,10 +1,10 @@
-# AGENTS.md - diesel_guard
+# AGENTS.md - diesel-guard
 
-This document provides context for AI coding agents working on diesel_guard. It covers architecture, implementation patterns, and conventions for maintaining consistency across contributions.
+This document provides context for AI coding agents working on **diesel-guard**. It covers architecture, implementation patterns, and conventions for maintaining consistency across contributions.
 
 ## Project Overview
 
-**diesel_guard** detects unsafe PostgreSQL migration patterns in Diesel migrations before they cause production incidents. It parses SQL using `sqlparser` and identifies operations that acquire dangerous locks or trigger table rewrites.
+**diesel-guard** detects unsafe PostgreSQL migration patterns in Diesel migrations before they cause production incidents. It parses SQL using `sqlparser` and identifies operations that acquire dangerous locks or trigger table rewrites.
 
 **Core Technology:**
 - Language: Rust
@@ -53,18 +53,13 @@ Create `src/checks/your_check.rs`:
 //! Document: lock type, table rewrite behavior, and PostgreSQL version specifics.
 
 use crate::checks::Check;
-use crate::error::Result;
 use crate::violation::Violation;
 use sqlparser::ast::{Statement, /* relevant AST types */};
 
 pub struct YourCheck;
 
 impl Check for YourCheck {
-    fn name(&self) -> &str {
-        "your_check_name"
-    }
-
-    fn check(&self, stmt: &Statement) -> Result<Vec<Violation>> {
+    fn check(&self, stmt: &Statement) -> Vec<Violation> {
         let mut violations = vec![];
 
         // Pattern match on Statement and extract relevant parts
@@ -76,7 +71,7 @@ impl Check for YourCheck {
             ));
         }
 
-        Ok(violations)
+        violations
     }
 }
 ```
@@ -179,16 +174,11 @@ fn test_your_operation_detected() {
     assert_eq!(violations.len(), 1);
     assert_eq!(violations[0].operation, "OPERATION NAME");
 }
-
-// Update test_check_entire_fixtures_directory() counts:
-// - Total fixture count
-// - Unsafe fixture count
-// - Total violations count
 ```
 
 ### 6. Update README
 
-Add to "Currently Supported Checks" section:
+Add to "Supported Checks" section:
 
 ```markdown
 ### N. YOUR CHECK NAME
@@ -259,7 +249,6 @@ Use numbered steps with actual SQL examples:
 ### Naming Conventions
 
 - **Check structs**: `YourOperationCheck` (descriptive, ends with "Check")
-- **Check name method**: `"your_operation"` (snake_case, matches operation)
 - **Test functions**: `test_detects_your_operation`, `test_ignores_safe_variant`
 - **Fixture directories**: `your_operation_unsafe`, `your_operation_safe`
 
@@ -364,6 +353,84 @@ Validates end-to-end behavior:
 **Symptom**: Safe CONCURRENTLY operation not tested correctly
 **Fix**: Add `metadata.toml` with `run_in_transaction = false` for CONCURRENTLY operations
 
+## Safety-Assured Implementation
+
+Users can wrap SQL in `-- safety-assured:start` / `-- safety-assured:end` blocks to bypass checks.
+
+### Architecture
+
+**Comment Parser** (`src/parser/comment_parser.rs`):
+- Scans SQL line-by-line for directives
+- Builds `IgnoreRange` structs with start/end line numbers
+- Validates matching pairs (errors on unclosed/unmatched blocks)
+- Simple start/end directives: `-- safety-assured:start` and `-- safety-assured:end`
+
+**Parser** (`src/parser/mod.rs`):
+- `parse_with_metadata()` returns `ParsedSql` with:
+  - AST statements
+  - Statement line numbers (heuristic-based)
+  - Ignore ranges from comment parser
+- `extract_statement_lines()` maps statements to source lines using keyword matching
+
+**CheckRegistry** (`src/checks/mod.rs`):
+- `check_statements_with_context()` filters checks based on ignore ranges
+- `is_line_ignored()` checks if a line falls within any range
+- All checks are bypassed for statements within safety-assured blocks
+
+### Key Implementation Details
+
+**Line Number Handling:**
+- All line numbers are 1-indexed (matching editor conventions)
+- Ignore ranges are exclusive of start/end comment lines
+  - Line 5: `-- safety-assured:start`
+  - Line 6-9: Statements (IGNORED)
+  - Line 10: `-- safety-assured:end`
+
+**Statement Line Extraction:**
+- Heuristic-based since sqlparser doesn't preserve positions
+- Searches for SQL keywords (ALTER, CREATE, DROP, etc.)
+- Matches statements to lines in order of appearance
+- Skips already-matched lines to handle multiple statements
+
+**Directive Matching:**
+- Directives are case-insensitive (`-- SAFETY-ASSURED:START` works)
+- All checks are bypassed when a statement is within a block
+- No support for check-specific ignoring (keeps implementation simple)
+
+**Known Limitations:**
+- **Statement line tracking is heuristic-based**: The `extract_statement_lines` method in `src/parser/mod.rs` uses keyword matching to identify where statements begin in the source SQL. This approach has some edge case limitations:
+  - **Rare fallback to line 1**: If keyword matching fails (statement doesn't start with any known SQL keyword), the method defaults to line 1 and logs a warning to stderr. This should be rare in practice as the keyword list covers standard SQL operations.
+  - **Impact if fallback occurs**: When fallback occurs, statements may be incorrectly included or excluded from safety-assured blocks depending on whether line 1 falls within a block's range.
+  - **Edge cases**: Multiple statements on the same line, or statements with very unusual formatting, may not track correctly.
+- **Nested blocks**: Allowed and work as sequential blocks due to stack behavior in comment parser
+- **Debugging**: If fallback occurs, warnings are logged to stderr with the keyword and statement preview to help identify problematic SQL
+
+### Testing Strategy
+
+**Unit tests** (`src/parser/comment_parser.rs`):
+- Simple blocks, multiple blocks, empty blocks
+- Specific check names
+- Case insensitivity
+- Error cases (unclosed, unmatched)
+
+**Integration tests** (`tests/safety_assured_test.rs`):
+- End-to-end checking with blocks
+- Multiple blocks in one file
+- File-based testing with fixtures
+- 17 tests covering various scenarios and edge cases
+
+**Fixtures** (`tests/fixtures/safety_assured_*`):
+- `safety_assured_drop` - Simple DROP COLUMN in block
+- `safety_assured_multiple` - Multiple operations in one block
+
+**Edge Cases Tested**:
+- Multiple statements with same SQL keyword (e.g., multiple ALTER TABLE statements)
+- Keywords in comments vs real statements (comments correctly ignored)
+- Leading/trailing whitespace in statements
+- Interleaved safety-assured blocks with same operation types
+- Multiple blocks with same keywords appearing in/out of blocks
+- Nested blocks and sequential blocks
+
 ## Current Project State
 
 - **Checks implemented**: 5
@@ -372,12 +439,6 @@ Validates end-to-end behavior:
   - ADD NOT NULL constraint
   - ALTER COLUMN TYPE
   - DROP COLUMN
-
-- **Test fixtures**: 11 (3 safe, 9 unsafe)
-
-- **Test coverage**: 40 tests total
-  - 29 unit tests
-  - 11 integration tests
 
 - **Code quality**: All passing
   - ✅ `cargo test`

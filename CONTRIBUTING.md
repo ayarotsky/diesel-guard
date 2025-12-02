@@ -1,15 +1,15 @@
-# Contributing to diesel_guard
+# Contributing to diesel-guard
 
-Thank you for your interest in contributing to diesel_guard! We appreciate your help in making Diesel migrations safer for everyone.
+Thank you for your interest in contributing to **diesel-guard**! We appreciate your help in making Diesel migrations safer for everyone.
 
 ## Getting Help
 
-If you need help using diesel_guard, please open a [GitHub Discussion](https://github.com/ayarotsky/diesel_guard/discussions) or search Stack Overflow. Undocumented features are generally unsupported.
+If you need help using **diesel-guard**, please open a [GitHub Discussion](https://github.com/ayarotsky/diesel-guard/discussions) or search Stack Overflow. Undocumented features are generally unsupported.
 
 ## Reporting Bugs
 
 Before reporting a bug:
-1. Search [existing issues](https://github.com/ayarotsky/diesel_guard/issues) to see if it's already been reported
+1. Search [existing issues](https://github.com/ayarotsky/diesel-guard/issues) to see if it's already been reported
 2. Test against the latest version from the main branch
 3. Verify the issue is reproducible
 
@@ -47,8 +47,8 @@ We love pull requests! Here's how to contribute code:
 
 ```bash
 # Clone the repository
-git clone https://github.com/ayarotsky/diesel_guard.git
-cd diesel_guard
+git clone https://github.com/ayarotsky/diesel-guard.git
+cd diesel-guard
 
 # Run tests
 cargo test
@@ -188,7 +188,7 @@ Currently, we target PostgreSQL 9.6+ to match Diesel's requirements.
 ## Questions?
 
 Feel free to:
-- Open a [GitHub Discussion](https://github.com/yourusername/diesel_guard/discussions)
+- Open a [GitHub Discussion](https://github.com/ayarotsky/diesel-guard/discussions)
 - Comment on relevant issues
 - Ask for clarification in your PR
 

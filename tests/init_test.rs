@@ -3,20 +3,20 @@ use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
 
-/// Get the path to the diesel_guard binary
+/// Get the path to the diesel-guard binary
 fn diesel_guard_bin() -> PathBuf {
     // Build the binary first to ensure it exists
     let status = Command::new("cargo")
         .args(["build", "--quiet"])
         .status()
-        .expect("Failed to build diesel_guard");
-    assert!(status.success(), "Failed to build diesel_guard");
+        .expect("Failed to build diesel-guard");
+    assert!(status.success(), "Failed to build diesel-guard");
 
     // Get the binary path
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("target");
     path.push("debug");
-    path.push("diesel_guard");
+    path.push("diesel-guard");
     path
 }
 

@@ -1,4 +1,4 @@
-use crate::violation::{Severity, Violation};
+use crate::violation::Violation;
 use colored::*;
 use serde_json;
 
@@ -16,14 +16,9 @@ impl OutputFormatter {
         ));
 
         for violation in violations {
-            let severity_icon = match violation.severity {
-                Severity::Error => "❌",
-                Severity::Warning => "⚠️",
-            };
-
             output.push_str(&format!(
                 "{} {}\n\n",
-                severity_icon,
+                "❌",
                 violation.operation.red().bold()
             ));
 
@@ -43,7 +38,7 @@ impl OutputFormatter {
 
     /// Format violations as JSON
     pub fn format_json(results: &[(String, Vec<Violation>)]) -> String {
-        serde_json::to_string_pretty(results).unwrap_or_else(|_| "{}".to_string())
+        serde_json::to_string_pretty(results).unwrap_or_else(|_| "{}".into())
     }
 
     /// Print summary

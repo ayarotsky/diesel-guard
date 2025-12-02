@@ -1,3 +1,4 @@
+use camino::Utf8Path;
 use diesel_guard::{Config, SafetyChecker};
 use std::fs;
 use tempfile::TempDir;
@@ -15,7 +16,8 @@ disable_checks = ["AddColumnCheck"]
     )
     .unwrap();
 
-    let config = Config::load_from_path(&config_path).unwrap();
+    let config_path_utf8 = Utf8Path::from_path(&config_path).unwrap();
+    let config = Config::load_from_path(config_path_utf8).unwrap();
     assert!(!config.is_check_enabled("AddColumnCheck"));
     assert!(config.is_check_enabled("DropColumnCheck"));
 }
@@ -33,7 +35,8 @@ check_down = true
     )
     .unwrap();
 
-    let config = Config::load_from_path(&config_path).unwrap();
+    let config_path_utf8 = Utf8Path::from_path(&config_path).unwrap();
+    let config = Config::load_from_path(config_path_utf8).unwrap();
     assert!(config.check_down);
 }
 
@@ -50,7 +53,8 @@ start_after = "2024_01_01_000000"
     )
     .unwrap();
 
-    let config = Config::load_from_path(&config_path).unwrap();
+    let config_path_utf8 = Utf8Path::from_path(&config_path).unwrap();
+    let config = Config::load_from_path(config_path_utf8).unwrap();
     assert_eq!(config.start_after, Some("2024_01_01_000000".to_string()));
 }
 
@@ -78,7 +82,9 @@ fn test_check_down_integration() {
     // Test with check_down = false (default)
     let config_default = Config::default();
     let checker_default = SafetyChecker::with_config(config_default);
-    let results_default = checker_default.check_directory(temp_dir.path()).unwrap();
+    let results_default = checker_default
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
     assert_eq!(results_default.len(), 1); // Only up.sql
     assert!(results_default[0].0.contains("up.sql"));
 
@@ -88,7 +94,9 @@ fn test_check_down_integration() {
         ..Default::default()
     };
     let checker_with_down = SafetyChecker::with_config(config_with_down);
-    let results_with_down = checker_with_down.check_directory(temp_dir.path()).unwrap();
+    let results_with_down = checker_with_down
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
     assert_eq!(results_with_down.len(), 2); // Both up.sql and down.sql
 
     // Verify both files were checked
@@ -135,7 +143,9 @@ fn test_start_after_integration() {
         ..Default::default()
     };
     let checker = SafetyChecker::with_config(config);
-    let results = checker.check_directory(temp_dir.path()).unwrap();
+    let results = checker
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
 
     // Should only check new_migration (2024_06_01), not old or exact
     assert_eq!(results.len(), 1);
@@ -158,7 +168,9 @@ fn test_disable_checks_integration() {
     // Without disabling - should detect violation
     let config_default = Config::default();
     let checker_default = SafetyChecker::with_config(config_default);
-    let results_default = checker_default.check_directory(temp_dir.path()).unwrap();
+    let results_default = checker_default
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
     assert_eq!(results_default.len(), 1);
     assert_eq!(results_default[0].1.len(), 1); // 1 violation
 
@@ -168,7 +180,9 @@ fn test_disable_checks_integration() {
         ..Default::default()
     };
     let checker_disabled = SafetyChecker::with_config(config_disabled);
-    let results_disabled = checker_disabled.check_directory(temp_dir.path()).unwrap();
+    let results_disabled = checker_disabled
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
     assert_eq!(results_disabled.len(), 0); // No violations
 }
 
@@ -212,7 +226,9 @@ fn test_combined_config_features() {
     };
 
     let checker = SafetyChecker::with_config(config);
-    let results = checker.check_directory(temp_dir.path()).unwrap();
+    let results = checker
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
 
     // Should only check new_migration's down.sql
     assert_eq!(results.len(), 1);
@@ -239,7 +255,9 @@ fn test_standalone_sql_files_always_checked() {
     };
 
     let checker = SafetyChecker::with_config(config);
-    let results = checker.check_directory(temp_dir.path()).unwrap();
+    let results = checker
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
 
     // Standalone file should still be checked
     assert_eq!(results.len(), 1);
@@ -266,7 +284,9 @@ fn test_check_down_with_missing_down_sql() {
     };
 
     let checker = SafetyChecker::with_config(config);
-    let results = checker.check_directory(temp_dir.path()).unwrap();
+    let results = checker
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
 
     // Should succeed with no violations (up.sql is safe, down.sql doesn't exist)
     assert_eq!(results.len(), 0);
@@ -303,7 +323,9 @@ fn test_multiple_migrations_with_start_after() {
     };
 
     let checker = SafetyChecker::with_config(config);
-    let results = checker.check_directory(temp_dir.path()).unwrap();
+    let results = checker
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
 
     // Should only check last 2 migrations (after 2024_01_01_000000)
     assert_eq!(results.len(), 2);

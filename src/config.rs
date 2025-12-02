@@ -2,23 +2,61 @@
 //!
 //! This module handles loading and validating diesel-guard.toml configuration files.
 
+use camino::{Utf8Path, Utf8PathBuf};
+use miette::Diagnostic;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::sync::LazyLock;
 use thiserror::Error;
+
+/// Regex pattern for validating timestamp format: YYYY_MM_DD_HHMMSS
+static TIMESTAMP_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\d{4}_\d{2}_\d{2}_\d{6}$").unwrap());
+
+/// Generate help text for invalid check names from the registry
+fn valid_check_names_help() -> String {
+    format!(
+        "Valid check names: {}",
+        crate::checks::ALL_CHECK_NAMES.join(", ")
+    )
+}
 
 #[derive(Debug, Error)]
 pub enum ConfigError {
-    #[error("Failed to read config file: {0}")]
+    #[error("Failed to read config file")]
     IoError(#[from] std::io::Error),
 
-    #[error("Failed to parse config file: {0}")]
+    #[error("Failed to parse config file")]
     ParseError(#[from] toml::de::Error),
 
-    #[error("Invalid check name: {0}. Valid names: AddColumnCheck, AddIndexCheck, AddNotNullCheck, AlterColumnTypeCheck, DropColumnCheck")]
-    InvalidCheckName(String),
+    #[error("Invalid check name: {invalid_name}")]
+    InvalidCheckName { invalid_name: String },
 
-    #[error("Invalid timestamp format: {0}. Expected format: YYYY_MM_DD_HHMMSS (e.g., 2024_01_01_000000)")]
+    #[error("Invalid timestamp format: {0}")]
     InvalidTimestampFormat(String),
+}
+
+impl Diagnostic for ConfigError {
+    fn code<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
+        match self {
+            Self::IoError(_) => Some(Box::new("diesel_guard::config::io_error")),
+            Self::ParseError(_) => Some(Box::new("diesel_guard::config::parse_error")),
+            Self::InvalidCheckName { .. } => Some(Box::new("diesel_guard::config::invalid_check")),
+            Self::InvalidTimestampFormat(_) => {
+                Some(Box::new("diesel_guard::config::invalid_timestamp"))
+            }
+        }
+    }
+
+    fn help<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
+        match self {
+            Self::InvalidCheckName { .. } => Some(Box::new(valid_check_names_help())),
+            Self::InvalidTimestampFormat(_) => Some(Box::new(
+                "Expected format: YYYY_MM_DD_HHMMSS (e.g., 2024_01_01_000000)",
+            )),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -41,7 +79,7 @@ impl Config {
     /// Load config from diesel-guard.toml in current directory
     /// Returns default config if file doesn't exist
     pub fn load() -> Result<Self, ConfigError> {
-        let config_path = std::path::PathBuf::from("diesel-guard.toml");
+        let config_path = Utf8PathBuf::from("diesel-guard.toml");
 
         if !config_path.exists() {
             return Ok(Self::default());
@@ -51,7 +89,7 @@ impl Config {
     }
 
     /// Load config from specific path (useful for testing)
-    pub fn load_from_path(path: &Path) -> Result<Self, ConfigError> {
+    pub fn load_from_path(path: &Utf8Path) -> Result<Self, ConfigError> {
         let contents = std::fs::read_to_string(path)?;
         let config: Config = toml::from_str(&contents)?;
         config.validate()?;
@@ -65,18 +103,12 @@ impl Config {
             Self::validate_timestamp(timestamp)?;
         }
 
-        // Validate check names
-        const VALID_CHECKS: &[&str] = &[
-            "AddColumnCheck",
-            "AddIndexCheck",
-            "AddNotNullCheck",
-            "AlterColumnTypeCheck",
-            "DropColumnCheck",
-        ];
-
+        // Validate check names against the central registry
         for check_name in &self.disable_checks {
-            if !VALID_CHECKS.contains(&check_name.as_str()) {
-                return Err(ConfigError::InvalidCheckName(check_name.clone()));
+            if !crate::checks::ALL_CHECK_NAMES.contains(&check_name.as_str()) {
+                return Err(ConfigError::InvalidCheckName {
+                    invalid_name: check_name.clone(),
+                });
             }
         }
 
@@ -85,41 +117,16 @@ impl Config {
 
     /// Validate timestamp format: YYYY_MM_DD_HHMMSS
     fn validate_timestamp(timestamp: &str) -> Result<(), ConfigError> {
-        // Expected format: 2024_01_01_000000 (17 chars: 4+1+2+1+2+1+6)
-        if timestamp.len() != 17 {
-            return Err(ConfigError::InvalidTimestampFormat(timestamp.to_string()));
+        if TIMESTAMP_REGEX.is_match(timestamp) {
+            Ok(())
+        } else {
+            Err(ConfigError::InvalidTimestampFormat(timestamp.to_string()))
         }
-
-        // Validate underscores in correct positions (indices 4, 7, 10)
-        let chars: Vec<char> = timestamp.chars().collect();
-        if chars[4] != '_' || chars[7] != '_' || chars[10] != '_' {
-            return Err(ConfigError::InvalidTimestampFormat(timestamp.to_string()));
-        }
-
-        // Validate all parts are digits (YYYY, MM, DD, HHMMSS)
-        let parts: Vec<&str> = timestamp.split('_').collect();
-        if parts.len() != 4 {
-            return Err(ConfigError::InvalidTimestampFormat(timestamp.to_string()));
-        }
-
-        // Validate part lengths: YYYY (4), MM (2), DD (2), HHMMSS (6)
-        if parts[0].len() != 4 || parts[1].len() != 2 || parts[2].len() != 2 || parts[3].len() != 6
-        {
-            return Err(ConfigError::InvalidTimestampFormat(timestamp.to_string()));
-        }
-
-        for part in parts {
-            if !part.chars().all(|c| c.is_ascii_digit()) {
-                return Err(ConfigError::InvalidTimestampFormat(timestamp.to_string()));
-            }
-        }
-
-        Ok(())
     }
 
     /// Check if a specific check is enabled
     pub fn is_check_enabled(&self, check_name: &str) -> bool {
-        !self.disable_checks.contains(&check_name.to_string())
+        !self.disable_checks.iter().any(|c| c == check_name)
     }
 
     /// Check if migration should be checked based on start_after
@@ -232,6 +239,30 @@ mod tests {
     }
 
     #[test]
+    fn test_invalid_check_name_help_includes_all_checks() {
+        use miette::Diagnostic;
+
+        let error = ConfigError::InvalidCheckName {
+            invalid_name: "FooCheck".to_string(),
+        };
+
+        let help = error.help().unwrap().to_string();
+
+        // Verify help text includes all check names from the registry
+        for &check_name in crate::checks::ALL_CHECK_NAMES {
+            assert!(
+                help.contains(check_name),
+                "Help text should include '{}', got: {}",
+                check_name,
+                help
+            );
+        }
+
+        // Verify format
+        assert!(help.starts_with("Valid check names: "));
+    }
+
+    #[test]
     fn test_load_from_path() {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("diesel-guard.toml");
@@ -246,7 +277,8 @@ disable_checks = ["AddColumnCheck"]
         )
         .unwrap();
 
-        let config = Config::load_from_path(&config_path).unwrap();
+        let config_path_utf8 = Utf8Path::from_path(&config_path).unwrap();
+        let config = Config::load_from_path(config_path_utf8).unwrap();
         assert_eq!(config.start_after, Some("2024_01_01_000000".to_string()));
         assert!(config.check_down);
         assert_eq!(config.disable_checks, vec!["AddColumnCheck".to_string()]);

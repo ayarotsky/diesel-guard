@@ -8,4 +8,4 @@ pub mod violation;
 
 pub use config::{Config, ConfigError};
 pub use safety_checker::SafetyChecker;
-pub use violation::{Severity, Violation};
+pub use violation::Violation;

@@ -1,8 +1,8 @@
-# diesel_guard configuration file
+# diesel-guard configuration file
 # Copy this file to diesel-guard.toml and customize as needed
 
 # Skip checking migrations created before this timestamp
-# Useful for retrofitting diesel_guard into existing projects
+# Useful for retrofitting diesel-guard into existing projects
 # Format: YYYY_MM_DD_HHMMSS (matching Diesel migration directory timestamp prefix)
 #
 # Example: Skip all migrations before January 1, 2024

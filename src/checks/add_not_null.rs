@@ -11,70 +11,63 @@
 //! separately, then add the NOT NULL constraint.
 
 use crate::checks::Check;
-use crate::error::Result;
 use crate::violation::Violation;
 use sqlparser::ast::{AlterColumnOperation, AlterTableOperation, Statement};
 
 pub struct AddNotNullCheck;
 
 impl Check for AddNotNullCheck {
-    fn name(&self) -> &str {
-        "add_not_null_constraint"
-    }
-
-    fn check(&self, stmt: &Statement) -> Result<Vec<Violation>> {
-        let mut violations = vec![];
-
-        if let Statement::AlterTable {
+    fn check(&self, stmt: &Statement) -> Vec<Violation> {
+        let Statement::AlterTable {
             name, operations, ..
         } = stmt
-        {
-            for op in operations {
-                if let AlterTableOperation::AlterColumn {
+        else {
+            return vec![];
+        };
+
+        let table_name = name.to_string();
+
+        operations
+            .iter()
+            .filter_map(|op| {
+                let AlterTableOperation::AlterColumn {
                     column_name,
                     op: AlterColumnOperation::SetNotNull,
-                } = op
-                {
-                    let table_name = name.to_string();
-                    let column_name_str = column_name.to_string();
+                } = op else {
+                    return None;
+                };
 
-                    violations.push(Violation::new(
-                        "ADD NOT NULL constraint",
-                        format!(
-                            "Adding NOT NULL constraint to column '{}' on table '{}' requires a full table scan to verify \
-                            all values are non-null, acquiring an ACCESS EXCLUSIVE lock and blocking all operations. \
-                            Duration depends on table size.",
-                            column_name_str, table_name
-                        ),
-                        format!(
-                            "For safer constraint addition on large tables:\\n\\n\
-                             1. Add a CHECK constraint without validating existing rows:\\n   \
-                             ALTER TABLE {} ADD CONSTRAINT {}_not_null CHECK ({} IS NOT NULL) NOT VALID;\\n\\n\
-                             2. Validate the constraint separately (uses SHARE UPDATE EXCLUSIVE lock):\\n   \
-                             ALTER TABLE {} VALIDATE CONSTRAINT {}_not_null;\\n\\n\
-                             3. Add the NOT NULL constraint (instant if CHECK constraint exists):\\n   \
-                             ALTER TABLE {} ALTER COLUMN {} SET NOT NULL;\\n\\n\
-                             4. Optionally drop the redundant CHECK constraint:\\n   \
-                             ALTER TABLE {} DROP CONSTRAINT {}_not_null;\\n\\n\
-                             Note: The VALIDATE step allows concurrent reads and writes, only blocking \
-                             other schema changes. On PostgreSQL 12+, NOT NULL constraints are more efficient, \
-                             but the CHECK approach still provides better control over large migrations.",
-                            table_name,
-                            column_name_str,
-                            column_name_str,
-                            table_name,
-                            column_name_str,
-                            table_name,
-                            column_name_str,
-                            table_name,
-                            column_name_str
-                        ),
-                    ));
-                }
-            }
-        }
+                let column_name_str = column_name.to_string();
 
-        Ok(violations)
+                Some(Violation::new(
+                    "ADD NOT NULL constraint",
+                    format!(
+                        "Adding NOT NULL constraint to column '{column}' on table '{table}' requires a full table scan to verify \
+                        all values are non-null, acquiring an ACCESS EXCLUSIVE lock and blocking all operations. \
+                        Duration depends on table size.",
+                        column = column_name_str, table = table_name
+                    ),
+                    format!(r#"For safer constraint addition on large tables:
+
+1. Add a CHECK constraint without validating existing rows:
+   ALTER TABLE {table} ADD CONSTRAINT {column}_not_null CHECK ({column} IS NOT NULL) NOT VALID;
+
+2. Validate the constraint separately (uses SHARE UPDATE EXCLUSIVE lock):
+   ALTER TABLE {table} VALIDATE CONSTRAINT {column}_not_null;
+
+3. Add the NOT NULL constraint (instant if CHECK constraint exists):
+   ALTER TABLE {table} ALTER COLUMN {column} SET NOT NULL;
+
+4. Optionally drop the redundant CHECK constraint:
+   ALTER TABLE {table} DROP CONSTRAINT {column}_not_null;
+
+Note: The VALIDATE step allows concurrent reads and writes, only blocking other schema changes. On PostgreSQL 12+, NOT NULL constraints are more efficient, but the CHECK approach still provides better control over large migrations."#,
+                        table = table_name,
+                        column = column_name_str
+                    ),
+                ))
+            })
+            .collect()
     }
 }
 

@@ -4,65 +4,54 @@
 //! option, which blocks write operations during the index build.
 //!
 //! Creating an index without CONCURRENTLY acquires a SHARE lock on the table, which
-//! blocks write operations (INSERT, UPDATE, DELETE) for the duration of the index
-//! build. Reads (SELECT) are still allowed. The duration depends on table size.
+//! blocks write operations (INSERT, UPDATE, DELETE). Duration depends on table size.
+//! Reads (SELECT) are still allowed.
 //!
 //! Using CONCURRENTLY allows the index to be built while permitting concurrent writes,
 //! though it takes longer and cannot be run inside a transaction block.
 
-use crate::checks::Check;
-use crate::error::Result;
+use crate::checks::{display_or_default, unique_prefix, Check};
 use crate::violation::Violation;
 use sqlparser::ast::Statement;
 
 pub struct AddIndexCheck;
 
 impl Check for AddIndexCheck {
-    fn name(&self) -> &str {
-        "add_index_without_concurrently"
-    }
-
-    fn check(&self, stmt: &Statement) -> Result<Vec<Violation>> {
+    fn check(&self, stmt: &Statement) -> Vec<Violation> {
         let mut violations = vec![];
 
         if let Statement::CreateIndex(create_index) = stmt {
             // Check if CONCURRENTLY is NOT used
             if !create_index.concurrently {
                 let table_name = create_index.table_name.to_string();
-                let index_name = create_index
-                    .name
-                    .as_ref()
-                    .map(|n| n.to_string())
-                    .unwrap_or_else(|| "<unnamed>".to_string());
-
-                let unique_str = if create_index.unique { "UNIQUE " } else { "" };
+                let index_name = display_or_default(create_index.name.as_ref(), "<unnamed>");
+                let unique_str = unique_prefix(create_index.unique);
 
                 violations.push(Violation::new(
                     "ADD INDEX without CONCURRENTLY",
                     format!(
-                        "Creating {}index '{}' on table '{}' without CONCURRENTLY acquires a SHARE lock, blocking writes \
-                        (INSERT, UPDATE, DELETE) for the duration of the index build. Reads are still allowed.",
-                        unique_str, index_name, table_name
+                        "Creating {unique}index '{index}' on table '{table}' without CONCURRENTLY acquires a SHARE lock, blocking writes \
+                        (INSERT, UPDATE, DELETE). Duration depends on table size. Reads are still allowed.",
+                        unique = unique_str, index = index_name, table = table_name
                     ),
-                    format!(
-                        "Use CONCURRENTLY to build the index without blocking writes:\n   \
-                         CREATE {}INDEX CONCURRENTLY {} ON {};\n\n\
-                         Note: CONCURRENTLY takes longer and uses more resources, but allows \
-                         concurrent INSERT, UPDATE, and DELETE operations. The index build may \
-                         fail if there are deadlocks or unique constraint violations.\n\n\
-                         Considerations:\n\
-                         - Cannot be run inside a transaction block\n\
-                         - Requires more total work and takes longer to complete\n\
-                         - If it fails, it leaves behind an \"invalid\" index that should be dropped",
-                        unique_str,
-                        index_name,
-                        table_name
+                    format!(r#"Use CONCURRENTLY to build the index without blocking writes:
+   CREATE {unique}INDEX CONCURRENTLY {index} ON {table};
+
+Note: CONCURRENTLY takes longer and uses more resources, but allows concurrent INSERT, UPDATE, and DELETE operations. The index build may fail if there are deadlocks or unique constraint violations.
+
+Considerations:
+- Cannot be run inside a transaction block
+- Requires more total work and takes longer to complete
+- If it fails, it leaves behind an "invalid" index that should be dropped"#,
+                        unique = unique_str,
+                        index = index_name,
+                        table = table_name
                     ),
                 ));
             }
         }
 
-        Ok(violations)
+        violations
     }
 }
 
@@ -86,7 +75,7 @@ mod tests {
         let check = AddIndexCheck;
         let stmt = parse_sql("CREATE UNIQUE INDEX idx_users_email ON users(email);");
 
-        let violations = check.check(&stmt).unwrap();
+        let violations = check.check(&stmt);
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].operation, "ADD INDEX without CONCURRENTLY");
         assert!(violations[0].problem.contains("UNIQUE"));
