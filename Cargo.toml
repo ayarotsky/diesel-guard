@@ -6,6 +6,10 @@ authors = ["Alex Yarotsky <https://github.com/ayarotsky>"]
 description = "Catch unsafe PostgreSQL migrations in Diesel before they take down production"
 license = "MIT"
 repository = "https://github.com/ayarotsky/diesel-guard"
+homepage = "https://github.com/ayarotsky/diesel-guard"
+readme = "README.md"
+keywords = ["diesel", "migrations", "postgresql", "database", "safety"]
+categories = ["database", "development-tools"]
 
 [dependencies]
 # SQL parsing
