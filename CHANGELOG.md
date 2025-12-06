@@ -5,9 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## 0.1.1 - 2025-12-05
 
-## [0.1.0] - 2024-12-05
+### Added
+
+- Support for multiple timestamp formats in `start_after` configuration:
+  - `YYYYMMDDHHMMSS` (no separators)
+  - `YYYY_MM_DD_HHMMSS` (underscore separators)
+  - `YYYY-MM-DD-HHMMSS` (dash separators)
+- Migration directories are now checked in alphanumeric order for deterministic results
+
+### Fixed
+
+- Fixed safety-assured blocks being ignored when SQL keywords appear within identifiers (e.g., `CREATE` in `CREATED_AT`)
+- Statement line tracking now correctly matches whole keywords instead of prefixes
+
+## 0.1.0 - 2025-12-05
 
 ### Added
 
@@ -33,6 +46,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--allow-unsafe` flag to report without failing
 - Support for single file or directory scanning
 - Detailed error messages with file location and line numbers
-
-[unreleased]: https://github.com/ayarotsky/diesel-guard/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/ayarotsky/diesel-guard/releases/tag/v0.1.0
