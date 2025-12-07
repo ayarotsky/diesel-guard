@@ -213,12 +213,6 @@ diesel-guard check migrations/
 diesel-guard check migrations/ --format json
 ```
 
-### Allow unsafe operations
-
-```sh
-diesel-guard check migrations/ --allow-unsafe
-```
-
 ## Configuration
 
 Create a `diesel-guard.toml` file in your project root to customize behavior.

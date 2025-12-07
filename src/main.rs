@@ -26,10 +26,6 @@ enum Commands {
         /// Output format (text or json)
         #[arg(long, default_value = "text")]
         format: String,
-
-        /// Allow unsafe operations (exit with 0 even if violations found)
-        #[arg(long)]
-        allow_unsafe: bool,
     },
 
     /// Initialize diesel-guard configuration file
@@ -54,11 +50,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Check {
-            path,
-            format,
-            allow_unsafe,
-        } => {
+        Commands::Check { path, format } => {
             // Load configuration with explicit error handling
             let config = match Config::load() {
                 Ok(config) => config,
@@ -93,7 +85,7 @@ fn main() -> Result<()> {
                 }
             }
 
-            if !allow_unsafe && total_violations > 0 {
+            if total_violations > 0 {
                 exit(1);
             }
         }
