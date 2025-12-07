@@ -1,0 +1,11 @@
+-- Example of unnamed constraints in a migration
+-- These will receive auto-generated names from PostgreSQL
+
+-- Unnamed UNIQUE constraint
+ALTER TABLE users ADD UNIQUE (email);
+
+-- Unnamed CHECK constraint
+ALTER TABLE users ADD CHECK (age >= 0);
+
+-- Unnamed FOREIGN KEY constraint
+ALTER TABLE posts ADD FOREIGN KEY (user_id) REFERENCES users(id);

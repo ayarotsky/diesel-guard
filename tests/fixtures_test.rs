@@ -21,6 +21,7 @@ fn test_safe_fixtures_pass() {
         "drop_not_null",
         "safety_assured_drop",
         "safety_assured_multiple",
+        "unnamed_constraint_safe",
     ];
 
     for fixture in safe_fixtures {
@@ -125,6 +126,19 @@ fn test_create_extension_detected() {
 }
 
 #[test]
+fn test_unnamed_constraint_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("unnamed_constraint_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 3, "Expected 3 violations");
+    assert_eq!(violations[0].operation, "Unnamed constraint");
+    assert_eq!(violations[1].operation, "Unnamed constraint");
+    assert_eq!(violations[2].operation, "Unnamed constraint");
+}
+
+#[test]
 fn test_drop_column_detected() {
     let checker = SafetyChecker::new();
     let path = fixture_path("drop_column");
@@ -173,14 +187,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        10,
-        "Expected violations in 10 files, got {}",
+        11,
+        "Expected violations in 11 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 11,
-        "Expected 11 total violations (drop_multiple_columns has 2), got {}",
+        total_violations, 14,
+        "Expected 14 total violations (drop_multiple_columns has 2, unnamed_constraint_unsafe has 3), got {}",
         total_violations
     );
 }

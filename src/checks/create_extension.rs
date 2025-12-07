@@ -20,9 +20,6 @@ impl Check for CreateExtensionCheck {
     fn check(&self, stmt: &Statement) -> Vec<Violation> {
         let mut violations = vec![];
 
-        // sqlparser doesn't have a dedicated CreateExtension variant,
-        // so we need to check for the general Statement::CreateExtension
-        // or it might be parsed as a generic statement
         if let Statement::CreateExtension {
             name,
             if_not_exists,
