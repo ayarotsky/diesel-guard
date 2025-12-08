@@ -4,6 +4,7 @@ mod add_not_null;
 mod alter_column_type;
 mod create_extension;
 mod drop_column;
+mod rename_column;
 mod unnamed_constraint;
 
 #[cfg(test)]
@@ -15,6 +16,7 @@ pub use add_not_null::AddNotNullCheck;
 pub use alter_column_type::AlterColumnTypeCheck;
 pub use create_extension::CreateExtensionCheck;
 pub use drop_column::DropColumnCheck;
+pub use rename_column::RenameColumnCheck;
 pub use unnamed_constraint::UnnamedConstraintCheck;
 
 use crate::config::Config;
@@ -59,6 +61,7 @@ pub const ALL_CHECK_NAMES: &[&str] = &[
     "AlterColumnTypeCheck",
     "CreateExtensionCheck",
     "DropColumnCheck",
+    "RenameColumnCheck",
     "UnnamedConstraintCheck",
 ];
 
@@ -88,6 +91,7 @@ impl CheckRegistry {
         self.register_check(config, AlterColumnTypeCheck);
         self.register_check(config, CreateExtensionCheck);
         self.register_check(config, DropColumnCheck);
+        self.register_check(config, RenameColumnCheck);
         self.register_check(config, UnnamedConstraintCheck);
     }
 
