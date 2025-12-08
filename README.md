@@ -299,6 +299,44 @@ ALTER TABLE users DROP COLUMN email;
 
 **Important:** The RENAME COLUMN operation itself is fast (brief ACCESS EXCLUSIVE lock), but the primary risk is application compatibility, not lock duration. All running instances must be updated to reference the new column name before the rename is applied.
 
+### Renaming a table
+
+#### Bad
+
+Renaming a table breaks running application instances immediately. Any code that references the old table name will fail after the rename is applied. Additionally, this operation requires an ACCESS EXCLUSIVE lock which can block on busy tables.
+
+```sql
+ALTER TABLE users RENAME TO customers;
+```
+
+#### Good
+
+Use a multi-step dual-write migration to safely rename the table:
+
+```sql
+-- Migration 1: Create new table
+CREATE TABLE customers (LIKE users INCLUDING ALL);
+
+-- Update application code to write to BOTH tables
+
+-- Migration 2: Backfill data in batches
+INSERT INTO customers
+SELECT * FROM users
+WHERE id > last_processed_id
+LIMIT 10000;
+
+-- Update application code to read from new table
+
+-- Deploy updated application
+
+-- Update application code to stop writing to old table
+
+-- Migration 3: Drop old table
+DROP TABLE users;
+```
+
+**Important:** This multi-step approach avoids the ACCESS EXCLUSIVE lock issues on large tables and ensures zero downtime. The migration requires multiple deployments coordinated with application code changes.
+
 ### Adding a SERIAL column to an existing table
 
 #### Bad
@@ -399,6 +437,7 @@ disable_checks = ["AddColumnCheck"]
 - `CreateExtensionCheck` - CREATE EXTENSION
 - `DropColumnCheck` - DROP COLUMN
 - `RenameColumnCheck` - RENAME COLUMN
+- `RenameTableCheck` - RENAME TABLE
 - `UnnamedConstraintCheck` - Unnamed constraints (UNIQUE, FOREIGN KEY, CHECK)
 
 ## Safety Assured
@@ -462,13 +501,11 @@ Error: Unclosed 'safety-assured:start' at line 1
 
 ### Schema & data migration
 
-- **RENAME TABLE** - Causes errors in running instances; use database views as intermediary
 - **Adding stored GENERATED column** - Triggers full table rewrite with ACCESS EXCLUSIVE lock
 - **Adding JSON/JSONB column** - Can break SELECT DISTINCT in older PostgreSQL versions
 
 ### Data safety & best practices
 
-- **Short integer primary keys** - SMALLINT/INT risk ID exhaustion; use BIGINT
 - **Wide indexes** - Indexes with 3+ columns rarely help; consider partial indexes
 - **Multiple foreign keys** - Can block all involved tables simultaneously
 
