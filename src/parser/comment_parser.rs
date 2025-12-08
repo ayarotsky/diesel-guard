@@ -29,7 +29,7 @@ pub struct CommentParser;
 
 impl CommentParser {
     /// Parse SQL and extract safety-assured blocks
-    /// Returns: Vec<IgnoreRange> and validates matching start/end pairs
+    /// Returns: `Vec<IgnoreRange>` and validates matching start/end pairs
     pub fn parse_ignore_ranges(sql: &str) -> Result<Vec<IgnoreRange>> {
         let mut ranges = Vec::new();
         let mut current_start: Option<usize> = None;
