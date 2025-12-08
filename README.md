@@ -49,6 +49,17 @@ Safe alternative:
 
 ## Checks
 
+- [Adding a column with a default value](#adding-a-column-with-a-default-value)
+- [Dropping a column](#dropping-a-column)
+- [Adding an index non-concurrently](#adding-an-index-non-concurrently)
+- [Changing column type](#changing-column-type)
+- [Adding a NOT NULL constraint](#adding-a-not-null-constraint)
+- [Creating extensions](#creating-extensions)
+- [Unnamed constraints](#unnamed-constraints)
+- [Renaming a column](#renaming-a-column)
+- [Renaming a table](#renaming-a-table)
+- [Adding a SERIAL column to an existing table](#adding-a-serial-column-to-an-existing-table)
+
 ### Adding a column with a default value
 
 #### Bad
