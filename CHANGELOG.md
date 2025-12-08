@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.0 - 2025-12-07
+
+### Added
+
+- `CreateExtension` check - Detects `CREATE EXTENSION` without `IF NOT EXISTS` clause
+- `UnnamedConstraint` check - Detects unnamed constraints (`CHECK`, `UNIQUE`, `FOREIGN KEY`)
+- `RenameColumn` check - Detects `ALTER TABLE ... RENAME COLUMN` operations
+- `AddSerialColumn` check - Detects adding `SERIAL` or `BIGSERIAL` columns to existing tables
+- `RenameTable` check - Detects `ALTER TABLE ... RENAME TO` operations
+
+### Removed
+
+- `allow_unsafe` configuration option (the CLI flag `--allow-unsafe` remains available)
+
+### Changed
+
+- Refactoring and code improvements after v0.1 release
+- CI dependency updates (actions/checkout 4→6, softprops/action-gh-release 1→2)
+
 ## 0.1.1 - 2025-12-05
 
 ### Added
