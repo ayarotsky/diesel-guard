@@ -267,6 +267,38 @@ Named constraints make future migrations predictable:
 ALTER TABLE users DROP CONSTRAINT users_email_key;
 ```
 
+### Renaming a column
+
+#### Bad
+
+Renaming a column breaks running application instances immediately. Any code that references the old column name will fail after the rename is applied, causing downtime.
+
+```sql
+ALTER TABLE users RENAME COLUMN email TO email_address;
+```
+
+#### Good
+
+Use a multi-step migration to maintain compatibility during the transition:
+
+```sql
+-- Migration 1: Add new column
+ALTER TABLE users ADD COLUMN email_address VARCHAR(255);
+
+-- Outside migration: Backfill in batches
+UPDATE users SET email_address = email;
+
+-- Migration 2: Add NOT NULL if needed
+ALTER TABLE users ALTER COLUMN email_address SET NOT NULL;
+
+-- Update application code to use email_address
+
+-- Migration 3: Drop old column after deploying code changes
+ALTER TABLE users DROP COLUMN email;
+```
+
+**Important:** The RENAME COLUMN operation itself is fast (brief ACCESS EXCLUSIVE lock), but the primary risk is application compatibility, not lock duration. All running instances must be updated to reference the new column name before the rename is applied.
+
 ## Usage
 
 ### Check a single migration
@@ -328,6 +360,7 @@ disable_checks = ["AddColumnCheck"]
 - `AlterColumnTypeCheck` - ALTER COLUMN TYPE
 - `CreateExtensionCheck` - CREATE EXTENSION
 - `DropColumnCheck` - DROP COLUMN
+- `RenameColumnCheck` - RENAME COLUMN
 - `UnnamedConstraintCheck` - Unnamed constraints (UNIQUE, FOREIGN KEY, CHECK)
 
 ## Safety Assured
@@ -391,7 +424,6 @@ Error: Unclosed 'safety-assured:start' at line 1
 
 ### Schema & data migration
 
-- **RENAME COLUMN** - Causes errors in running instances; requires multi-step migration
 - **RENAME TABLE** - Causes errors in running instances; use database views as intermediary
 - **Adding stored GENERATED column** - Triggers full table rewrite with ACCESS EXCLUSIVE lock
 - **Adding JSON/JSONB column** - Can break SELECT DISTINCT in older PostgreSQL versions
