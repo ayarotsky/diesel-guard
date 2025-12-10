@@ -6,6 +6,7 @@ mod add_unique_constraint;
 mod alter_column_type;
 mod create_extension;
 mod drop_column;
+mod drop_index;
 mod rename_column;
 mod rename_table;
 mod short_int_primary_key;
@@ -22,6 +23,7 @@ pub use add_unique_constraint::AddUniqueConstraintCheck;
 pub use alter_column_type::AlterColumnTypeCheck;
 pub use create_extension::CreateExtensionCheck;
 pub use drop_column::DropColumnCheck;
+pub use drop_index::DropIndexCheck;
 pub use rename_column::RenameColumnCheck;
 pub use rename_table::RenameTableCheck;
 pub use short_int_primary_key::ShortIntegerPrimaryKeyCheck;
@@ -44,6 +46,15 @@ mod helpers {
     pub fn unique_prefix(is_unique: bool) -> &'static str {
         if is_unique {
             "UNIQUE "
+        } else {
+            ""
+        }
+    }
+
+    /// Get SQL clause for IF EXISTS modifier
+    pub fn if_exists_clause(if_exists: bool) -> &'static str {
+        if if_exists {
+            " IF EXISTS"
         } else {
             ""
         }
@@ -93,6 +104,7 @@ impl Registry {
         self.register_check(config, AlterColumnTypeCheck);
         self.register_check(config, CreateExtensionCheck);
         self.register_check(config, DropColumnCheck);
+        self.register_check(config, DropIndexCheck);
         self.register_check(config, RenameColumnCheck);
         self.register_check(config, RenameTableCheck);
         self.register_check(config, ShortIntegerPrimaryKeyCheck);

@@ -35,7 +35,7 @@ src/
 └── violation.rs     # Violation struct with operation/problem/solution
 
 tests/
-├── fixtures/        # Test migration files (13 fixtures: 7 safe, 12 unsafe)
+├── fixtures/        # Test migration files
 └── fixtures_test.rs # Integration tests
 ```
 
@@ -515,17 +515,6 @@ Users can wrap SQL in `-- safety-assured:start` / `-- safety-assured:end` blocks
   - ✅ `cargo test`
   - ✅ `cargo fmt --check`
   - ✅ `cargo clippy --all-targets --all-features -- -D warnings`
-
-- **Planned checks**: 18 checks in Coming Soon (Phase 2)
-  - See README.md for complete list
-
-## Dependencies
-
-- **sqlparser**: v0.60.0 - SQL parsing
-- **colored**: v3.0.0 - Terminal output formatting
-- **thiserror**: v2.0.17 - Error handling
-- **toml**: v0.9.8 - Metadata file parsing
-- **regex**: v1.10.0 - Custom pattern detection for unsupported SQL syntax
 
 ## Build & Development Commands
 

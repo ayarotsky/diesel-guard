@@ -51,6 +51,7 @@ Safe alternative:
 
 - [Adding a column with a default value](#adding-a-column-with-a-default-value)
 - [Dropping a column](#dropping-a-column)
+- [Dropping an index non-concurrently](#dropping-an-index-non-concurrently)
 - [Adding an index non-concurrently](#adding-an-index-non-concurrently)
 - [Adding a UNIQUE constraint](#adding-a-unique-constraint)
 - [Changing column type](#changing-column-type)
@@ -116,6 +117,35 @@ ALTER TABLE users DROP COLUMN email;
 ```
 
 PostgreSQL doesn't support `DROP COLUMN CONCURRENTLY`, so the table rewrite is unavoidable. Staging the removal minimizes risk.
+
+### Dropping an index non-concurrently
+
+#### Bad
+
+Dropping an index without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock on the table, blocking all queries (SELECT, INSERT, UPDATE, DELETE) until the drop operation completes.
+
+```sql
+DROP INDEX idx_users_email;
+DROP INDEX IF EXISTS idx_users_username;
+```
+
+#### Good
+
+Use CONCURRENTLY to drop the index without blocking queries:
+
+```sql
+DROP INDEX CONCURRENTLY idx_users_email;
+DROP INDEX CONCURRENTLY IF EXISTS idx_users_username;
+```
+
+**Important:** CONCURRENTLY requires PostgreSQL 9.2+ and cannot run inside a transaction block. Add a `metadata.toml` file to your migration directory:
+
+```toml
+# migrations/2024_01_01_drop_user_index/metadata.toml
+run_in_transaction = false
+```
+
+**Note:** Dropping an index concurrently takes longer than a regular drop and uses more resources, but allows concurrent queries to continue. If it fails, the index may be left in an "invalid" state and should be dropped again.
 
 ### Adding an index non-concurrently
 
@@ -523,6 +553,7 @@ disable_checks = ["AddColumnCheck"]
 - `AlterColumnTypeCheck` - ALTER COLUMN TYPE
 - `CreateExtensionCheck` - CREATE EXTENSION
 - `DropColumnCheck` - DROP COLUMN
+- `DropIndexCheck` - DROP INDEX without CONCURRENTLY
 - `RenameColumnCheck` - RENAME COLUMN
 - `RenameTableCheck` - RENAME TABLE
 - `ShortIntegerPrimaryKeyCheck` - SMALLINT/INT/INTEGER primary keys
@@ -583,18 +614,25 @@ Error: Unclosed 'safety-assured:start' at line 1
 
 - **ADD FOREIGN KEY constraint** - Blocks writes during validation; use NOT VALID + separate VALIDATE
 - **ADD CHECK constraint** - Blocks during validation; use NOT VALID then VALIDATE separately
-- **DROP INDEX without CONCURRENTLY** - Blocks all queries; use DROP INDEX CONCURRENTLY
+- **ADD EXCLUSION constraint** - Blocks all operations during validation (no safe workaround)
+- **ADD PRIMARY KEY to existing table** - Blocks all operations, creates index; use CREATE UNIQUE INDEX CONCURRENTLY first
+- **DROP PRIMARY KEY** - Breaks foreign key relationships and removes critical constraint
+- **FOREIGN KEY with CASCADE** - Can cause unintended cascading deletes/updates and data loss
 - **REINDEX without CONCURRENTLY** - Blocks reads/writes; use REINDEX CONCURRENTLY (PostgreSQL 12+)
 
 ### Schema & data migration
 
 - **Adding stored GENERATED column** - Triggers full table rewrite with ACCESS EXCLUSIVE lock
 - **Adding JSON/JSONB column** - Can break SELECT DISTINCT in older PostgreSQL versions
+- **DROP TABLE with multiple foreign keys** - Extended locks on multiple tables simultaneously
+- **TRUNCATE TABLE** - Acquires ACCESS EXCLUSIVE lock, blocks all operations, cannot be batched
 
 ### Data safety & best practices
 
 - **Wide indexes** - Indexes with 3+ columns rarely help; consider partial indexes
 - **Multiple foreign keys** - Can block all involved tables simultaneously
+- **Replacing indexes** - Dropping old index before creating replacement risks query performance
+- **Mismatched foreign key column types** - Foreign key column type differs from referenced primary key
 
 ## Contributing
 
