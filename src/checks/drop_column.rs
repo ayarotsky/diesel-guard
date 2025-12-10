@@ -11,7 +11,7 @@
 //! The recommended approach is to stage the removal: mark the column as unused
 //! in application code, deploy without references, and drop in a later migration.
 
-use crate::checks::Check;
+use crate::checks::{if_exists_clause, Check};
 use crate::violation::Violation;
 use sqlparser::ast::{AlterTable, AlterTableOperation, Statement};
 
@@ -62,7 +62,7 @@ impl Check for DropColumnCheck {
 Note: PostgreSQL doesn't support DROP COLUMN CONCURRENTLY. The rewrite is unavoidable but staging the removal reduces risk."#,
                                 table = table_name,
                                 column = column_name_str,
-                                if_exists = if *if_exists { " IF EXISTS" } else { "" }
+                                if_exists = if_exists_clause(*if_exists)
                             ),
                         )
                     })

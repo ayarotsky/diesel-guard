@@ -19,6 +19,7 @@ fn test_safe_fixtures_pass() {
         "add_column_safe",
         "add_index_with_concurrently",
         "add_unique_constraint_safe",
+        "drop_index_concurrently",
         "drop_not_null",
         "safety_assured_drop",
         "safety_assured_multiple",
@@ -228,6 +229,33 @@ fn test_drop_multiple_columns_detected() {
 }
 
 #[test]
+fn test_drop_index_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("drop_index_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(violations[0].operation, "DROP INDEX without CONCURRENTLY");
+}
+
+#[test]
+fn test_drop_index_concurrently_is_safe() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("drop_index_concurrently");
+
+    // Should parse successfully (even though sqlparser can't parse it)
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    // Should have NO violations (DROP INDEX CONCURRENTLY is the safe way)
+    assert_eq!(
+        violations.len(),
+        0,
+        "DROP INDEX CONCURRENTLY should not be flagged as unsafe"
+    );
+}
+
+#[test]
 fn test_rename_column_detected() {
     let checker = SafetyChecker::new();
     let path = fixture_path("rename_column_unsafe");
@@ -284,14 +312,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        16,
-        "Expected violations in 16 files, got {}",
+        17,
+        "Expected violations in 17 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 23,
-        "Expected 23 total violations: 11 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 4, add_serial_column_unsafe with 1, rename_column_unsafe with 1, rename_table_unsafe with 1, got {}",
+        total_violations, 24,
+        "Expected 24 total violations: 14 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 4, got {}",
         total_violations
     );
 }

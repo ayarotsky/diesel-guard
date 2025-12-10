@@ -4,6 +4,7 @@ use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
 
 pub mod comment_parser;
+mod drop_index_concurrently_detector;
 mod unique_using_index_detector;
 
 pub use comment_parser::IgnoreRange;
@@ -33,7 +34,7 @@ impl SqlParser {
     }
 
     /// Parse SQL with metadata for safety-assured blocks
-    /// Handles UNIQUE USING INDEX detection when parsing fails
+    /// Handles safe patterns that sqlparser can't parse
     pub fn parse_with_metadata(&self, sql: &str) -> Result<ParsedSql> {
         // Parse ignore ranges first
         let ignore_ranges = comment_parser::CommentParser::parse_ignore_ranges(sql)?;
@@ -46,27 +47,41 @@ impl SqlParser {
                 ignore_ranges,
             }),
             Err(e) => {
-                // If parsing fails but SQL contains UNIQUE USING INDEX,
-                // treat it as safe (empty statement list)
-                if unique_using_index_detector::contains_unique_using_index(sql) {
-                    // LIMITATION: This skips ALL statements in the file, not just the UNIQUE USING INDEX one.
-                    // The UNIQUE USING INDEX syntax is safe, but other statements in this file
-                    // are also being skipped due to parser limitations.
-                    eprintln!(
-                        "Warning: SQL contains UNIQUE USING INDEX (safe pattern) but parser failed. \
-                         Other statements in this file may not be checked due to sqlparser limitations."
-                    );
+                // If parsing fails, check for safe patterns that sqlparser can't handle
+                if let Some(pattern_name) = Self::detect_safe_pattern(sql) {
+                    Self::warn_safe_pattern_skipped(pattern_name);
                     Ok(ParsedSql {
                         statements: vec![],
                         sql: sql.to_string(),
                         ignore_ranges,
                     })
                 } else {
-                    // Not UNIQUE USING INDEX - return the original parse error
+                    // Not a known safe pattern - return the original parse error
                     Err(e)
                 }
             }
         }
+    }
+
+    /// Detect if SQL contains known safe patterns that sqlparser can't parse
+    /// Returns the pattern name if detected
+    fn detect_safe_pattern(sql: &str) -> Option<&'static str> {
+        if unique_using_index_detector::contains_unique_using_index(sql) {
+            Some("UNIQUE USING INDEX")
+        } else if drop_index_concurrently_detector::contains_drop_index_concurrently(sql) {
+            Some("DROP INDEX CONCURRENTLY")
+        } else {
+            None
+        }
+    }
+
+    /// Print warning about safe pattern causing other statements to be skipped
+    fn warn_safe_pattern_skipped(pattern_name: &str) {
+        eprintln!(
+            "Warning: SQL contains {} (safe pattern) but parser failed. \
+             Other statements in this file may not be checked due to sqlparser limitations.",
+            pattern_name
+        );
     }
 }
 
@@ -159,6 +174,53 @@ ALTER TABLE users DROP COLUMN old_field;
             result.statements.len(),
             0,
             "When UNIQUE USING INDEX causes parse failure, ALL statements are skipped"
+        );
+    }
+
+    #[test]
+    fn test_drop_index_concurrently_returns_empty_statements() {
+        let parser = SqlParser::new();
+        let sql = "DROP INDEX CONCURRENTLY idx_users_email;";
+
+        // This should succeed (not error) but return empty statements
+        // because sqlparser can't parse DROP INDEX CONCURRENTLY
+        let result = parser.parse_with_metadata(sql).unwrap();
+        assert_eq!(
+            result.statements.len(),
+            0,
+            "DROP INDEX CONCURRENTLY should return empty statements"
+        );
+    }
+
+    #[test]
+    fn test_drop_index_concurrently_if_exists() {
+        let parser = SqlParser::new();
+        let sql = "DROP INDEX CONCURRENTLY IF EXISTS idx_users_email;";
+
+        let result = parser.parse_with_metadata(sql).unwrap();
+        assert_eq!(
+            result.statements.len(),
+            0,
+            "DROP INDEX CONCURRENTLY IF EXISTS should return empty statements"
+        );
+    }
+
+    #[test]
+    fn test_drop_index_concurrently_skips_all_statements() {
+        let parser = SqlParser::new();
+        // This file has both DROP INDEX CONCURRENTLY (safe) and DROP COLUMN (unsafe)
+        let sql = r#"
+DROP INDEX CONCURRENTLY idx_users_email;
+ALTER TABLE users DROP COLUMN old_field;
+        "#;
+
+        // Due to parser limitation, ALL statements are skipped (returns empty)
+        // This test documents the limitation - the unsafe DROP COLUMN is NOT detected
+        let result = parser.parse_with_metadata(sql).unwrap();
+        assert_eq!(
+            result.statements.len(),
+            0,
+            "When DROP INDEX CONCURRENTLY causes parse failure, ALL statements are skipped"
         );
     }
 }
