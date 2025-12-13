@@ -50,6 +50,7 @@ impl SafetyChecker {
     pub fn check_file(&self, path: &Utf8Path) -> Result<Vec<Violation>> {
         let sql = fs::read_to_string(path)?;
         self.check_sql(&sql)
+            .map_err(|e| e.with_file_context(path.as_str(), sql.clone()))
     }
 
     /// Check all migration files in a directory
