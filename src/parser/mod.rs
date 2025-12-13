@@ -5,6 +5,7 @@ use sqlparser::parser::Parser;
 
 pub mod comment_parser;
 mod drop_index_concurrently_detector;
+mod primary_key_using_index_detector;
 mod unique_using_index_detector;
 
 pub use comment_parser::IgnoreRange;
@@ -68,6 +69,8 @@ impl SqlParser {
     fn detect_safe_pattern(sql: &str) -> Option<&'static str> {
         if unique_using_index_detector::contains_unique_using_index(sql) {
             Some("UNIQUE USING INDEX")
+        } else if primary_key_using_index_detector::contains_primary_key_using_index(sql) {
+            Some("PRIMARY KEY USING INDEX")
         } else if drop_index_concurrently_detector::contains_drop_index_concurrently(sql) {
             Some("DROP INDEX CONCURRENTLY")
         } else {
@@ -221,6 +224,40 @@ ALTER TABLE users DROP COLUMN old_field;
             result.statements.len(),
             0,
             "When DROP INDEX CONCURRENTLY causes parse failure, ALL statements are skipped"
+        );
+    }
+
+    #[test]
+    fn test_primary_key_using_index_returns_empty_statements() {
+        let parser = SqlParser::new();
+        let sql = "ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY USING INDEX users_pkey;";
+
+        // This should succeed (not error) but return empty statements
+        // because sqlparser can't parse PRIMARY KEY USING INDEX
+        let result = parser.parse_with_metadata(sql).unwrap();
+        assert_eq!(
+            result.statements.len(),
+            0,
+            "PRIMARY KEY USING INDEX should return empty statements"
+        );
+    }
+
+    #[test]
+    fn test_primary_key_using_index_skips_all_statements() {
+        let parser = SqlParser::new();
+        // This file has both PRIMARY KEY USING INDEX (safe) and DROP COLUMN (unsafe)
+        let sql = r#"
+ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY USING INDEX users_pkey;
+ALTER TABLE users DROP COLUMN old_field;
+        "#;
+
+        // Due to parser limitation, ALL statements are skipped (returns empty)
+        // This test documents the limitation - the unsafe DROP COLUMN is NOT detected
+        let result = parser.parse_with_metadata(sql).unwrap();
+        assert_eq!(
+            result.statements.len(),
+            0,
+            "When PRIMARY KEY USING INDEX causes parse failure, ALL statements are skipped"
         );
     }
 }

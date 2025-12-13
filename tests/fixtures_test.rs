@@ -18,6 +18,7 @@ fn test_safe_fixtures_pass() {
     let safe_fixtures = vec![
         "add_column_safe",
         "add_index_with_concurrently",
+        "add_primary_key_safe",
         "add_unique_constraint_safe",
         "drop_index_concurrently",
         "drop_not_null",
@@ -296,10 +297,31 @@ fn test_short_int_pk_unsafe_detected() {
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
-    assert_eq!(violations.len(), 4, "Expected 4 violations");
-    assert!(violations
+    // Expected 5 violations:
+    // - 4 from ShortIntegerPrimaryKeyCheck (INT and SMALLINT PKs)
+    // - 1 from AddPrimaryKeyCheck (ALTER TABLE ADD PRIMARY KEY with INT)
+    assert_eq!(violations.len(), 5, "Expected 5 violations");
+
+    // Check that we have violations from both checks
+    let short_int_violations: Vec<_> = violations
         .iter()
-        .all(|v| v.operation == "Short integer primary key"));
+        .filter(|v| v.operation == "Short integer primary key")
+        .collect();
+    let add_pk_violations: Vec<_> = violations
+        .iter()
+        .filter(|v| v.operation == "ADD PRIMARY KEY")
+        .collect();
+
+    assert_eq!(
+        short_int_violations.len(),
+        4,
+        "Expected 4 short int PK violations"
+    );
+    assert_eq!(
+        add_pk_violations.len(),
+        1,
+        "Expected 1 ADD PRIMARY KEY violation"
+    );
 }
 
 #[test]
@@ -325,6 +347,17 @@ fn test_wide_index_detected() {
 }
 
 #[test]
+fn test_add_primary_key_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("add_primary_key_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(violations[0].operation, "ADD PRIMARY KEY");
+}
+
+#[test]
 fn test_drop_primary_key_detected() {
     let checker = SafetyChecker::new();
     let path = fixture_path("drop_primary_key_unsafe");
@@ -346,14 +379,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        20,
-        "Expected violations in 20 files, got {}",
+        21,
+        "Expected violations in 21 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 27,
-        "Expected 27 total violations: 17 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 4, got {}",
+        total_violations, 29,
+        "Expected 29 total violations: 18 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
         total_violations
     );
 }

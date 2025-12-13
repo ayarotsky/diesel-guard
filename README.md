@@ -57,6 +57,7 @@ Safe alternative:
 - [Adding a UNIQUE constraint](#adding-a-unique-constraint)
 - [Changing column type](#changing-column-type)
 - [Adding a NOT NULL constraint](#adding-a-not-null-constraint)
+- [Adding a primary key to an existing table](#adding-a-primary-key-to-an-existing-table)
 - [Creating extensions](#creating-extensions)
 - [Unnamed constraints](#unnamed-constraints)
 - [Renaming a column](#renaming-a-column)
@@ -312,6 +313,43 @@ ALTER TABLE users DROP CONSTRAINT users_email_not_null_check;
 ```
 
 The VALIDATE step allows concurrent reads and writes, only blocking other schema changes. On PostgreSQL 12+, NOT NULL constraints are more efficient, but this approach still provides better control.
+
+### Adding a primary key to an existing table
+
+#### Bad
+
+Adding a primary key constraint to an existing table acquires an ACCESS EXCLUSIVE lock, blocking all operations (reads and writes). The operation must also create an index to enforce uniqueness, which compounds the lock duration on large tables.
+
+```sql
+-- Blocks all operations while creating index and adding constraint
+ALTER TABLE users ADD PRIMARY KEY (id);
+ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+```
+
+#### Good
+
+Use CREATE UNIQUE INDEX CONCURRENTLY first, then add the primary key constraint using the existing index:
+
+```sql
+-- Step 1: Create unique index concurrently (allows concurrent operations)
+CREATE UNIQUE INDEX CONCURRENTLY users_pkey ON users(id);
+
+-- Step 2: Add PRIMARY KEY using the existing index (fast, minimal lock)
+ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY USING INDEX users_pkey;
+```
+
+**Important:** The CONCURRENTLY approach requires `metadata.toml` with `run_in_transaction = false`:
+
+```toml
+# migrations/2024_01_01_add_primary_key/metadata.toml
+run_in_transaction = false
+```
+
+**Why this works:**
+- Step 1: Creates the index without blocking operations (only prevents concurrent schema changes)
+- Step 2: Adding the constraint is nearly instant since the index already exists
+
+**Note:** This approach requires PostgreSQL 11+. For earlier versions, you must use the unsafe `ALTER TABLE ADD PRIMARY KEY` during a maintenance window.
 
 ### Creating extensions
 
@@ -752,6 +790,7 @@ disable_checks = ["AddColumnCheck"]
 - `AddColumnCheck` - ADD COLUMN with DEFAULT
 - `AddIndexCheck` - CREATE INDEX without CONCURRENTLY
 - `AddNotNullCheck` - ALTER COLUMN SET NOT NULL
+- `AddPrimaryKeyCheck` - ADD PRIMARY KEY to existing table
 - `AddSerialColumnCheck` - ADD COLUMN with SERIAL
 - `AddUniqueConstraintCheck` - ADD UNIQUE constraint via ALTER TABLE
 - `AlterColumnTypeCheck` - ALTER COLUMN TYPE
@@ -822,7 +861,6 @@ Error: Unclosed 'safety-assured:start' at line 1
 - **ADD FOREIGN KEY constraint** - Blocks writes during validation; use NOT VALID + separate VALIDATE
 - **ADD CHECK constraint** - Blocks during validation; use NOT VALID then VALIDATE separately
 - **ADD EXCLUSION constraint** - Blocks all operations during validation (no safe workaround)
-- **ADD PRIMARY KEY to existing table** - Blocks all operations, creates index; use CREATE UNIQUE INDEX CONCURRENTLY first
 - **FOREIGN KEY with CASCADE** - Can cause unintended cascading deletes/updates and data loss
 - **REINDEX without CONCURRENTLY** - Blocks reads/writes; use REINDEX CONCURRENTLY (PostgreSQL 12+)
 

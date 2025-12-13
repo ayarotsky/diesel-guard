@@ -1,6 +1,7 @@
 mod add_column;
 mod add_index;
 mod add_not_null;
+mod add_primary_key;
 mod add_serial_column;
 mod add_unique_constraint;
 mod alter_column_type;
@@ -21,6 +22,7 @@ mod test_utils;
 pub use add_column::AddColumnCheck;
 pub use add_index::AddIndexCheck;
 pub use add_not_null::AddNotNullCheck;
+pub use add_primary_key::AddPrimaryKeyCheck;
 pub use add_serial_column::AddSerialColumnCheck;
 pub use add_unique_constraint::AddUniqueConstraintCheck;
 pub use alter_column_type::AlterColumnTypeCheck;
@@ -105,6 +107,7 @@ impl Registry {
         self.register_check(config, AddColumnCheck);
         self.register_check(config, AddIndexCheck);
         self.register_check(config, AddNotNullCheck);
+        self.register_check(config, AddPrimaryKeyCheck);
         self.register_check(config, AddSerialColumnCheck);
         self.register_check(config, AddUniqueConstraintCheck);
         self.register_check(config, AlterColumnTypeCheck);

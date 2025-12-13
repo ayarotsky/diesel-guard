@@ -34,11 +34,6 @@ impl Check for AddUniqueConstraintCheck {
                 };
 
                 if let TableConstraint::Unique(unique) = constraint {
-                    // UNIQUE USING INDEX is the safe way - don't flag it!
-                    if unique.index_name.is_some() {
-                        return None;
-                    }
-
                     let constraint_name = unique
                         .name
                         .as_ref()
