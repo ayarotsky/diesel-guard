@@ -18,6 +18,7 @@ fn test_safe_fixtures_pass() {
     let safe_fixtures = vec![
         "add_column_safe",
         "add_index_with_concurrently",
+        "add_json_column_safe",
         "add_primary_key_safe",
         "add_unique_constraint_safe",
         "drop_index_concurrently",
@@ -76,6 +77,17 @@ fn test_add_index_without_concurrently_detected() {
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
     assert_eq!(violations[0].operation, "ADD INDEX without CONCURRENTLY");
+}
+
+#[test]
+fn test_add_json_column_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("add_json_column_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(violations[0].operation, "ADD COLUMN with JSON type");
 }
 
 #[test]
@@ -379,14 +391,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        21,
-        "Expected violations in 21 files, got {}",
+        22,
+        "Expected violations in 22 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 29,
-        "Expected 29 total violations: 18 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
+        total_violations, 30,
+        "Expected 30 total violations: 19 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
         total_violations
     );
 }

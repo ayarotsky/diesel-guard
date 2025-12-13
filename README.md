@@ -64,6 +64,7 @@ Safe alternative:
 - [Renaming a table](#renaming-a-table)
 - [Short integer primary keys](#short-integer-primary-keys)
 - [Adding a SERIAL column to an existing table](#adding-a-serial-column-to-an-existing-table)
+- [Adding a JSON column](#adding-a-json-column)
 - [Truncating a table](#truncating-a-table)
 - [Wide indexes](#wide-indexes)
 
@@ -579,6 +580,32 @@ ALTER SEQUENCE users_id_seq OWNED BY users.id;
 
 **Key insight:** Adding a column with `DEFAULT nextval(...)` on an existing table still triggers a table rewrite. The solution is to add the column first without any default, backfill separately, then set the default for future rows only.
 
+### Adding a JSON column
+
+#### Bad
+
+In PostgreSQL, the `json` type has no equality operator, which breaks existing `SELECT DISTINCT` queries and other operations that require comparing values.
+
+```sql
+ALTER TABLE users ADD COLUMN properties JSON;
+```
+
+#### Good
+
+Use `jsonb` instead of `json`:
+
+```sql
+ALTER TABLE users ADD COLUMN properties JSONB;
+```
+
+**Benefits of JSONB over JSON:**
+- Has proper equality and comparison operators (supports DISTINCT, GROUP BY, UNION)
+- Supports indexing (GIN indexes for efficient queries)
+- Faster to process (binary format, no reparsing)
+- Generally better performance for most use cases
+
+**Note:** The only advantage of JSON over JSONB is that it preserves exact formatting and key order, which is rarely needed in practice.
+
 ### Truncating a table
 
 #### Bad
@@ -867,7 +894,6 @@ Error: Unclosed 'safety-assured:start' at line 1
 ### Schema & data migration
 
 - **Adding stored GENERATED column** - Triggers full table rewrite with ACCESS EXCLUSIVE lock
-- **Adding JSON/JSONB column** - Can break SELECT DISTINCT in older PostgreSQL versions
 - **DROP TABLE with multiple foreign keys** - Extended locks on multiple tables simultaneously
 
 ### Data safety & best practices
