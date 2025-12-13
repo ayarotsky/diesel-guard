@@ -51,6 +51,7 @@ Safe alternative:
 
 - [Adding a column with a default value](#adding-a-column-with-a-default-value)
 - [Dropping a column](#dropping-a-column)
+- [Dropping a primary key](#dropping-a-primary-key)
 - [Dropping an index non-concurrently](#dropping-an-index-non-concurrently)
 - [Adding an index non-concurrently](#adding-an-index-non-concurrently)
 - [Adding a UNIQUE constraint](#adding-a-unique-constraint)
@@ -119,6 +120,54 @@ ALTER TABLE users DROP COLUMN email;
 ```
 
 PostgreSQL doesn't support `DROP COLUMN CONCURRENTLY`, so the table rewrite is unavoidable. Staging the removal minimizes risk.
+
+### Dropping a primary key
+
+#### Bad
+
+Dropping a primary key removes the critical uniqueness constraint and breaks foreign key relationships in other tables that reference this table. It also acquires an ACCESS EXCLUSIVE lock, blocking all operations.
+
+```sql
+-- Breaks foreign keys that reference users(id)
+ALTER TABLE users DROP CONSTRAINT users_pkey;
+```
+
+#### Good
+
+If you must change your primary key strategy, use a multi-step migration approach:
+
+```sql
+-- Step 1: Identify all foreign key dependencies
+SELECT
+  tc.table_name, kcu.column_name, rc.constraint_name
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.unique_constraint_name
+WHERE tc.table_name = 'users' AND tc.constraint_type = 'PRIMARY KEY';
+
+-- Step 2: Create the new primary key FIRST (if migrating to a new key)
+ALTER TABLE users ADD CONSTRAINT users_new_pkey PRIMARY KEY (uuid);
+
+-- Step 3: Update all foreign keys to reference the new key
+-- (This may require adding new columns to referencing tables)
+ALTER TABLE posts ADD COLUMN user_uuid UUID;
+UPDATE posts SET user_uuid = users.uuid FROM users WHERE posts.user_id = users.id;
+ALTER TABLE posts ADD CONSTRAINT posts_user_uuid_fkey FOREIGN KEY (user_uuid) REFERENCES users(uuid);
+
+-- Step 4: Only after all foreign keys are migrated, drop the old key
+ALTER TABLE users DROP CONSTRAINT users_pkey;
+
+-- Step 5: Clean up old columns
+ALTER TABLE posts DROP COLUMN user_id;
+```
+
+**Important considerations:**
+- Review ALL tables with foreign keys to this table
+- Consider a transition period where both old and new keys exist
+- Update application code to use the new key before dropping the old one
+- Test thoroughly in a staging environment first
+
+**Limitation:** This check relies on PostgreSQL naming conventions (e.g., `users_pkey`). It may not detect primary keys with custom names. Future versions will support database connections for accurate verification.
 
 ### Dropping an index non-concurrently
 
@@ -709,6 +758,7 @@ disable_checks = ["AddColumnCheck"]
 - `CreateExtensionCheck` - CREATE EXTENSION
 - `DropColumnCheck` - DROP COLUMN
 - `DropIndexCheck` - DROP INDEX without CONCURRENTLY
+- `DropPrimaryKeyCheck` - DROP PRIMARY KEY
 - `RenameColumnCheck` - RENAME COLUMN
 - `RenameTableCheck` - RENAME TABLE
 - `ShortIntegerPrimaryKeyCheck` - SMALLINT/INT/INTEGER primary keys
@@ -773,7 +823,6 @@ Error: Unclosed 'safety-assured:start' at line 1
 - **ADD CHECK constraint** - Blocks during validation; use NOT VALID then VALIDATE separately
 - **ADD EXCLUSION constraint** - Blocks all operations during validation (no safe workaround)
 - **ADD PRIMARY KEY to existing table** - Blocks all operations, creates index; use CREATE UNIQUE INDEX CONCURRENTLY first
-- **DROP PRIMARY KEY** - Breaks foreign key relationships and removes critical constraint
 - **FOREIGN KEY with CASCADE** - Can cause unintended cascading deletes/updates and data loss
 - **REINDEX without CONCURRENTLY** - Blocks reads/writes; use REINDEX CONCURRENTLY (PostgreSQL 12+)
 
