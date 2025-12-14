@@ -881,25 +881,200 @@ Diesel Guard will error if blocks are mismatched:
 Error: Unclosed 'safety-assured:start' at line 1
 ```
 
-## Coming Soon
+## Path to v1
 
-### Constraint & lock-related
+`diesel-guard` is on a roadmap to **v1** with 3 major phases, each adding progressively more sophisticated migration safety capabilities.
 
-- **ADD FOREIGN KEY constraint** - Blocks writes during validation; use NOT VALID + separate VALIDATE
-- **ADD CHECK constraint** - Blocks during validation; use NOT VALID then VALIDATE separately
-- **ADD EXCLUSION constraint** - Blocks all operations during validation (no safe workaround)
-- **FOREIGN KEY with CASCADE** - Can cause unintended cascading deletes/updates and data loss
-- **REINDEX without CONCURRENTLY** - Blocks reads/writes; use REINDEX CONCURRENTLY (PostgreSQL 12+)
+### Phase 1: Complete Static Analysis Coverage
 
-### Schema & data migration
+**Goal:** Implement all linter checks that work through SQL parsing alone, without requiring database connection.
 
-- **Adding stored GENERATED column** - Triggers full table rewrite with ACCESS EXCLUSIVE lock
-- **DROP TABLE with multiple foreign keys** - Extended locks on multiple tables simultaneously
+**Status:** 18/40 checks implemented (45%)
 
-### Data safety & best practices
+#### Constraint & Lock Safety (5 remaining)
+- **ADD FOREIGN KEY constraint** - Detect missing NOT VALID; recommend two-step validation
+- **ADD CHECK constraint** - Detect missing NOT VALID; recommend separate VALIDATE
+- **ADD EXCLUSION constraint** - Warn about blocking behavior (no safe workaround)
+- **FOREIGN KEY with CASCADE** - Flag ON DELETE CASCADE and ON UPDATE CASCADE
+- **REINDEX without CONCURRENTLY** - Recommend REINDEX CONCURRENTLY (PostgreSQL 12+)
 
-- **Multiple foreign keys** - Can block all involved tables simultaneously
-- **Mismatched foreign key column types** - Foreign key column type differs from referenced primary key
+#### Table & Schema Operations (7 remaining)
+- **VACUUM FULL** - Warn about ACCESS EXCLUSIVE lock; recommend regular VACUUM
+- **CLUSTER** - Warn about full table rewrite with ACCESS EXCLUSIVE lock
+- **Adding stored GENERATED column** - Detect table rewrite trigger
+- **DROP TABLE** - Configurable prevention of accidental drops
+- **DROP DATABASE** - Prevent catastrophic database deletion
+- **DROP NOT NULL constraint** - Warn about breaking existing clients
+- **LOCK TABLE statements** - Flag explicit lock acquisitions
+
+#### Type & Best Practices (5 remaining)
+- **CHAR/CHARACTER field types** - Recommend TEXT or VARCHAR instead
+- **VARCHAR with size limit** - Recommend TEXT with CHECK constraint
+- **TIMESTAMP without time zone** - Recommend TIMESTAMPTZ
+- **SERIAL/BIGSERIAL types** - Recommend IDENTITY columns
+- **Mismatched foreign key column types** - Detect type inconsistencies via SQL parsing
+
+#### Transaction & Robustness (3 remaining)
+- **CREATE INDEX CONCURRENTLY in transaction** - Detect and prevent (will fail)
+- **Transaction nesting** - Detect problematic nested BEGIN/COMMIT blocks
+- **Non-robust statements** - Encourage IF EXISTS/IF NOT EXISTS for idempotency
+
+#### Data Safety (2 remaining)
+- **UPDATE/DELETE without WHERE clause** - Prevent accidental mass modifications
+- **Uncommitted transactions** - Detect unclosed transaction blocks
+
+### Phase 2: Database-Connected Intelligence
+
+**Goal:** Add optional database connection to provide context-aware checking based on actual table state, relationships, and PostgreSQL version.
+
+**Benefits:** More accurate warnings, version-specific advice, and detection of issues impossible to catch through static analysis alone.
+
+#### New Database-Connected Checks
+
+1. **Table size awareness** - Warn differently for operations on large vs small tables
+   - Operations safe on small tables become dangerous above threshold (configurable, default: 1GB or 100K rows)
+   - Example: ALTER COLUMN TYPE on 100-row table vs 10M-row table
+
+2. **View and materialized view dependencies** - Detect dependent objects before dangerous operations
+   - Flag DROP COLUMN when views reference the column
+   - Flag ALTER COLUMN TYPE when materialized views depend on it
+
+3. **Foreign key relationship mapping** - Analyze actual FK graph in database
+   - Detect DROP TABLE when other tables reference it (with FK counts)
+   - Warn about CASCADE operations with actual downstream table list
+   - Flag ADD FOREIGN KEY when referencing table lacks proper index
+
+4. **Partition hierarchy detection** - Understand partitioned table structures
+   - Recommend DETACH PARTITION CONCURRENTLY for PG 14+
+   - Warn about operations on parent vs child partitions
+
+5. **Trigger and function dependencies** - Detect triggers that reference columns/tables
+   - Flag DROP COLUMN when triggers use it
+   - Flag ALTER COLUMN TYPE when triggers may break
+
+6. **Missing timeout settings** - Verify timeout configuration at database/user level
+   - Query `SHOW lock_timeout` and `SHOW statement_timeout` to check effective values
+   - Only warn if both migration file AND database have no timeouts configured
+   - Avoids false positives when timeouts are set at database/role level
+   - Recommend `SET lock_timeout = '2s'` and `SET statement_timeout = '5s'` in migrations
+
+#### Existing Checks Enhanced by Database Connection
+
+1. **DROP PRIMARY KEY** (currently limited) - Currently relies on naming conventions (e.g., `users_pkey`)
+   - **With DB:** Query information_schema to find actual primary key name
+   - **With DB:** List all foreign keys that reference this PK
+
+2. **ADD COLUMN with DEFAULT** (currently version-agnostic)
+   - **With DB:** Query PostgreSQL version to give accurate warnings
+   - **With DB:** PG 11+ with constant defaults → mark as safe, no warning needed
+
+3. **ALTER COLUMN TYPE** (currently assumes all unsafe)
+   - **With DB:** Detect safe type changes (VARCHAR(50)→VARCHAR(100), VARCHAR→TEXT)
+   - **With DB:** Check actual column type to avoid false positives
+
+4. **Short Integer Primary Keys** (currently checks all tables)
+   - **With DB:** Query actual row counts to assess urgency
+   - **With DB:** Calculate time-to-exhaustion based on insert rate from pg_stat_user_tables
+
+5. **CREATE EXTENSION** (currently always warns)
+   - **With DB:** Check if extension already exists
+   - **With DB:** Verify current user has sufficient privileges
+
+6. **ADD NOT NULL** (currently always recommends CHECK constraint)
+   - **With DB:** On PG 12+, verify all values non-null → direct SET NOT NULL is safe
+   - **With DB:** Detect if equivalent CHECK constraint already exists
+
+#### Configuration
+
+```toml
+# diesel-guard.toml
+# Optional: connect to database for enhanced checking
+url = "postgresql://user:pass@localhost/dbname"
+enabled = false  # Default: false (static analysis only)
+
+# Table size thresholds for warnings
+large_table_rows = 100000
+large_table_size_mb = 1024
+```
+
+### Phase 3: Diesel Integration - All-in-One Migration Suite
+
+**Goal:** Integration with `diesel_migrations` to become the single tool for both safety checking and migration execution.
+
+#### Core Integration Features
+
+1. **Native Diesel CLI replacement**
+   ```bash
+   # Instead of:
+   diesel migration run
+   diesel migration revert
+
+   # Users can:
+   diesel-guard migrate run    # Checks safety, then runs
+   diesel-guard migrate revert # Checks down.sql safety, then reverts
+   diesel-guard migrate status # Show migration status + safety summary
+   ```
+
+2. **Automatic safety checking before execution**
+   - Run all safety checks before applying any migration
+
+3. **Migration generation with safe templates**
+   ```bash
+   diesel-guard migration generate add_user_email
+
+   # Generates migration with safety comments and safe patterns:
+   # up.sql:
+   # -- Migration: Add email column to users
+   # -- Safe pattern: Add without default, backfill separately
+   #
+   # SET lock_timeout = '2s';
+   # SET statement_timeout = '5s';
+   #
+   # ALTER TABLE users ADD COLUMN email TEXT;
+   ```
+
+4. **Interactive migration review**
+   ```bash
+   diesel-guard migrate review
+
+   # Shows:
+   # ✓ 2024_01_01_create_users - Safe
+   # ⚠ 2024_01_02_add_email - 1 warning (ADD COLUMN with DEFAULT)
+   # ✗ 2024_01_03_drop_column - 1 violation (DROP COLUMN)
+   #
+   # Run migrations? (y/N/review)
+   ```
+
+5. **Diesel schema.rs validation**
+   - Detect schema.rs drift from actual database
+   - Validate that migrations will produce expected schema
+   - Warn about schema changes not reflected in migrations
+
+6. **Migration splitting assistant**
+   ```bash
+   diesel-guard migrate split 2024_01_02_add_email
+
+   # Automatically splits unsafe migration into safe multi-step migrations:
+   # 2024_01_02_01_add_email_column
+   # 2024_01_02_02_add_email_default
+   ```
+
+#### Configuration
+
+```toml
+# diesel-guard.toml
+# Enforce timeout settings when running migrations
+enforce_timeouts = true
+
+# Timeouts applied if migration doesn't specify them
+# These are set before each migration runs
+lock_timeout = "2s"
+statement_timeout = "5s"
+idle_in_transaction_session_timeout = "10s"
+
+# Include timeout settings in generated migrations
+include_timeouts = true
+```
 
 ## Contributing
 
