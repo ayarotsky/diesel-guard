@@ -30,7 +30,7 @@ serde_json = "1.0"
 toml = "0.9"
 
 # Path handling
-camino = "1.1"
+camino = "1.2"
 walkdir = "2.4"
 
 # Validation
