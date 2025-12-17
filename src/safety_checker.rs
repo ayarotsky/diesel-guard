@@ -1,11 +1,12 @@
+use crate::adapters::{DieselAdapter, MigrationAdapter, SqlxAdapter};
 use crate::checks::Registry;
 use crate::config::Config;
 use crate::error::Result;
 use crate::parser::SqlParser;
 use crate::violation::Violation;
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use std::fs;
-use walkdir::WalkDir;
+use std::sync::Arc;
 
 pub struct SafetyChecker {
     parser: SqlParser,
@@ -49,88 +50,79 @@ impl SafetyChecker {
     /// Check a single migration file
     pub fn check_file(&self, path: &Utf8Path) -> Result<Vec<Violation>> {
         let sql = fs::read_to_string(path)?;
-        self.check_sql(&sql)
-            .map_err(|e| e.with_file_context(path.as_str(), sql.clone()))
+
+        // For most files, just parse normally
+        // Direction-aware parsing is only needed for marker-based SQLx migrations
+        // which will be handled by check_directory when using SqlxAdapter
+        let parsed = self
+            .parser
+            .parse_with_metadata(&sql)
+            .map_err(|e| e.with_file_context(path.as_str(), sql.clone()))?;
+
+        let violations = self.registry.check_statements_with_context(
+            &parsed.statements,
+            &parsed.sql,
+            &parsed.ignore_ranges,
+        );
+
+        Ok(violations)
     }
 
     /// Check all migration files in a directory
     pub fn check_directory(&self, dir: &Utf8Path) -> Result<Vec<(String, Vec<Violation>)>> {
-        let files_to_check = self.collect_files(dir);
-
-        files_to_check
-            .iter()
-            .map(|file_path| {
-                let violations = self.check_file(file_path)?;
-                if violations.is_empty() {
-                    Ok(None)
-                } else {
-                    Ok(Some((file_path.to_string(), violations)))
-                }
-            })
-            .collect::<Result<Vec<_>>>()
-            .map(|results| results.into_iter().flatten().collect())
-    }
-
-    /// Collect all SQL files to check from a directory
-    fn collect_files(&self, dir: &Utf8Path) -> Vec<Utf8PathBuf> {
-        // Collect and sort directory entries
-        let mut entries: Vec<_> = WalkDir::new(dir)
-            .max_depth(1)
-            .min_depth(1)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .collect();
-
-        entries.sort_by(|a, b| a.path().cmp(b.path()));
-
-        // Process each entry
-        entries
-            .into_iter()
-            .flat_map(|entry| {
-                let Some(path) = Utf8Path::from_path(entry.path()) else {
-                    return vec![];
-                };
-
-                if entry.file_type().is_dir() {
-                    self.process_migration_directory(path)
-                } else if path.extension() == Some("sql") {
-                    vec![path.to_owned()]
-                } else {
-                    vec![]
-                }
-            })
-            .collect()
-    }
-
-    /// Process a migration directory and return SQL files to check
-    fn process_migration_directory(&self, path: &Utf8Path) -> Vec<Utf8PathBuf> {
-        let dir_name = match path.file_name() {
-            Some(name) => name,
-            None => return vec![],
+        // Get framework adapter from config
+        let adapter: Arc<dyn MigrationAdapter> = match self.config.framework.as_str() {
+            "diesel" => Arc::new(DieselAdapter),
+            "sqlx" => Arc::new(SqlxAdapter),
+            _ => {
+                return Err(crate::error::DieselGuardError::parse_error(format!(
+                    "Invalid framework: {}",
+                    self.config.framework
+                )));
+            }
         };
 
-        // Skip if migration is before start_after threshold
-        if !self.config.should_check_migration(dir_name) {
-            return vec![];
-        }
+        // Collect migration files using adapter
+        let migration_files = adapter
+            .collect_migration_files(
+                dir,
+                self.config.start_after.as_deref(),
+                self.config.check_down,
+            )
+            .map_err(|e| crate::error::DieselGuardError::parse_error(e.to_string()))?;
 
-        let mut files = vec![];
+        // Check each migration file
+        let mut results = Vec::new();
 
-        // Always check up.sql if it exists
-        let up_sql = path.join("up.sql");
-        if up_sql.exists() {
-            files.push(up_sql);
-        }
+        for mig_file in migration_files {
+            let sql = fs::read_to_string(&mig_file.path)?;
 
-        // Check down.sql only if enabled in config
-        if self.config.check_down {
-            let down_sql = path.join("down.sql");
-            if down_sql.exists() {
-                files.push(down_sql);
+            // Parse with direction awareness only for marker-based files
+            // (files that contain both up and down sections)
+            // For regular files (separate up.sql/down.sql), just parse normally
+            let use_direction_parsing =
+                sql.contains("-- migrate:up") && sql.contains("-- migrate:down");
+
+            let parsed = if use_direction_parsing {
+                self.parser
+                    .parse_sql_with_direction(&sql, mig_file.direction)
+            } else {
+                self.parser.parse_with_metadata(&sql)
+            }
+            .map_err(|e| e.with_file_context(mig_file.path.as_str(), sql.clone()))?;
+
+            let violations = self.registry.check_statements_with_context(
+                &parsed.statements,
+                &parsed.sql,
+                &parsed.ignore_ranges,
+            );
+
+            if !violations.is_empty() {
+                results.push((mig_file.path.to_string(), violations));
             }
         }
 
-        files
+        Ok(results)
     }
 
     /// Check a path (file or directory)

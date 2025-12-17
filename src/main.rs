@@ -54,10 +54,16 @@ fn main() -> Result<()> {
             // Load configuration with explicit error handling
             let config = match Config::load() {
                 Ok(config) => config,
-                Err(e) => {
-                    eprintln!("Warning: {}", e);
-                    eprintln!("Using default configuration.");
+                Err(diesel_guard::config::ConfigError::IoError(_))
+                    if !Utf8PathBuf::from("diesel-guard.toml").exists() =>
+                {
+                    // File doesn't exist - use defaults with warning
+                    eprintln!("Warning: No config file found. Using default configuration.");
                     Config::default()
+                }
+                Err(e) => {
+                    // Config file exists but has errors - this is fatal
+                    return Err(e.into());
                 }
             };
 
@@ -113,8 +119,11 @@ fn main() -> Result<()> {
             }
             println!();
             println!("Next steps:");
-            println!("1. Edit diesel-guard.toml to customize your configuration");
-            println!("2. Run 'diesel-guard check <path>' to check your migrations");
+            println!(
+                "1. Edit diesel-guard.toml and set the 'framework' field to \"diesel\" or \"sqlx\""
+            );
+            println!("2. Customize other configuration options as needed");
+            println!("3. Run 'diesel-guard check <path>' to check your migrations");
         }
     }
 
