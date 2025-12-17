@@ -63,15 +63,19 @@ impl Diagnostic for ConfigError {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     /// Skip migrations before this timestamp
-    /// Format: YYYYMMDDHHMMSS, YYYY_MM_DD_HHMMSS, or YYYY-MM-DD-HHMMSS
+    ///
+    /// Accepts multiple formats: YYYYMMDDHHMMSS, YYYY_MM_DD_HHMMSS, or YYYY-MM-DD-HHMMSS
+    ///
     /// Examples: "20240101000000", "2024_01_01_000000", or "2024-01-01-000000"
+    ///
+    /// Note: Timestamps are normalized automatically during comparison
     #[serde(default)]
     pub start_after: Option<String>,
 
-    /// Whether to check down.sql files in addition to up.sql
+    /// Whether to check down.sql/down migrations in addition to up.sql/up migrations
     #[serde(default)]
     pub check_down: bool,
 
@@ -103,10 +107,8 @@ impl Config {
 
     /// Validate configuration values
     fn validate(&self) -> Result<(), ConfigError> {
-        // Validate timestamp format if present
-        if let Some(ref timestamp) = self.start_after {
-            Self::validate_timestamp(timestamp)?;
-        }
+        // Timestamp validation is framework-specific and done by adapters
+        // during migration file collection
 
         // Validate check names against the central registry
         for check_name in &self.disable_checks {
@@ -118,20 +120,6 @@ impl Config {
         }
 
         Ok(())
-    }
-
-    /// Validate timestamp format: YYYY_MM_DD_HHMMSS, YYYY-MM-DD-HHMMSS, or YYYYMMDDHHMMSS
-    fn validate_timestamp(timestamp: &str) -> Result<(), ConfigError> {
-        let Some(captures) = MIGRATION_TIMESTAMP_REGEX.captures(timestamp) else {
-            return Err(ConfigError::InvalidTimestampFormat(timestamp.to_string()));
-        };
-
-        // Check if the matched part is the entire string
-        if captures.get(0).unwrap().as_str() == timestamp {
-            Ok(())
-        } else {
-            Err(ConfigError::InvalidTimestampFormat(timestamp.to_string()))
-        }
     }
 
     /// Check if a specific check is enabled
@@ -174,44 +162,6 @@ mod tests {
         assert_eq!(config.start_after, None);
         assert!(!config.check_down);
         assert_eq!(config.disable_checks.len(), 0);
-    }
-
-    #[test]
-    fn test_valid_timestamp() {
-        // Format with underscores
-        assert!(Config::validate_timestamp("2024_01_01_000000").is_ok());
-        assert!(Config::validate_timestamp("2023_12_31_235959").is_ok());
-        assert!(Config::validate_timestamp("2025_06_15_120000").is_ok());
-
-        // Format with dashes
-        assert!(Config::validate_timestamp("2024-01-01-000000").is_ok());
-        assert!(Config::validate_timestamp("2023-12-31-235959").is_ok());
-        assert!(Config::validate_timestamp("2025-06-15-120000").is_ok());
-
-        // Format without separators
-        assert!(Config::validate_timestamp("20240101000000").is_ok());
-        assert!(Config::validate_timestamp("20231231235959").is_ok());
-        assert!(Config::validate_timestamp("20250615120000").is_ok());
-    }
-
-    #[test]
-    fn test_invalid_timestamp_format() {
-        // Mixed separators
-        assert!(Config::validate_timestamp("2024_01-01_000000").is_err());
-        assert!(Config::validate_timestamp("2024-01_01-000000").is_err());
-
-        // Wrong length
-        assert!(Config::validate_timestamp("2024_01_01").is_err());
-        assert!(Config::validate_timestamp("2024_01_01_00000").is_err());
-        assert!(Config::validate_timestamp("2024010100000").is_err());
-
-        // Non-numeric characters
-        assert!(Config::validate_timestamp("202a_01_01_000000").is_err());
-        assert!(Config::validate_timestamp("202a-01-01-000000").is_err());
-
-        // Invalid separators
-        assert!(Config::validate_timestamp("2024/01/01/000000").is_err());
-        assert!(Config::validate_timestamp("2024.01.01.000000").is_err());
     }
 
     #[test]

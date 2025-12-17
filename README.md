@@ -2,11 +2,11 @@
 
 ![Build Status](https://github.com/ayarotsky/diesel-guard/actions/workflows/ci.yml/badge.svg?branch=main)
 
-Catch dangerous PostgreSQL migrations in Diesel before they take down production.
+Catch dangerous PostgreSQL migrations before they take down production.
 
 ✓ Detects operations that lock tables or cause downtime<br>
 ✓ Provides safe alternatives for each blocking operation<br>
-✓ Works with any Diesel project - zero configuration required<br>
+✓ Works with both Diesel and SQLx - zero configuration required<br>
 ✓ Supports safety-assured blocks for verified operations<br>
 
 ## Installation
@@ -17,7 +17,7 @@ cargo install diesel-guard
 
 ## How It Works
 
-Diesel Guard analyzes your migration SQL and catches dangerous operations before they reach production.
+diesel-guard analyzes your migration SQL and catches dangerous operations before they reach production.
 
 ```sh
 diesel-guard check migrations/2024_01_01_create_users/up.sql
@@ -46,6 +46,85 @@ Safe alternative:
 
   Note: For PostgreSQL 11+, this is safe if the default is a constant value.
 ```
+
+## Supported Frameworks
+
+diesel-guard supports both **Diesel** and **SQLx** PostgreSQL migrations with automatic framework detection.
+
+### Diesel
+
+Diesel's directory-based migration structure:
+
+```
+migrations/
+└── 2024_01_01_000000_create_users/
+    ├── up.sql
+    ├── down.sql
+    └── metadata.toml (optional)
+```
+
+### SQLx
+
+SQLx supports multiple migration file formats. diesel-guard handles all of them:
+
+#### Format 1: Suffix-based (recommended)
+Most common SQLx format with separate up/down files:
+
+```
+migrations/
+├── 20240101000000_create_users.up.sql
+└── 20240101000000_create_users.down.sql
+```
+
+#### Format 2: Single file (up-only)
+Single migration file without rollback:
+
+```
+migrations/
+└── 20240101000000_create_users.sql
+```
+
+#### Format 3: Marker-based
+Single file with both up and down sections:
+
+```sql
+-- migrations/20240101000000_create_users.sql
+
+-- migrate:up
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL
+);
+
+-- migrate:down
+DROP TABLE users;
+```
+
+#### Format 4: Directory-based
+Similar to Diesel but with SQLx timestamp format:
+
+```
+migrations/
+└── 20240101000000_create_users/
+    ├── up.sql
+    └── down.sql
+```
+
+### Framework Detection
+
+diesel-guard automatically detects which framework you're using by examining your migrations directory structure. No configuration needed.
+
+### SQLx Metadata Directives
+
+SQLx uses comment directives for migration metadata. diesel-guard recognizes these and validates their usage:
+
+```sql
+-- migrate:no-transaction
+
+CREATE INDEX CONCURRENTLY idx_users_email ON users(email);
+```
+
+diesel-guard will warn you if you use `CONCURRENTLY` operations without the `-- migrate:no-transaction` directive.
 
 ## Checks
 
