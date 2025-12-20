@@ -12,7 +12,6 @@
 use super::{MigrationAdapter, MigrationDirection, MigrationFile, Result};
 use camino::Utf8Path;
 use regex::Regex;
-use std::fs;
 use std::sync::LazyLock;
 use walkdir::WalkDir;
 
@@ -29,26 +28,6 @@ pub struct DieselAdapter;
 impl MigrationAdapter for DieselAdapter {
     fn name(&self) -> &'static str {
         "Diesel"
-    }
-
-    fn detect(path: &Utf8Path) -> Option<u8> {
-        let mut score = 0u8;
-
-        // Look for diesel.toml in parent directories (strong signal)
-        if has_diesel_toml(path) {
-            score += 60;
-        }
-
-        // Look for Diesel migration structure (directories with up.sql/down.sql)
-        if has_diesel_migration_structure(path) {
-            score += 40;
-        }
-
-        if score > 0 {
-            Some(score)
-        } else {
-            None
-        }
     }
 
     fn collect_migration_files(
@@ -180,59 +159,6 @@ impl DieselAdapter {
 
         Ok(files)
     }
-}
-
-/// Check if diesel.toml exists in parent directories.
-fn has_diesel_toml(path: &Utf8Path) -> bool {
-    let mut current = path;
-
-    // Check up to 5 levels up
-    for _ in 0..5 {
-        let diesel_toml = current.join("diesel.toml");
-        if diesel_toml.exists() {
-            return true;
-        }
-
-        match current.parent() {
-            Some(parent) => current = parent,
-            None => break,
-        }
-    }
-
-    false
-}
-
-/// Check if directory has Diesel migration structure (directories with up.sql).
-fn has_diesel_migration_structure(path: &Utf8Path) -> bool {
-    let Ok(entries) = fs::read_dir(path) else {
-        return false;
-    };
-
-    for entry in entries.filter_map(|e| e.ok()) {
-        if !entry
-            .file_type()
-            .ok()
-            .map(|ft| ft.is_dir())
-            .unwrap_or(false)
-        {
-            continue;
-        }
-
-        let Ok(dir_name) = entry.file_name().into_string() else {
-            continue;
-        };
-
-        // Check if directory name looks like a Diesel migration
-        if DIESEL_TIMESTAMP_REGEX.is_match(&dir_name) {
-            // Check if it contains up.sql
-            let up_sql = entry.path().join("up.sql");
-            if up_sql.exists() {
-                return true;
-            }
-        }
-    }
-
-    false
 }
 
 /// Check if migration should be checked based on start_after filter.

@@ -38,6 +38,12 @@ pub enum ConfigError {
 
     #[error("Invalid timestamp format: {0}")]
     InvalidTimestampFormat(String),
+
+    #[error("Missing required field 'framework' in diesel-guard.toml")]
+    MissingFramework,
+
+    #[error("Invalid framework: {framework}")]
+    InvalidFramework { framework: String },
 }
 
 impl Diagnostic for ConfigError {
@@ -49,6 +55,10 @@ impl Diagnostic for ConfigError {
             Self::InvalidTimestampFormat(_) => {
                 Some(Box::new("diesel_guard::config::invalid_timestamp"))
             }
+            Self::MissingFramework => Some(Box::new("diesel_guard::config::missing_framework")),
+            Self::InvalidFramework { .. } => {
+                Some(Box::new("diesel_guard::config::invalid_framework"))
+            }
         }
     }
 
@@ -58,13 +68,24 @@ impl Diagnostic for ConfigError {
             Self::InvalidTimestampFormat(_) => Some(Box::new(
                 "Expected format: YYYYMMDDHHMMSS, YYYY_MM_DD_HHMMSS, or YYYY-MM-DD-HHMMSS (e.g., 20240101000000, 2024_01_01_000000, or 2024-01-01-000000)",
             )),
+            Self::MissingFramework => Some(Box::new(
+                "Add one of the following to your diesel-guard.toml file:\n  framework = \"diesel\"\n  framework = \"sqlx\"",
+            )),
+            Self::InvalidFramework { .. } => Some(Box::new("Valid values: \"diesel\", \"sqlx\"")),
             _ => None,
         }
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    /// Migration framework being used (required)
+    ///
+    /// Valid values: "diesel" or "sqlx"
+    ///
+    /// This field is required and must be explicitly set in diesel-guard.toml
+    pub framework: String,
+
     /// Skip migrations before this timestamp
     ///
     /// Accepts multiple formats: YYYYMMDDHHMMSS, YYYY_MM_DD_HHMMSS, or YYYY-MM-DD-HHMMSS
@@ -100,13 +121,30 @@ impl Config {
     /// Load config from specific path (useful for testing)
     pub fn load_from_path(path: &Utf8Path) -> Result<Self, ConfigError> {
         let contents = std::fs::read_to_string(path)?;
-        let config: Config = toml::from_str(&contents)?;
+        let config: Config = toml::from_str(&contents).map_err(|e| {
+            // Check if the error is due to missing framework field
+            if e.to_string().contains("missing field `framework`") {
+                ConfigError::MissingFramework
+            } else {
+                ConfigError::ParseError(e)
+            }
+        })?;
         config.validate()?;
         Ok(config)
     }
 
     /// Validate configuration values
     fn validate(&self) -> Result<(), ConfigError> {
+        // Validate framework field
+        match self.framework.as_str() {
+            "diesel" | "sqlx" => {}
+            _ => {
+                return Err(ConfigError::InvalidFramework {
+                    framework: self.framework.clone(),
+                });
+            }
+        }
+
         // Timestamp validation is framework-specific and done by adapters
         // during migration file collection
 
@@ -147,6 +185,17 @@ impl Config {
 
         // String comparison works because all formats are lexicographically ordered
         migration_normalized > start_normalized
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            framework: "diesel".to_string(),
+            start_after: None,
+            check_down: false,
+            disable_checks: Vec::new(),
+        }
     }
 }
 
@@ -257,6 +306,7 @@ mod tests {
     #[test]
     fn test_invalid_check_name() {
         let config_str = r#"
+            framework = "diesel"
             disable_checks = ["InvalidCheckName"]
         "#;
 
@@ -267,6 +317,7 @@ mod tests {
     #[test]
     fn test_valid_check_names() {
         let config_str = r#"
+            framework = "diesel"
             disable_checks = ["AddColumnCheck", "DropColumnCheck"]
         "#;
 
@@ -306,6 +357,7 @@ mod tests {
         fs::write(
             &config_path,
             r#"
+framework = "diesel"
 start_after = "2024_01_01_000000"
 check_down = true
 disable_checks = ["AddColumnCheck"]
@@ -315,8 +367,74 @@ disable_checks = ["AddColumnCheck"]
 
         let config_path_utf8 = Utf8Path::from_path(&config_path).unwrap();
         let config = Config::load_from_path(config_path_utf8).unwrap();
+        assert_eq!(config.framework, "diesel");
         assert_eq!(config.start_after, Some("2024_01_01_000000".to_string()));
         assert!(config.check_down);
         assert_eq!(config.disable_checks, vec!["AddColumnCheck".to_string()]);
+    }
+
+    #[test]
+    fn test_valid_diesel_framework() {
+        let config = Config {
+            framework: "diesel".to_string(),
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_valid_sqlx_framework() {
+        let config = Config {
+            framework: "sqlx".to_string(),
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_invalid_framework_value() {
+        let config = Config {
+            framework: "rails".to_string(),
+            ..Default::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidFramework { .. }));
+    }
+
+    #[test]
+    fn test_framework_case_sensitive() {
+        let config = Config {
+            framework: "Diesel".to_string(),
+            ..Default::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(matches!(err, ConfigError::InvalidFramework { .. }));
+    }
+
+    #[test]
+    fn test_missing_framework_field_errors() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("diesel-guard.toml");
+
+        // Config file without framework field
+        fs::write(
+            &config_path,
+            r#"
+start_after = "2024_01_01_000000"
+check_down = true
+            "#,
+        )
+        .unwrap();
+
+        let config_path_utf8 = Utf8Path::from_path(&config_path).unwrap();
+        let err = Config::load_from_path(config_path_utf8).unwrap_err();
+        assert!(matches!(err, ConfigError::MissingFramework));
+    }
+
+    #[test]
+    fn test_default_config_has_valid_framework() {
+        let config = Config::default();
+        assert_eq!(config.framework, "diesel");
+        assert!(config.validate().is_ok());
     }
 }

@@ -11,6 +11,7 @@ fn test_config_disables_checks() {
     fs::write(
         &config_path,
         r#"
+framework = "diesel"
 disable_checks = ["AddColumnCheck"]
         "#,
     )
@@ -30,6 +31,7 @@ fn test_config_enables_check_down() {
     fs::write(
         &config_path,
         r#"
+framework = "diesel"
 check_down = true
         "#,
     )
@@ -48,6 +50,7 @@ fn test_config_start_after() {
     fs::write(
         &config_path,
         r#"
+framework = "diesel"
 start_after = "2024_01_01_000000"
         "#,
     )

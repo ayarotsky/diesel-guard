@@ -1,6 +1,12 @@
 # diesel-guard configuration file
 # Copy this file to diesel-guard.toml and customize as needed
 
+# Framework configuration (REQUIRED)
+# Specify which migration framework you're using
+# Valid values: "diesel" or "sqlx"
+framework = "diesel"
+# framework = "sqlx"
+
 # Skip checking migrations created before this timestamp
 # Useful for retrofitting diesel-guard into existing projects
 #

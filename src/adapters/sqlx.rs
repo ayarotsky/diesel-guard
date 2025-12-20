@@ -33,26 +33,6 @@ impl MigrationAdapter for SqlxAdapter {
         "SQLx"
     }
 
-    fn detect(path: &Utf8Path) -> Option<u8> {
-        let mut score = 0u8;
-
-        // Look for .sqlx directory (strong signal)
-        if has_sqlx_directory(path) {
-            score += 60;
-        }
-
-        // Look for SQLx file patterns
-        if has_sqlx_file_patterns(path) {
-            score += 40;
-        }
-
-        if score > 0 {
-            Some(score)
-        } else {
-            None
-        }
-    }
-
     fn collect_migration_files(
         &self,
         dir: &Utf8Path,
@@ -339,62 +319,6 @@ fn validate_migration_metadata(
 /// Check if SQL contains SQLx migration markers.
 fn contains_migrate_markers(content: &str) -> bool {
     content.contains("-- migrate:up") && content.contains("-- migrate:down")
-}
-
-/// Check if .sqlx directory exists in project root.
-fn has_sqlx_directory(path: &Utf8Path) -> bool {
-    let mut current = path;
-
-    // Check up to 5 levels up
-    for _ in 0..5 {
-        let sqlx_dir = current.join(".sqlx");
-        if sqlx_dir.exists() && sqlx_dir.is_dir() {
-            return true;
-        }
-
-        match current.parent() {
-            Some(parent) => current = parent,
-            None => break,
-        }
-    }
-
-    false
-}
-
-/// Check if directory has SQLx file patterns.
-fn has_sqlx_file_patterns(path: &Utf8Path) -> bool {
-    let Ok(entries) = fs::read_dir(path) else {
-        return false;
-    };
-
-    for entry in entries.filter_map(|e| e.ok()) {
-        let Ok(file_name) = entry.file_name().into_string() else {
-            continue;
-        };
-
-        // Check for .up.sql or .down.sql files
-        if file_name.ends_with(".up.sql") || file_name.ends_with(".down.sql") {
-            return true;
-        }
-
-        // Check for flat YYYYMMDDHHMMSS_*.sql files
-        if SQLX_TIMESTAMP_REGEX.is_match(&file_name) && file_name.ends_with(".sql") {
-            return true;
-        }
-
-        // Check for directories with YYYYMMDDHHMMSS_ prefix
-        if entry
-            .file_type()
-            .ok()
-            .map(|ft| ft.is_dir())
-            .unwrap_or(false)
-            && SQLX_TIMESTAMP_REGEX.is_match(&file_name)
-        {
-            return true;
-        }
-    }
-
-    false
 }
 
 /// Check if migration should be checked based on start_after filter.

@@ -3,15 +3,15 @@
 //! This module provides abstractions for different migration frameworks (Diesel, SQLx, etc.).
 //! Each framework implements the `MigrationAdapter` trait to handle framework-specific
 //! file discovery, timestamp parsing, and validation.
+//!
+//! The framework is explicitly configured via the `framework` field in `diesel-guard.toml`.
 
 use camino::{Utf8Path, Utf8PathBuf};
 use std::error::Error;
 
-mod detector;
 mod diesel;
 mod sqlx;
 
-pub use detector::FrameworkDetector;
 pub use diesel::DieselAdapter;
 pub use sqlx::SqlxAdapter;
 
@@ -47,17 +47,6 @@ pub struct MigrationFile {
 pub trait MigrationAdapter: Send + Sync {
     /// Framework name for display/logging.
     fn name(&self) -> &'static str;
-
-    /// Detect if a directory contains this framework's migrations.
-    ///
-    /// Returns a confidence score (0-100) if the directory structure matches
-    /// this framework's conventions, or `None` if it doesn't match at all.
-    ///
-    /// Higher scores indicate stronger confidence. Scores are used for
-    /// auto-detection when multiple frameworks might apply.
-    fn detect(path: &Utf8Path) -> Option<u8>
-    where
-        Self: Sized;
 
     /// Collect migration files from a directory.
     ///

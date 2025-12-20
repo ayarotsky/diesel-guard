@@ -1,4 +1,4 @@
-use crate::adapters::FrameworkDetector;
+use crate::adapters::{DieselAdapter, MigrationAdapter, SqlxAdapter};
 use crate::checks::Registry;
 use crate::config::Config;
 use crate::error::Result;
@@ -6,6 +6,7 @@ use crate::parser::SqlParser;
 use crate::violation::Violation;
 use camino::Utf8Path;
 use std::fs;
+use std::sync::Arc;
 
 pub struct SafetyChecker {
     parser: SqlParser,
@@ -69,9 +70,17 @@ impl SafetyChecker {
 
     /// Check all migration files in a directory
     pub fn check_directory(&self, dir: &Utf8Path) -> Result<Vec<(String, Vec<Violation>)>> {
-        // Auto-detect framework from directory structure
-        let adapter = FrameworkDetector::detect(dir);
-        eprintln!("Detected framework: {}", adapter.name());
+        // Get framework adapter from config
+        let adapter: Arc<dyn MigrationAdapter> = match self.config.framework.as_str() {
+            "diesel" => Arc::new(DieselAdapter),
+            "sqlx" => Arc::new(SqlxAdapter),
+            _ => {
+                return Err(crate::error::DieselGuardError::parse_error(format!(
+                    "Invalid framework: {}",
+                    self.config.framework
+                )));
+            }
+        };
 
         // Collect migration files using adapter
         let migration_files = adapter

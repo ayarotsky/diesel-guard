@@ -879,6 +879,11 @@ diesel-guard init --force
 ### Configuration options
 
 ```toml
+# Framework configuration (REQUIRED)
+# Specify which migration framework you're using
+# Valid values: "diesel" or "sqlx"
+framework = "diesel"
+
 # Skip migrations before this timestamp
 # Accepts: YYYYMMDDHHMMSS, YYYY_MM_DD_HHMMSS, or YYYY-MM-DD-HHMMSS
 # Works with any migration directory format
