@@ -6,7 +6,7 @@ Catch dangerous PostgreSQL migrations before they take down production.
 
 ✓ Detects operations that lock tables or cause downtime<br>
 ✓ Provides safe alternatives for each blocking operation<br>
-✓ Works with both Diesel and SQLx - zero configuration required<br>
+✓ Works with both Diesel and SQLx migration frameworks<br>
 ✓ Supports safety-assured blocks for verified operations<br>
 
 ## Installation
@@ -49,7 +49,7 @@ Safe alternative:
 
 ## Supported Frameworks
 
-diesel-guard supports both **Diesel** and **SQLx** PostgreSQL migrations with automatic framework detection.
+diesel-guard supports both **Diesel** and **SQLx** PostgreSQL migrations. The framework is configured via `diesel-guard.toml` (see [Configuration](#configuration)).
 
 ### Diesel
 
@@ -110,9 +110,21 @@ migrations/
     └── down.sql
 ```
 
-### Framework Detection
+### Framework Configuration
 
-diesel-guard automatically detects which framework you're using by examining your migrations directory structure. No configuration needed.
+diesel-guard requires explicit framework configuration in `diesel-guard.toml`:
+
+```toml
+# Framework configuration (REQUIRED)
+framework = "diesel"  # or "sqlx"
+```
+
+Generate a config file with:
+```sh
+diesel-guard init
+```
+
+See the [Configuration](#configuration) section for all available options.
 
 ### SQLx Metadata Directives
 
