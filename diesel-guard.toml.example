@@ -1,18 +1,26 @@
 # diesel-guard configuration file
 # Copy this file to diesel-guard.toml and customize as needed
 
+# Framework configuration (REQUIRED)
+# Specify which migration framework you're using
+# Valid values: "diesel" or "sqlx"
+framework = "diesel"
+# framework = "sqlx"
+
 # Skip checking migrations created before this timestamp
 # Useful for retrofitting diesel-guard into existing projects
-# Accepted formats: YYYYMMDDHHMMSS, YYYY_MM_DD_HHMMSS, or YYYY-MM-DD-HHMMSS
-# Works with any migration directory format regardless of separator style
 #
-# Examples: Skip all migrations before January 1, 2024
-# start_after = "2024_01_01_000000"  # underscores
-# start_after = "2024-01-01-000000"  # dashes
-# start_after = "20240101000000"     # no separators
+# Timestamp format depends on your framework:
+#   Diesel: YYYYMMDDHHMMSS, YYYY_MM_DD_HHMMSS, or YYYY-MM-DD-HHMMSS
+#           Examples: 20240101000000, 2024_01_01_000000, 2024-01-01-000000
+#   SQLx:   YYYYMMDDHHMMSS (14 digits, no separators)
+#           Example: 20240101000000
+#
+# Works with any format - diesel-guard normalizes timestamps for comparison
+# start_after = "20240101000000"
 
-# Whether to check down.sql files in addition to up.sql
-# Default: false
+# Check rollback migrations (down.sql files or -- migrate:down sections)
+# Default: false (only checks forward migrations)
 #
 # Set to true if you want to ensure rollback migrations are also safe
 # check_down = false
