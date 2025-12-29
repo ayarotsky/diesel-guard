@@ -43,4 +43,4 @@ miette = { version = "7.0", features = ["fancy"] }
 derive_more = { version = "2.1", features = ["display", "from", "error"] }
 
 [dev-dependencies]
-tempfile = "3.8"
+tempfile = "3.24"
