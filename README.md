@@ -819,14 +819,14 @@ jobs:
       - uses: actions/checkout@v4
 
       # Pin to specific version (recommended for stability)
-      - uses: ayarotsky/diesel-guard@v0.2.0
+      - uses: ayarotsky/diesel-guard@v0.4.0
         with:
           path: migrations/
 ```
 
 **Versioning:**
 - The action automatically installs the diesel-guard CLI version matching the tag
-- `@v0.2.0` installs diesel-guard v0.2.0
+- `@v0.4.0` installs diesel-guard v0.4.0
 - `@main` installs the latest version
 
 **Alternatives:**
@@ -1093,22 +1093,21 @@ large_table_rows = 100000
 large_table_size_mb = 1024
 ```
 
-### Phase 3: Diesel Integration - All-in-One Migration Suite
+### Phase 3: Framework Integration - All-in-One Migration Suite
 
-**Goal:** Integration with `diesel_migrations` to become the single tool for both safety checking and migration execution.
+**Goal:** Integration with Diesel and SQLx migration ecosystems to become the single tool for both safety checking and migration execution.
 
 #### Core Integration Features
 
-1. **Native Diesel CLI replacement**
+1. **Native migration CLI replacement**
    ```bash
    # Instead of:
    diesel migration run
    diesel migration revert
 
    # Users can:
-   diesel-guard migrate run    # Checks safety, then runs
-   diesel-guard migrate revert # Checks down.sql safety, then reverts
-   diesel-guard migrate status # Show migration status + safety summary
+   diesel-guard migrate run    # Checks safety, runs with sqlx migrate run
+   diesel-guard migrate revert # Checks safety, reverts migrations
    ```
 
 2. **Automatic safety checking before execution**
@@ -1116,9 +1115,13 @@ large_table_size_mb = 1024
 
 3. **Migration generation with safe templates**
    ```bash
+   # Works for both Diesel and SQLx based on diesel-guard.toml config
    diesel-guard migration generate add_user_email
 
-   # Generates migration with safety comments and safe patterns:
+   # Generates migration with safety comments and safe patterns
+   # (format depends on configured framework)
+   #
+   # Example for Diesel:
    # up.sql:
    # -- Migration: Add email column to users
    # -- Safe pattern: Add without default, backfill separately

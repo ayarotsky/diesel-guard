@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.4.0 - 2025-12-28
+
+### Added
+
+- SQLx framework support - Full support for all 4 SQLx migration formats
+- Framework configuration - New required `framework` field in `diesel-guard.toml`
+  - Valid values: `"diesel"` or `"sqlx"`
+  - Explicit framework selection for clear configuration
+- MigrationFile builder pattern - Cleaner API with `new()`, `with_direction()`, `with_no_transaction()`
+
+### Changed
+
+- Shared adapter utilities - `should_check_migration()` and `collect_and_sort_entries()` moved to shared module
+- Improved CONCURRENTLY detection - Uses regex pattern matching instead of simple string contains
+
 ## 0.3.0 - 2025-12-13
 
 ### Added
