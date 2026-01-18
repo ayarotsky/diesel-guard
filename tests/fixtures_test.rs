@@ -265,6 +265,17 @@ fn test_drop_table_detected() {
 }
 
 #[test]
+fn test_drop_database_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("drop_database_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(violations[0].operation, "DROP DATABASE");
+}
+
+#[test]
 fn test_drop_index_concurrently_is_safe() {
     let checker = SafetyChecker::new();
     let path = fixture_path("drop_index_concurrently");
@@ -402,14 +413,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        23,
-        "Expected violations in 23 files, got {}",
+        24,
+        "Expected violations in 24 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 31,
-        "Expected 31 total violations: 20 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
+        total_violations, 32,
+        "Expected 32 total violations: 21 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
         total_violations
     );
 }

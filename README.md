@@ -144,6 +144,7 @@ diesel-guard will warn you if you use `CONCURRENTLY` operations without the `-- 
 - [Dropping a column](#dropping-a-column)
 - [Dropping a primary key](#dropping-a-primary-key)
 - [Dropping a table](#dropping-a-table)
+- [Dropping a database](#dropping-a-database)
 - [Dropping an index non-concurrently](#dropping-an-index-non-concurrently)
 - [Adding an index non-concurrently](#adding-an-index-non-concurrently)
 - [Adding a UNIQUE constraint](#adding-a-unique-constraint)
@@ -308,6 +309,40 @@ DROP TABLE users;
 - Check for foreign keys in other tables that reference this table
 - Ensure data backups exist before dropping
 - Consider renaming the table first (e.g., `users_deprecated`) and waiting before dropping
+
+### Dropping a database
+
+#### Bad
+
+Dropping a database permanently deletes the entire database including all tables, data, and objects. This operation is irreversible. PostgreSQL requires exclusive access to the target database—all active connections must be terminated before the drop can proceed. The command cannot be executed inside a transaction block.
+
+```sql
+DROP DATABASE mydb;
+DROP DATABASE IF EXISTS testdb;
+```
+
+#### Good
+
+DROP DATABASE should almost never appear in application migrations. Database lifecycle should be managed through infrastructure automation or DBA operations.
+
+```sql
+-- For local development: use database setup scripts
+-- For production: use infrastructure automation (Terraform, Ansible)
+-- For test cleanup: coordinate with DBA or use dedicated test infrastructure
+
+-- If absolutely necessary (e.g., test cleanup), use a safety-assured block:
+-- safety-assured:start
+DROP DATABASE test_db;
+-- safety-assured:end
+```
+
+**Important considerations:**
+- Database deletion should be handled by DBAs or infrastructure automation, not application migrations
+- Ensure complete backups exist before proceeding
+- Verify all connections to the database are terminated
+- Consider using infrastructure tools (Terraform, Ansible) instead of migrations
+
+**Note:** PostgreSQL 13+ supports `DROP DATABASE ... WITH (FORCE)` to terminate active connections automatically, but this makes the operation even more dangerous and should be used with extreme caution.
 
 ### Dropping an index non-concurrently
 
@@ -966,6 +1001,7 @@ disable_checks = ["AddColumnCheck"]
 - `AlterColumnTypeCheck` - ALTER COLUMN TYPE
 - `CreateExtensionCheck` - CREATE EXTENSION
 - `DropColumnCheck` - DROP COLUMN
+- `DropDatabaseCheck` - DROP DATABASE
 - `DropIndexCheck` - DROP INDEX without CONCURRENTLY
 - `DropPrimaryKeyCheck` - DROP PRIMARY KEY
 - `DropTableCheck` - DROP TABLE
@@ -1040,11 +1076,10 @@ Error: Unclosed 'safety-assured:start' at line 1
 - **FOREIGN KEY with CASCADE** - Flag ON DELETE CASCADE and ON UPDATE CASCADE
 - **REINDEX without CONCURRENTLY** - Recommend REINDEX CONCURRENTLY (PostgreSQL 12+)
 
-#### Table & Schema Operations (6 remaining)
+#### Table & Schema Operations (5 remaining)
 - **VACUUM FULL** - Warn about ACCESS EXCLUSIVE lock; recommend regular VACUUM
 - **CLUSTER** - Warn about full table rewrite with ACCESS EXCLUSIVE lock
 - **Adding stored GENERATED column** - Detect table rewrite trigger
-- **DROP DATABASE** - Prevent catastrophic database deletion
 - **DROP NOT NULL constraint** - Warn about breaking existing clients
 - **LOCK TABLE statements** - Flag explicit lock acquisitions
 
@@ -1054,10 +1089,6 @@ Error: Unclosed 'safety-assured:start' at line 1
 - **TIMESTAMP without time zone** - Recommend TIMESTAMPTZ
 - **SERIAL/BIGSERIAL types** - Recommend IDENTITY columns
 - **Mismatched foreign key column types** - Detect type inconsistencies via SQL parsing
-
-#### Data Safety (2 remaining)
-- **UPDATE/DELETE without WHERE clause** - Prevent accidental mass modifications
-- **Uncommitted transactions** - Detect unclosed transaction blocks
 
 ### Phase 2: Database-Connected Intelligence
 
