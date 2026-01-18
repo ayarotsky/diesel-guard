@@ -143,6 +143,7 @@ diesel-guard will warn you if you use `CONCURRENTLY` operations without the `-- 
 - [Adding a column with a default value](#adding-a-column-with-a-default-value)
 - [Dropping a column](#dropping-a-column)
 - [Dropping a primary key](#dropping-a-primary-key)
+- [Dropping a table](#dropping-a-table)
 - [Dropping an index non-concurrently](#dropping-an-index-non-concurrently)
 - [Adding an index non-concurrently](#adding-an-index-non-concurrently)
 - [Adding a UNIQUE constraint](#adding-a-unique-constraint)
@@ -261,6 +262,52 @@ ALTER TABLE posts DROP COLUMN user_id;
 - Test thoroughly in a staging environment first
 
 **Limitation:** This check relies on PostgreSQL naming conventions (e.g., `users_pkey`). It may not detect primary keys with custom names. Future versions will support database connections for accurate verification.
+
+### Dropping a table
+
+#### Bad
+
+Dropping a table permanently deletes all data, indexes, triggers, and constraints. This operation acquires an ACCESS EXCLUSIVE lock and cannot be undone after the transaction commits. Foreign key relationships in other tables may block the drop or cause cascading deletes.
+
+```sql
+DROP TABLE users;
+DROP TABLE IF EXISTS orders CASCADE;
+```
+
+#### Good
+
+Before dropping a table in production, take these precautions:
+
+```sql
+-- Step 1: Verify the table is no longer in use
+-- Check application code for references to this table
+-- Monitor for queries against the table
+
+-- Step 2: Check for foreign key dependencies
+SELECT
+  tc.table_name, kcu.column_name, rc.constraint_name
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.constraint_name
+WHERE rc.unique_constraint_schema = 'public'
+  AND rc.unique_constraint_name IN (
+    SELECT constraint_name FROM information_schema.table_constraints
+    WHERE table_name = 'users' AND constraint_type IN ('PRIMARY KEY', 'UNIQUE')
+  );
+
+-- Step 3: Ensure backups exist or data has been migrated
+
+-- Step 4: Drop the table (use safety-assured if intentional)
+-- safety-assured:start
+DROP TABLE users;
+-- safety-assured:end
+```
+
+**Important considerations:**
+- Verify all application code references have been removed and deployed
+- Check for foreign keys in other tables that reference this table
+- Ensure data backups exist before dropping
+- Consider renaming the table first (e.g., `users_deprecated`) and waiting before dropping
 
 ### Dropping an index non-concurrently
 
@@ -921,6 +968,7 @@ disable_checks = ["AddColumnCheck"]
 - `DropColumnCheck` - DROP COLUMN
 - `DropIndexCheck` - DROP INDEX without CONCURRENTLY
 - `DropPrimaryKeyCheck` - DROP PRIMARY KEY
+- `DropTableCheck` - DROP TABLE
 - `RenameColumnCheck` - RENAME COLUMN
 - `RenameTableCheck` - RENAME TABLE
 - `ShortIntegerPrimaryKeyCheck` - SMALLINT/INT/INTEGER primary keys
@@ -985,8 +1033,6 @@ Error: Unclosed 'safety-assured:start' at line 1
 
 **Goal:** Implement all linter checks that work through SQL parsing alone, without requiring database connection.
 
-**Status:** 18/40 checks implemented (45%)
-
 #### Constraint & Lock Safety (5 remaining)
 - **ADD FOREIGN KEY constraint** - Detect missing NOT VALID; recommend two-step validation
 - **ADD CHECK constraint** - Detect missing NOT VALID; recommend separate VALIDATE
@@ -994,11 +1040,10 @@ Error: Unclosed 'safety-assured:start' at line 1
 - **FOREIGN KEY with CASCADE** - Flag ON DELETE CASCADE and ON UPDATE CASCADE
 - **REINDEX without CONCURRENTLY** - Recommend REINDEX CONCURRENTLY (PostgreSQL 12+)
 
-#### Table & Schema Operations (7 remaining)
+#### Table & Schema Operations (6 remaining)
 - **VACUUM FULL** - Warn about ACCESS EXCLUSIVE lock; recommend regular VACUUM
 - **CLUSTER** - Warn about full table rewrite with ACCESS EXCLUSIVE lock
 - **Adding stored GENERATED column** - Detect table rewrite trigger
-- **DROP TABLE** - Configurable prevention of accidental drops
 - **DROP DATABASE** - Prevent catastrophic database deletion
 - **DROP NOT NULL constraint** - Warn about breaking existing clients
 - **LOCK TABLE statements** - Flag explicit lock acquisitions
@@ -1009,11 +1054,6 @@ Error: Unclosed 'safety-assured:start' at line 1
 - **TIMESTAMP without time zone** - Recommend TIMESTAMPTZ
 - **SERIAL/BIGSERIAL types** - Recommend IDENTITY columns
 - **Mismatched foreign key column types** - Detect type inconsistencies via SQL parsing
-
-#### Transaction & Robustness (3 remaining)
-- **CREATE INDEX CONCURRENTLY in transaction** - Detect and prevent (will fail)
-- **Transaction nesting** - Detect problematic nested BEGIN/COMMIT blocks
-- **Non-robust statements** - Encourage IF EXISTS/IF NOT EXISTS for idempotency
 
 #### Data Safety (2 remaining)
 - **UPDATE/DELETE without WHERE clause** - Prevent accidental mass modifications
