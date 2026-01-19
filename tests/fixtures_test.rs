@@ -132,6 +132,17 @@ fn test_alter_column_type_with_using_detected() {
 }
 
 #[test]
+fn test_char_type_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("char_type_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(violations[0].operation, "ADD COLUMN with CHAR type");
+}
+
+#[test]
 fn test_create_extension_detected() {
     let checker = SafetyChecker::new();
     let path = fixture_path("create_extension_unsafe");
@@ -413,14 +424,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        24,
-        "Expected violations in 24 files, got {}",
+        25,
+        "Expected violations in 25 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 32,
-        "Expected 32 total violations: 21 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
+        total_violations, 33,
+        "Expected 33 total violations: 22 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
         total_violations
     );
 }
