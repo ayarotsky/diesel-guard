@@ -159,6 +159,7 @@ diesel-guard will warn you if you use `CONCURRENTLY` operations without the `-- 
 - [Adding a SERIAL column to an existing table](#adding-a-serial-column-to-an-existing-table)
 - [Adding a JSON column](#adding-a-json-column)
 - [Using CHAR/CHARACTER types](#using-charcharacter-types)
+- [Using TIMESTAMP without time zone](#using-timestamp-without-time-zone)
 - [Truncating a table](#truncating-a-table)
 - [Wide indexes](#wide-indexes)
 
@@ -817,6 +818,55 @@ CREATE TABLE products (sku TEXT CHECK (length(sku) <= 10));
 - DISTINCT, GROUP BY, and joins may behave unexpectedly
 - No performance benefit over VARCHAR or TEXT in PostgreSQL
 
+### Using TIMESTAMP without time zone
+
+**Lock type:** None (best practice warning)
+
+#### Bad
+
+TIMESTAMP (or TIMESTAMP WITHOUT TIME ZONE) stores values without timezone context, which can cause issues in multi-timezone applications, during DST transitions, and makes it difficult to determine the actual point in time represented.
+
+```sql
+-- ALTER TABLE
+ALTER TABLE events ADD COLUMN created_at TIMESTAMP;
+ALTER TABLE events ADD COLUMN updated_at TIMESTAMP WITHOUT TIME ZONE;
+
+-- CREATE TABLE
+CREATE TABLE events (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE
+);
+```
+
+#### Good
+
+Use TIMESTAMPTZ (TIMESTAMP WITH TIME ZONE) instead:
+
+```sql
+-- ALTER TABLE
+ALTER TABLE events ADD COLUMN created_at TIMESTAMPTZ;
+ALTER TABLE events ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE;
+
+-- CREATE TABLE
+CREATE TABLE events (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+```
+
+**Why TIMESTAMPTZ is better:**
+- Stores values in UTC internally and converts on input/output based on session timezone
+- Provides consistent behavior across different timezones and server environments
+- Handles DST transitions correctly
+- Makes it clear what point in time is represented
+
+**When TIMESTAMP without time zone might be acceptable:**
+- Storing dates that are inherently timezone-agnostic (e.g., birth dates stored as midnight)
+- Legacy systems where all data is known to be in a single timezone
+- Use `safety-assured` if you've confirmed timezone-naive timestamps are appropriate
+
 ### Truncating a table
 
 #### Bad
@@ -1048,6 +1098,7 @@ disable_checks = ["AddColumnCheck"]
 - `RenameColumnCheck` - RENAME COLUMN
 - `RenameTableCheck` - RENAME TABLE
 - `ShortIntegerPrimaryKeyCheck` - SMALLINT/INT/INTEGER primary keys
+- `TimestampTypeCheck` - TIMESTAMP without time zone
 - `TruncateTableCheck` - TRUNCATE TABLE
 - `UnnamedConstraintCheck` - Unnamed constraints (UNIQUE, FOREIGN KEY, CHECK)
 - `WideIndexCheck` - Indexes with 4+ columns
@@ -1121,9 +1172,7 @@ Error: Unclosed 'safety-assured:start' at line 1
 - **Adding stored GENERATED column** - Detect table rewrite trigger
 - **DROP NOT NULL constraint** - Warn about breaking existing clients
 
-#### Type & Best Practices (4 remaining)
-- **VARCHAR with size limit** - Recommend TEXT with CHECK constraint
-- **TIMESTAMP without time zone** - Recommend TIMESTAMPTZ
+#### Type & Best Practices (2 remaining)
 - **SERIAL/BIGSERIAL types** - Recommend IDENTITY columns
 - **Mismatched foreign key column types** - Detect type inconsistencies via SQL parsing
 
@@ -1131,32 +1180,9 @@ Error: Unclosed 'safety-assured:start' at line 1
 
 **Goal:** Add optional database connection to provide context-aware checking based on actual table state, relationships, and PostgreSQL version.
 
-**Benefits:** More accurate warnings, version-specific advice, and detection of issues impossible to catch through static analysis alone.
-
 #### New Database-Connected Checks
 
-1. **Table size awareness** - Warn differently for operations on large vs small tables
-   - Operations safe on small tables become dangerous above threshold (configurable, default: 1GB or 100K rows)
-   - Example: ALTER COLUMN TYPE on 100-row table vs 10M-row table
-
-2. **View and materialized view dependencies** - Detect dependent objects before dangerous operations
-   - Flag DROP COLUMN when views reference the column
-   - Flag ALTER COLUMN TYPE when materialized views depend on it
-
-3. **Foreign key relationship mapping** - Analyze actual FK graph in database
-   - Detect DROP TABLE when other tables reference it (with FK counts)
-   - Warn about CASCADE operations with actual downstream table list
-   - Flag ADD FOREIGN KEY when referencing table lacks proper index
-
-4. **Partition hierarchy detection** - Understand partitioned table structures
-   - Recommend DETACH PARTITION CONCURRENTLY for PG 14+
-   - Warn about operations on parent vs child partitions
-
-5. **Trigger and function dependencies** - Detect triggers that reference columns/tables
-   - Flag DROP COLUMN when triggers use it
-   - Flag ALTER COLUMN TYPE when triggers may break
-
-6. **Missing timeout settings** - Verify timeout configuration at database/user level
+1. **Missing timeout settings** - Verify timeout configuration at database/user level
    - Query `SHOW lock_timeout` and `SHOW statement_timeout` to check effective values
    - Only warn if both migration file AND database have no timeouts configured
    - Avoids false positives when timeouts are set at database/role level

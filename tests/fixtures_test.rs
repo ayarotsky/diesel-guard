@@ -17,15 +17,18 @@ fn test_safe_fixtures_pass() {
     let checker = SafetyChecker::new();
     let safe_fixtures = vec![
         "add_column_safe",
-        "add_index_with_concurrently",
+        "add_index_safe",
         "add_json_column_safe",
         "add_primary_key_safe",
+        "add_serial_column_safe",
         "add_unique_constraint_safe",
-        "drop_index_concurrently",
-        "drop_not_null",
+        "char_type_safe",
+        "drop_index_safe",
+        "drop_not_null_safe",
         "safety_assured_drop",
         "safety_assured_multiple",
         "short_int_pk_safe",
+        "timestamp_type_safe",
         "unnamed_constraint_safe",
         "wide_index_safe",
     ];
@@ -49,7 +52,7 @@ fn test_safe_fixtures_pass() {
 #[test]
 fn test_add_column_with_default_detected() {
     let checker = SafetyChecker::new();
-    let path = fixture_path("add_column_with_default");
+    let path = fixture_path("add_column_with_default_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
@@ -60,7 +63,7 @@ fn test_add_column_with_default_detected() {
 #[test]
 fn test_add_not_null_detected() {
     let checker = SafetyChecker::new();
-    let path = fixture_path("add_not_null");
+    let path = fixture_path("add_not_null_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
@@ -71,7 +74,7 @@ fn test_add_not_null_detected() {
 #[test]
 fn test_add_index_without_concurrently_detected() {
     let checker = SafetyChecker::new();
-    let path = fixture_path("add_index_without_concurrently");
+    let path = fixture_path("add_index_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
@@ -93,7 +96,7 @@ fn test_add_json_column_detected() {
 #[test]
 fn test_add_unique_index_without_concurrently_detected() {
     let checker = SafetyChecker::new();
-    let path = fixture_path("add_unique_index_without_concurrently");
+    let path = fixture_path("add_unique_index_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
@@ -108,7 +111,7 @@ fn test_add_unique_index_without_concurrently_detected() {
 #[test]
 fn test_alter_column_type_detected() {
     let checker = SafetyChecker::new();
-    let path = fixture_path("alter_column_type");
+    let path = fixture_path("alter_column_type_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
@@ -119,7 +122,7 @@ fn test_alter_column_type_detected() {
 #[test]
 fn test_alter_column_type_with_using_detected() {
     let checker = SafetyChecker::new();
-    let path = fixture_path("alter_column_type_with_using");
+    let path = fixture_path("alter_column_type_using_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
@@ -183,7 +186,7 @@ fn test_unique_using_index_is_safe() {
 #[test]
 fn test_unique_using_index_skips_other_statements() {
     let checker = SafetyChecker::new();
-    let path = fixture_path("unique_using_index_with_unsafe");
+    let path = fixture_path("unique_using_index_parser_limitation");
 
     // This file contains both UNIQUE USING INDEX (safe) and DROP COLUMN (unsafe)
     // Due to parser limitation, ALL statements are skipped when UNIQUE USING INDEX
@@ -218,7 +221,7 @@ fn test_unnamed_constraint_detected() {
 #[test]
 fn test_drop_column_detected() {
     let checker = SafetyChecker::new();
-    let path = fixture_path("drop_column");
+    let path = fixture_path("drop_column_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
@@ -229,7 +232,7 @@ fn test_drop_column_detected() {
 #[test]
 fn test_drop_column_if_exists_detected() {
     let checker = SafetyChecker::new();
-    let path = fixture_path("drop_column_if_exists");
+    let path = fixture_path("drop_column_if_exists_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
@@ -240,7 +243,7 @@ fn test_drop_column_if_exists_detected() {
 #[test]
 fn test_drop_multiple_columns_detected() {
     let checker = SafetyChecker::new();
-    let path = fixture_path("drop_multiple_columns");
+    let path = fixture_path("drop_multiple_columns_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
@@ -289,7 +292,7 @@ fn test_drop_database_detected() {
 #[test]
 fn test_drop_index_concurrently_is_safe() {
     let checker = SafetyChecker::new();
-    let path = fixture_path("drop_index_concurrently");
+    let path = fixture_path("drop_index_safe");
 
     // Should parse successfully (even though sqlparser can't parse it)
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -333,6 +336,17 @@ fn test_add_serial_column_detected() {
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
     assert_eq!(violations[0].operation, "ADD COLUMN with SERIAL");
+}
+
+#[test]
+fn test_timestamp_type_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("timestamp_type_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(violations[0].operation, "ADD COLUMN with TIMESTAMP");
 }
 
 #[test]
@@ -424,14 +438,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        25,
-        "Expected violations in 25 files, got {}",
+        26,
+        "Expected violations in 26 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 33,
-        "Expected 33 total violations: 22 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
+        total_violations, 34,
+        "Expected 34 total violations: 23 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
         total_violations
     );
 }
