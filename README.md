@@ -158,6 +158,7 @@ diesel-guard will warn you if you use `CONCURRENTLY` operations without the `-- 
 - [Short integer primary keys](#short-integer-primary-keys)
 - [Adding a SERIAL column to an existing table](#adding-a-serial-column-to-an-existing-table)
 - [Adding a JSON column](#adding-a-json-column)
+- [Using CHAR/CHARACTER types](#using-charcharacter-types)
 - [Truncating a table](#truncating-a-table)
 - [Wide indexes](#wide-indexes)
 
@@ -779,6 +780,43 @@ ALTER TABLE users ADD COLUMN properties JSONB;
 
 **Note:** The only advantage of JSON over JSONB is that it preserves exact formatting and key order, which is rarely needed in practice.
 
+### Using CHAR/CHARACTER types
+
+**Lock type:** None (best practice warning)
+
+#### Bad
+
+CHAR and CHARACTER types are fixed-length and padded with spaces. This wastes storage and can cause subtle bugs with string comparisons and equality checks.
+
+```sql
+ALTER TABLE users ADD COLUMN country_code CHAR(2);
+CREATE TABLE products (sku CHARACTER(10) PRIMARY KEY);
+```
+
+#### Good
+
+Use TEXT or VARCHAR instead:
+
+```sql
+-- For ALTER TABLE
+ALTER TABLE users ADD COLUMN country_code TEXT;
+ALTER TABLE users ADD COLUMN country_code VARCHAR(2);
+
+-- For CREATE TABLE
+CREATE TABLE products (sku TEXT);
+CREATE TABLE products (sku VARCHAR(10));
+
+-- Or TEXT with CHECK constraint for length validation
+ALTER TABLE users ADD COLUMN country_code TEXT CHECK (length(country_code) = 2);
+CREATE TABLE products (sku TEXT CHECK (length(sku) <= 10));
+```
+
+**Why CHAR is problematic:**
+- Fixed-length padding wastes storage
+- Trailing spaces affect equality comparisons (`'US' != 'US  '`)
+- DISTINCT, GROUP BY, and joins may behave unexpectedly
+- No performance benefit over VARCHAR or TEXT in PostgreSQL
+
 ### Truncating a table
 
 #### Bad
@@ -994,11 +1032,13 @@ disable_checks = ["AddColumnCheck"]
 
 - `AddColumnCheck` - ADD COLUMN with DEFAULT
 - `AddIndexCheck` - CREATE INDEX without CONCURRENTLY
+- `AddJsonColumnCheck` - ADD COLUMN with JSON type
 - `AddNotNullCheck` - ALTER COLUMN SET NOT NULL
 - `AddPrimaryKeyCheck` - ADD PRIMARY KEY to existing table
 - `AddSerialColumnCheck` - ADD COLUMN with SERIAL
 - `AddUniqueConstraintCheck` - ADD UNIQUE constraint via ALTER TABLE
 - `AlterColumnTypeCheck` - ALTER COLUMN TYPE
+- `CharTypeCheck` - CHAR/CHARACTER column types
 - `CreateExtensionCheck` - CREATE EXTENSION
 - `DropColumnCheck` - DROP COLUMN
 - `DropDatabaseCheck` - DROP DATABASE
@@ -1076,15 +1116,12 @@ Error: Unclosed 'safety-assured:start' at line 1
 - **FOREIGN KEY with CASCADE** - Flag ON DELETE CASCADE and ON UPDATE CASCADE
 - **REINDEX without CONCURRENTLY** - Recommend REINDEX CONCURRENTLY (PostgreSQL 12+)
 
-#### Table & Schema Operations (5 remaining)
-- **VACUUM FULL** - Warn about ACCESS EXCLUSIVE lock; recommend regular VACUUM
+#### Table & Schema Operations (3 remaining)
 - **CLUSTER** - Warn about full table rewrite with ACCESS EXCLUSIVE lock
 - **Adding stored GENERATED column** - Detect table rewrite trigger
 - **DROP NOT NULL constraint** - Warn about breaking existing clients
-- **LOCK TABLE statements** - Flag explicit lock acquisitions
 
-#### Type & Best Practices (5 remaining)
-- **CHAR/CHARACTER field types** - Recommend TEXT or VARCHAR instead
+#### Type & Best Practices (4 remaining)
 - **VARCHAR with size limit** - Recommend TEXT with CHECK constraint
 - **TIMESTAMP without time zone** - Recommend TIMESTAMPTZ
 - **SERIAL/BIGSERIAL types** - Recommend IDENTITY columns
