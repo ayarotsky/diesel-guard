@@ -7,6 +7,8 @@ use sqlparser::parser::Parser;
 pub mod comment_parser;
 mod drop_index_concurrently_detector;
 mod primary_key_using_index_detector;
+pub mod reindex_concurrently_detector;
+pub mod reindex_detector;
 mod unique_using_index_detector;
 
 pub use comment_parser::IgnoreRange;
@@ -99,6 +101,8 @@ impl SqlParser {
             Some("PRIMARY KEY USING INDEX")
         } else if drop_index_concurrently_detector::contains_drop_index_concurrently(sql) {
             Some("DROP INDEX CONCURRENTLY")
+        } else if reindex_concurrently_detector::contains_reindex_concurrently(sql) {
+            Some("REINDEX CONCURRENTLY")
         } else {
             None
         }
@@ -325,6 +329,53 @@ ALTER TABLE users DROP COLUMN old_field;
             result.statements.len(),
             0,
             "When PRIMARY KEY USING INDEX causes parse failure, ALL statements are skipped"
+        );
+    }
+
+    #[test]
+    fn test_reindex_concurrently_returns_empty_statements() {
+        let parser = SqlParser::new();
+        let sql = "REINDEX INDEX CONCURRENTLY idx_users_email;";
+
+        // This should succeed (not error) but return empty statements
+        // because sqlparser can't parse REINDEX statements at all
+        let result = parser.parse_with_metadata(sql).unwrap();
+        assert_eq!(
+            result.statements.len(),
+            0,
+            "REINDEX CONCURRENTLY should return empty statements"
+        );
+    }
+
+    #[test]
+    fn test_reindex_table_concurrently() {
+        let parser = SqlParser::new();
+        let sql = "REINDEX TABLE CONCURRENTLY users;";
+
+        let result = parser.parse_with_metadata(sql).unwrap();
+        assert_eq!(
+            result.statements.len(),
+            0,
+            "REINDEX TABLE CONCURRENTLY should return empty statements"
+        );
+    }
+
+    #[test]
+    fn test_reindex_concurrently_skips_all_statements() {
+        let parser = SqlParser::new();
+        // This file has both REINDEX CONCURRENTLY (safe) and DROP COLUMN (unsafe)
+        let sql = r#"
+REINDEX INDEX CONCURRENTLY idx_users_email;
+ALTER TABLE users DROP COLUMN old_field;
+        "#;
+
+        // Due to parser limitation, ALL statements are skipped (returns empty)
+        // This test documents the limitation - the unsafe DROP COLUMN is NOT detected
+        let result = parser.parse_with_metadata(sql).unwrap();
+        assert_eq!(
+            result.statements.len(),
+            0,
+            "When REINDEX CONCURRENTLY causes parse failure, ALL statements are skipped"
         );
     }
 

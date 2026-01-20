@@ -53,11 +53,18 @@ impl Check for DropIndexCheck {
 
 Note: CONCURRENTLY requires PostgreSQL 9.2+ and cannot be run inside a transaction block.
 
-Migration setup:
+For Diesel migrations:
 1. Create metadata.toml in your migration directory:
    run_in_transaction = false
 
 2. Use DROP INDEX CONCURRENTLY in your up.sql:
+   DROP INDEX CONCURRENTLY{if_exists} {index};
+
+For SQLx migrations:
+1. Add the no-transaction directive at the top of your migration file:
+   -- no-transaction
+
+2. Use DROP INDEX CONCURRENTLY:
    DROP INDEX CONCURRENTLY{if_exists} {index};
 
 Considerations:

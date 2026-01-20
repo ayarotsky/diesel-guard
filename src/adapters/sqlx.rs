@@ -6,7 +6,7 @@
 //! 3. Marker-based (up+down in one file): `-- migrate:up` / `-- migrate:down`
 //! 4. Directory-based: `20240101000000_init/{up.sql, down.sql}`
 //!
-//! Also parses SQLx metadata directives like `-- migrate:no-transaction`.
+//! Also parses SQLx metadata directives like `-- no-transaction`.
 
 use super::{
     collect_and_sort_entries, should_check_migration, MigrationAdapter, MigrationDirection,
@@ -270,7 +270,7 @@ fn parse_sqlx_directives(sql: &str) -> MigrationMetadata {
         let line = line.trim();
         if let Some(comment) = line.strip_prefix("--") {
             let comment = comment.trim();
-            if comment == "migrate:no-transaction" {
+            if comment == "no-transaction" {
                 metadata.requires_no_transaction = true;
             }
         }
@@ -296,7 +296,7 @@ fn validate_migration_metadata(
     // Check if CONCURRENTLY is used without no-transaction directive
     if detect_concurrently_operations(sql) && !metadata.requires_no_transaction {
         eprintln!(
-            "Warning: {} uses CONCURRENTLY but missing '-- migrate:no-transaction' directive",
+            "Warning: {} uses CONCURRENTLY but missing '-- no-transaction' directive",
             path
         );
         eprintln!(
@@ -362,7 +362,7 @@ mod tests {
 
     #[test]
     fn test_parse_sqlx_directives() {
-        let sql = "-- migrate:no-transaction\nCREATE INDEX CONCURRENTLY idx;";
+        let sql = "-- no-transaction\nCREATE INDEX CONCURRENTLY idx;";
         let metadata = parse_sqlx_directives(sql);
         assert!(metadata.requires_no_transaction);
 
