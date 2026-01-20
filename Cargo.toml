@@ -1,6 +1,6 @@
 [package]
 name = "diesel-guard"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 authors = ["Alex Yarotsky <https://github.com/ayarotsky>"]
 description = "Catch unsafe PostgreSQL migrations in Diesel and SQLx before they take down production"
