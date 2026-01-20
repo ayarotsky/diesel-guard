@@ -24,7 +24,7 @@ src/
 ├── error.rs              # Error handling with miette
 ├── output.rs             # Output formatting (text/JSON)
 ├── config.rs             # Configuration loading/validation
-├── checks/               # Individual safety checks (22 checks)
+├── checks/               # Individual safety checks (23 checks)
 │   ├── mod.rs            # Registry that runs all checks
 │   ├── test_utils.rs     # Shared test macros (assert_detects_violation!, assert_allows!)
 │   ├── add_column.rs
@@ -42,6 +42,7 @@ src/
 │   ├── drop_index.rs
 │   ├── drop_primary_key.rs
 │   ├── drop_table.rs
+│   ├── generated_column.rs
 │   ├── rename_column.rs
 │   ├── rename_table.rs
 │   ├── short_int_primary_key.rs
@@ -636,7 +637,7 @@ disable_checks = ["AddColumnCheck"]  # Disable specific checks
 
 ## Current Project State
 
-- **Checks implemented**: 22
+- **Checks implemented**: 23
   - ADD COLUMN with DEFAULT (PostgreSQL < 11)
   - ADD INDEX without CONCURRENTLY
   - ADD JSON column (should use JSONB)
@@ -652,6 +653,7 @@ disable_checks = ["AddColumnCheck"]  # Disable specific checks
   - DROP INDEX without CONCURRENTLY
   - DROP PRIMARY KEY
   - DROP TABLE
+  - GENERATED STORED column (table rewrite)
   - RENAME COLUMN
   - RENAME TABLE
   - Short integer primary keys (SMALLINT/INT)
