@@ -618,7 +618,7 @@ migrations/
 ```
 
 **SQLx-specific Features:**
-- `-- migrate:no-transaction` comment directive for CONCURRENTLY operations
+- `-- no-transaction` comment directive for CONCURRENTLY operations
 - Direction-aware parsing for marker-based format (`parse_sql_with_direction()`)
 - All four formats auto-detected
 

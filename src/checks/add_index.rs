@@ -39,8 +39,21 @@ impl Check for AddIndexCheck {
 
 Note: CONCURRENTLY takes longer and uses more resources, but allows concurrent INSERT, UPDATE, and DELETE operations. The index build may fail if there are deadlocks or unique constraint violations.
 
+For Diesel migrations:
+1. Create metadata.toml in your migration directory:
+   run_in_transaction = false
+
+2. Use CREATE INDEX CONCURRENTLY in your up.sql:
+   CREATE {unique}INDEX CONCURRENTLY {index} ON {table}(...);
+
+For SQLx migrations:
+1. Add the no-transaction directive at the top of your migration file:
+   -- no-transaction
+
+2. Use CREATE INDEX CONCURRENTLY:
+   CREATE {unique}INDEX CONCURRENTLY {index} ON {table}(...);
+
 Considerations:
-- Cannot be run inside a transaction block
 - Requires more total work and takes longer to complete
 - If it fails, it leaves behind an "invalid" index that should be dropped"#,
                         unique = unique_str,

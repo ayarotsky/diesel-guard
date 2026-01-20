@@ -131,12 +131,12 @@ See the [Configuration](#configuration) section for all available options.
 SQLx uses comment directives for migration metadata. diesel-guard recognizes these and validates their usage:
 
 ```sql
--- migrate:no-transaction
+-- no-transaction
 
 CREATE INDEX CONCURRENTLY idx_users_email ON users(email);
 ```
 
-diesel-guard will warn you if you use `CONCURRENTLY` operations without the `-- migrate:no-transaction` directive.
+diesel-guard will warn you if you use `CONCURRENTLY` operations without the `-- no-transaction` directive.
 
 ## Checks
 
@@ -146,6 +146,7 @@ diesel-guard will warn you if you use `CONCURRENTLY` operations without the `-- 
 - [Dropping a table](#dropping-a-table)
 - [Dropping a database](#dropping-a-database)
 - [Dropping an index non-concurrently](#dropping-an-index-non-concurrently)
+- [Reindexing without CONCURRENTLY](#reindexing-without-concurrently)
 - [Adding an index non-concurrently](#adding-an-index-non-concurrently)
 - [Adding a UNIQUE constraint](#adding-a-unique-constraint)
 - [Changing column type](#changing-column-type)
@@ -367,14 +368,61 @@ DROP INDEX CONCURRENTLY idx_users_email;
 DROP INDEX CONCURRENTLY IF EXISTS idx_users_username;
 ```
 
-**Important:** CONCURRENTLY requires PostgreSQL 9.2+ and cannot run inside a transaction block. Add a `metadata.toml` file to your migration directory:
+**Important:** CONCURRENTLY requires PostgreSQL 9.2+ and cannot run inside a transaction block.
+
+**For Diesel migrations:** Add a `metadata.toml` file to your migration directory:
 
 ```toml
 # migrations/2024_01_01_drop_user_index/metadata.toml
 run_in_transaction = false
 ```
 
+**For SQLx migrations:** Add the no-transaction directive at the top of your migration file:
+
+```sql
+-- no-transaction
+DROP INDEX CONCURRENTLY idx_users_email;
+```
+
 **Note:** Dropping an index concurrently takes longer than a regular drop and uses more resources, but allows concurrent queries to continue. If it fails, the index may be left in an "invalid" state and should be dropped again.
+
+### Reindexing without CONCURRENTLY
+
+#### Bad
+
+Reindexing without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock on the table, blocking all operations until complete. Duration depends on index size.
+
+```sql
+REINDEX INDEX idx_users_email;
+REINDEX TABLE users;
+```
+
+#### Good
+
+Use CONCURRENTLY to reindex without blocking operations:
+
+```sql
+REINDEX INDEX CONCURRENTLY idx_users_email;
+REINDEX TABLE CONCURRENTLY users;
+```
+
+**Important:** CONCURRENTLY requires PostgreSQL 12+ and cannot run inside a transaction block.
+
+**For Diesel migrations:** Add a `metadata.toml` file to your migration directory:
+
+```toml
+# migrations/2024_01_01_reindex_users/metadata.toml
+run_in_transaction = false
+```
+
+**For SQLx migrations:** Add the no-transaction directive at the top of your migration file:
+
+```sql
+-- no-transaction
+REINDEX INDEX CONCURRENTLY idx_users_email;
+```
+
+**Note:** REINDEX CONCURRENTLY rebuilds the index without locking out writes. If it fails, the index may be left in an "invalid" state—check with `\d tablename` and run REINDEX again if needed.
 
 ### Adding an index non-concurrently
 
@@ -396,11 +444,20 @@ CREATE INDEX CONCURRENTLY idx_users_email ON users(email);
 CREATE UNIQUE INDEX CONCURRENTLY idx_users_username ON users(username);
 ```
 
-**Important:** CONCURRENTLY cannot run inside a transaction block. Add a `metadata.toml` file to your migration directory:
+**Important:** CONCURRENTLY cannot run inside a transaction block.
+
+**For Diesel migrations:** Add a `metadata.toml` file to your migration directory:
 
 ```toml
 # migrations/2024_01_01_add_user_index/metadata.toml
 run_in_transaction = false
+```
+
+**For SQLx migrations:** Add the no-transaction directive at the top of your migration file:
+
+```sql
+-- no-transaction
+CREATE INDEX CONCURRENTLY idx_users_email ON users(email);
 ```
 
 ### Adding a UNIQUE constraint
@@ -1134,6 +1191,7 @@ disable_checks = ["AddColumnCheck"]
 - `DropPrimaryKeyCheck` - DROP PRIMARY KEY
 - `DropTableCheck` - DROP TABLE
 - `GeneratedColumnCheck` - ADD COLUMN with GENERATED STORED
+- `ReindexCheck` - REINDEX without CONCURRENTLY
 - `RenameColumnCheck` - RENAME COLUMN
 - `RenameTableCheck` - RENAME TABLE
 - `ShortIntegerPrimaryKeyCheck` - SMALLINT/INT/INTEGER primary keys
@@ -1199,18 +1257,16 @@ Error: Unclosed 'safety-assured:start' at line 1
 
 **Goal:** Implement all linter checks that work through SQL parsing alone, without requiring database connection.
 
-#### Constraint & Lock Safety (5 remaining)
+#### Constraint & Lock Safety (4 remaining)
 - **ADD FOREIGN KEY constraint** - Detect missing NOT VALID; recommend two-step validation
 - **ADD CHECK constraint** - Detect missing NOT VALID; recommend separate VALIDATE
 - **ADD EXCLUSION constraint** - Warn about blocking behavior (no safe workaround)
 - **FOREIGN KEY with CASCADE** - Flag ON DELETE CASCADE and ON UPDATE CASCADE
-- **REINDEX without CONCURRENTLY** - Recommend REINDEX CONCURRENTLY (PostgreSQL 12+)
 
 #### Table & Schema Operations (1 remaining)
 - **CLUSTER** - Warn about full table rewrite with ACCESS EXCLUSIVE lock
 
-#### Type & Best Practices (2 remaining)
-- **SERIAL/BIGSERIAL types** - Recommend IDENTITY columns
+#### Type & Best Practices (1 remaining)
 - **Mismatched foreign key column types** - Detect type inconsistencies via SQL parsing
 
 ### Phase 2: Database-Connected Intelligence

@@ -26,6 +26,7 @@ fn test_safe_fixtures_pass() {
         "drop_index_safe",
         "drop_not_null_safe",
         "generated_column_safe",
+        "reindex_safe",
         "safety_assured_drop",
         "safety_assured_multiple",
         "short_int_pk_safe",
@@ -318,6 +319,33 @@ fn test_generated_column_detected() {
 }
 
 #[test]
+fn test_reindex_without_concurrently_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("reindex_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(violations[0].operation, "REINDEX without CONCURRENTLY");
+}
+
+#[test]
+fn test_reindex_concurrently_is_safe() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("reindex_safe");
+
+    // Should parse successfully (even though sqlparser can't parse it)
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    // Should have NO violations (REINDEX CONCURRENTLY is the safe way)
+    assert_eq!(
+        violations.len(),
+        0,
+        "REINDEX CONCURRENTLY should not be flagged as unsafe"
+    );
+}
+
+#[test]
 fn test_rename_column_detected() {
     let checker = SafetyChecker::new();
     let path = fixture_path("rename_column_unsafe");
@@ -450,14 +478,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        27,
-        "Expected violations in 27 files, got {}",
+        28,
+        "Expected violations in 28 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 35,
-        "Expected 35 total violations: 24 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
+        total_violations, 36,
+        "Expected 36 total violations: 25 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
         total_violations
     );
 }
@@ -561,6 +589,7 @@ fn test_safe_sqlx_fixtures_pass() {
     let safe_sqlx_fixtures = vec![
         "tests/fixtures_sqlx/sqlx_concurrently_missing_directive",
         "tests/fixtures_sqlx/sqlx_concurrently_with_directive",
+        "tests/fixtures_sqlx/sqlx_reindex_safe",
     ];
 
     for fixture in safe_sqlx_fixtures {
@@ -610,6 +639,8 @@ fn test_check_all_sqlx_fixtures() {
         "tests/fixtures_sqlx/sqlx_concurrently_missing_directive",
         "tests/fixtures_sqlx/sqlx_concurrently_with_directive",
         "tests/fixtures_sqlx/sqlx_directory_rename_column",
+        "tests/fixtures_sqlx/sqlx_reindex_unsafe",
+        "tests/fixtures_sqlx/sqlx_reindex_safe",
     ];
 
     let mut all_violations = 0;
@@ -625,7 +656,7 @@ fn test_check_all_sqlx_fixtures() {
         }
     }
 
-    // Note: We're actually finding 4 files because the suffix fixture has both
+    // Note: We're actually finding 5 files because the suffix fixture has both
     // .up.sql and .down.sql, and both have violations (even with check_down=false,
     // the down.sql file still gets processed since it's a separate file, not a section)
     // Expected violations (with check_down = false):
@@ -633,15 +664,16 @@ fn test_check_all_sqlx_fixtures() {
     // 2. sqlx_suffix_add_column_unsafe/.down.sql - 1 violation (DROP COLUMN)
     // 3. sqlx_marker_drop_column - 1 violation (DROP COLUMN in up section)
     // 4. sqlx_directory_rename_column/up.sql - 1 violation (RENAME COLUMN)
-    // Note: CONCURRENTLY fixtures have 0 violations
+    // 5. sqlx_reindex_unsafe - 1 violation (REINDEX without CONCURRENTLY)
+    // Note: CONCURRENTLY and safe fixtures have 0 violations
     assert_eq!(
-        files_with_violations, 4,
-        "Expected 4 files with violations, got {}",
+        files_with_violations, 5,
+        "Expected 5 files with violations, got {}",
         files_with_violations
     );
     assert_eq!(
-        all_violations, 4,
-        "Expected 4 total violations, got {}",
+        all_violations, 5,
+        "Expected 5 total violations, got {}",
         all_violations
     );
 }
