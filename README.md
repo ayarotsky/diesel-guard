@@ -152,6 +152,7 @@ diesel-guard will warn you if you use `CONCURRENTLY` operations without the `-- 
 - [Adding a NOT NULL constraint](#adding-a-not-null-constraint)
 - [Adding a primary key to an existing table](#adding-a-primary-key-to-an-existing-table)
 - [Creating extensions](#creating-extensions)
+- [Adding a stored GENERATED column](#adding-a-stored-generated-column)
 - [Unnamed constraints](#unnamed-constraints)
 - [Renaming a column](#renaming-a-column)
 - [Renaming a table](#renaming-a-table)
@@ -557,6 +558,43 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 - Have your DBA or infrastructure team install extensions before deployment
 
 Common extensions that require this approach: `pg_trgm`, `uuid-ossp`, `hstore`, `postgis`, `pg_stat_statements`.
+
+### Adding a stored GENERATED column
+
+Adding a `GENERATED ALWAYS AS ... STORED` column acquires an ACCESS EXCLUSIVE lock and triggers a full table rewrite because PostgreSQL must compute and store the expression value for every existing row.
+
+#### Bad
+
+```sql
+ALTER TABLE products ADD COLUMN total_price INTEGER GENERATED ALWAYS AS (price * quantity) STORED;
+```
+
+#### Good
+
+```sql
+-- Step 1: Add a regular nullable column
+ALTER TABLE products ADD COLUMN total_price INTEGER;
+
+-- Step 2: Backfill in batches (outside migration)
+UPDATE products SET total_price = price * quantity WHERE total_price IS NULL;
+
+-- Step 3: Optionally add NOT NULL constraint
+ALTER TABLE products ALTER COLUMN total_price SET NOT NULL;
+
+-- Step 4: Use a trigger for new rows
+CREATE FUNCTION compute_total_price() RETURNS TRIGGER AS $$
+BEGIN
+  NEW.total_price := NEW.price * NEW.quantity;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_total_price
+BEFORE INSERT OR UPDATE ON products
+FOR EACH ROW EXECUTE FUNCTION compute_total_price();
+```
+
+**Note:** PostgreSQL does not support VIRTUAL generated columns (only STORED). For new empty tables, GENERATED STORED columns are acceptable.
 
 ### Unnamed constraints
 
@@ -1095,6 +1133,7 @@ disable_checks = ["AddColumnCheck"]
 - `DropIndexCheck` - DROP INDEX without CONCURRENTLY
 - `DropPrimaryKeyCheck` - DROP PRIMARY KEY
 - `DropTableCheck` - DROP TABLE
+- `GeneratedColumnCheck` - ADD COLUMN with GENERATED STORED
 - `RenameColumnCheck` - RENAME COLUMN
 - `RenameTableCheck` - RENAME TABLE
 - `ShortIntegerPrimaryKeyCheck` - SMALLINT/INT/INTEGER primary keys
@@ -1167,10 +1206,8 @@ Error: Unclosed 'safety-assured:start' at line 1
 - **FOREIGN KEY with CASCADE** - Flag ON DELETE CASCADE and ON UPDATE CASCADE
 - **REINDEX without CONCURRENTLY** - Recommend REINDEX CONCURRENTLY (PostgreSQL 12+)
 
-#### Table & Schema Operations (3 remaining)
+#### Table & Schema Operations (1 remaining)
 - **CLUSTER** - Warn about full table rewrite with ACCESS EXCLUSIVE lock
-- **Adding stored GENERATED column** - Detect table rewrite trigger
-- **DROP NOT NULL constraint** - Warn about breaking existing clients
 
 #### Type & Best Practices (2 remaining)
 - **SERIAL/BIGSERIAL types** - Recommend IDENTITY columns
