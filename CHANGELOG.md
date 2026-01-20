@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.5.0 - 2026-01-19
+
+### Added
+
+- `ReindexCheck` - Detects `REINDEX` operations that acquire ACCESS EXCLUSIVE locks
+- `GeneratedColumnCheck` - Detects `GENERATED ALWAYS AS ... STORED` columns that trigger table rewrites
+- `TimestampTypeCheck` - Detects `TIMESTAMP` without time zone (recommends `TIMESTAMPTZ`)
+- `CharTypeCheck` - Detects `CHAR`/`CHARACTER` column types (recommends `TEXT` or `VARCHAR`)
+- `DropDatabaseCheck` - Detects `DROP DATABASE` operations
+- `DropTableCheck` - Detects `DROP TABLE` operations
+
+### Changed
+
+- Dependency updates (colored, clap, serde_json, tempfile, thiserror)
+
 ## 0.4.0 - 2025-12-28
 
 ### Added
