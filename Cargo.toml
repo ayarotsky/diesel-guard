@@ -34,7 +34,7 @@ camino = "1.2"
 walkdir = "2.4"
 
 # Validation
-regex = "1.10"
+regex = "1.12"
 
 # Error reporting
 miette = { version = "7.0", features = ["fancy"] }
