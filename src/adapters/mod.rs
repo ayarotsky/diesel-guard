@@ -128,6 +128,14 @@ pub(crate) fn should_check_migration(start_after: Option<&str>, migration_timest
     migration_normalized > start_normalized
 }
 
+/// Check if a directory is a single migration directory (contains up.sql directly).
+///
+/// This is used to detect when the user points at a specific migration directory
+/// (e.g., `migrations/2024_01_01_000000_create_users/`) rather than the parent.
+pub(crate) fn is_single_migration_dir(dir: &Utf8Path) -> bool {
+    dir.join("up.sql").exists()
+}
+
 /// Collect and sort directory entries from a directory.
 ///
 /// Returns entries sorted by path, with errors filtered out.
@@ -141,4 +149,26 @@ pub(crate) fn collect_and_sort_entries(dir: &Utf8Path) -> Vec<DirEntry> {
 
     entries.sort_by(|a, b| a.path().cmp(b.path()));
     entries
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_is_single_migration_dir_with_up_sql() {
+        let temp_dir = TempDir::new().unwrap();
+        let dir = Utf8Path::from_path(temp_dir.path()).unwrap();
+        fs::write(dir.join("up.sql"), "CREATE TABLE t();").unwrap();
+        assert!(is_single_migration_dir(dir));
+    }
+
+    #[test]
+    fn test_is_single_migration_dir_without_up_sql() {
+        let temp_dir = TempDir::new().unwrap();
+        let dir = Utf8Path::from_path(temp_dir.path()).unwrap();
+        assert!(!is_single_migration_dir(dir));
+    }
 }

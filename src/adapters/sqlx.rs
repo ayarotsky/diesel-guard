@@ -9,8 +9,8 @@
 //! Also parses SQLx metadata directives like `-- no-transaction`.
 
 use super::{
-    collect_and_sort_entries, should_check_migration, MigrationAdapter, MigrationDirection,
-    MigrationFile, Result,
+    collect_and_sort_entries, is_single_migration_dir, should_check_migration, MigrationAdapter,
+    MigrationDirection, MigrationFile, Result,
 };
 use camino::Utf8Path;
 use regex::Regex;
@@ -54,6 +54,12 @@ impl MigrationAdapter for SqlxAdapter {
         start_after: Option<&str>,
         check_down: bool,
     ) -> Result<Vec<MigrationFile>> {
+        if is_single_migration_dir(dir) {
+            // When the user targets a specific migration directory, skip the
+            // start_after filter — they explicitly chose this migration.
+            return self.process_migration_directory(dir, None, check_down);
+        }
+
         let entries = collect_and_sort_entries(dir);
         let mut files = Vec::new();
 
@@ -112,8 +118,17 @@ impl SqlxAdapter {
     ) -> Result<Vec<MigrationFile>> {
         let filename = path.file_name().unwrap_or("");
 
+        // Skip .down.sql files early when check_down is disabled,
+        // before any format detection can match and include them
+        if !check_down {
+            let file_stem = path.file_stem().unwrap_or("");
+            if file_stem.ends_with(".down") {
+                return Ok(vec![]);
+            }
+        }
+
         // Check for suffix format (.up.sql / .down.sql)
-        if let Some(mig_file) = self.try_suffix_format(path, start_after, check_down)? {
+        if let Some(mig_file) = self.try_suffix_format(path, start_after)? {
             return Ok(vec![mig_file]);
         }
 
@@ -128,47 +143,40 @@ impl SqlxAdapter {
     }
 
     /// Try to parse as suffix format (.up.sql / .down.sql).
+    ///
+    /// Pure format detection — does not filter by `check_down`.
+    /// The caller (`process_migration_file`) is responsible for skipping
+    /// `.down.sql` files when `check_down` is disabled.
     fn try_suffix_format(
         &self,
         path: &Utf8Path,
         start_after: Option<&str>,
-        check_down: bool,
     ) -> Result<Option<MigrationFile>> {
         let file_stem = path.file_stem().unwrap_or("");
 
-        // Check if it ends with .up or .down
-        if let Some(timestamp_part) = file_stem.strip_suffix(".up") {
-            // Format 1: .up.sql
-            if let Some(timestamp) = self.parse_timestamp(timestamp_part) {
-                if should_check_migration(start_after, &timestamp) {
-                    let (_content, metadata) = self.read_and_validate_sqlx_file(path)?;
+        let (timestamp_part, direction) = if let Some(part) = file_stem.strip_suffix(".up") {
+            (part, MigrationDirection::Up)
+        } else if let Some(part) = file_stem.strip_suffix(".down") {
+            (part, MigrationDirection::Down)
+        } else {
+            return Ok(None);
+        };
 
-                    return Ok(Some(
-                        MigrationFile::new(path.to_owned(), timestamp)
-                            .with_no_transaction(metadata.requires_no_transaction),
-                    ));
-                }
-            }
-        } else if let Some(timestamp_part) = file_stem.strip_suffix(".down") {
-            // Format 1: .down.sql
-            if !check_down {
-                return Ok(None);
-            }
+        let Some(timestamp) = self.parse_timestamp(timestamp_part) else {
+            return Ok(None);
+        };
 
-            if let Some(timestamp) = self.parse_timestamp(timestamp_part) {
-                if should_check_migration(start_after, &timestamp) {
-                    let (_content, metadata) = self.read_and_validate_sqlx_file(path)?;
-
-                    return Ok(Some(
-                        MigrationFile::new(path.to_owned(), timestamp)
-                            .with_direction(MigrationDirection::Down)
-                            .with_no_transaction(metadata.requires_no_transaction),
-                    ));
-                }
-            }
+        if !should_check_migration(start_after, &timestamp) {
+            return Ok(None);
         }
 
-        Ok(None)
+        let (_content, metadata) = self.read_and_validate_sqlx_file(path)?;
+
+        Ok(Some(
+            MigrationFile::new(path.to_owned(), timestamp)
+                .with_direction(direction)
+                .with_no_transaction(metadata.requires_no_transaction),
+        ))
     }
 
     /// Try to parse as single file or marker format.
@@ -412,5 +420,80 @@ mod tests {
             Some("20240101000000"),
             "20231231235959"
         ));
+    }
+
+    #[test]
+    fn test_single_migration_dir_skips_down_sql() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let migration_dir = temp_dir.path().join("20240101000000_test");
+        fs::create_dir(&migration_dir).unwrap();
+        fs::write(
+            migration_dir.join("up.sql"),
+            "ALTER TABLE users ADD COLUMN admin BOOLEAN;",
+        )
+        .unwrap();
+        fs::write(
+            migration_dir.join("down.sql"),
+            "ALTER TABLE users DROP COLUMN admin;",
+        )
+        .unwrap();
+
+        let adapter = SqlxAdapter;
+        let migration_path =
+            Utf8Path::from_path(&migration_dir).expect("path should be valid UTF-8");
+        let files = adapter
+            .collect_migration_files(migration_path, None, false)
+            .unwrap();
+
+        assert_eq!(files.len(), 1);
+        assert!(files[0].path.as_str().contains("up.sql"));
+    }
+
+    #[test]
+    fn test_single_migration_dir_includes_down_sql() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let migration_dir = temp_dir.path().join("20240101000000_test");
+        fs::create_dir(&migration_dir).unwrap();
+        fs::write(
+            migration_dir.join("up.sql"),
+            "ALTER TABLE users ADD COLUMN admin BOOLEAN;",
+        )
+        .unwrap();
+        fs::write(
+            migration_dir.join("down.sql"),
+            "ALTER TABLE users DROP COLUMN admin;",
+        )
+        .unwrap();
+
+        let adapter = SqlxAdapter;
+        let migration_path =
+            Utf8Path::from_path(&migration_dir).expect("path should be valid UTF-8");
+        let files = adapter
+            .collect_migration_files(migration_path, None, true)
+            .unwrap();
+
+        assert_eq!(files.len(), 2);
+        let paths: Vec<String> = files.iter().map(|f| f.path.to_string()).collect();
+        assert!(paths.iter().any(|p| p.contains("up.sql")));
+        assert!(paths.iter().any(|p| p.contains("down.sql")));
+    }
+
+    #[test]
+    fn test_suffix_down_sql_skipped_when_check_down_false() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let down_file = temp_dir.path().join("20240101000000_create_users.down.sql");
+        fs::write(&down_file, "ALTER TABLE users DROP COLUMN admin;").unwrap();
+
+        let adapter = SqlxAdapter;
+        let path = Utf8Path::from_path(&down_file).expect("path should be valid UTF-8");
+        let files = adapter.process_migration_file(path, None, false).unwrap();
+
+        assert!(files.is_empty());
     }
 }
