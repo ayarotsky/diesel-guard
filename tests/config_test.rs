@@ -4,6 +4,64 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+fn test_check_down_single_migration_dir() {
+    let temp_dir = TempDir::new().unwrap();
+    let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
+    fs::create_dir(&migration_dir).unwrap();
+    fs::write(
+        migration_dir.join("up.sql"),
+        "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;",
+    )
+    .unwrap();
+    fs::write(
+        migration_dir.join("down.sql"),
+        "ALTER TABLE users DROP COLUMN admin;",
+    )
+    .unwrap();
+
+    // Point check_path at the single migration directory (the CI use case)
+    let config = Config::default(); // check_down = false
+    let checker = SafetyChecker::with_config(config);
+    let results = checker
+        .check_path(Utf8Path::from_path(&migration_dir).unwrap())
+        .unwrap();
+
+    // Should only find violations in up.sql, not down.sql
+    assert_eq!(results.len(), 1);
+    assert!(results[0].0.contains("up.sql"));
+}
+
+#[test]
+fn test_check_down_single_migration_dir_sqlx() {
+    let temp_dir = TempDir::new().unwrap();
+    // SQLx requires 14-digit timestamp prefix
+    let migration_dir = temp_dir.path().join("20240101000000_test");
+    fs::create_dir(&migration_dir).unwrap();
+    fs::write(
+        migration_dir.join("up.sql"),
+        "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;",
+    )
+    .unwrap();
+    fs::write(
+        migration_dir.join("down.sql"),
+        "ALTER TABLE users DROP COLUMN admin;",
+    )
+    .unwrap();
+
+    let config = Config {
+        framework: "sqlx".to_string(),
+        ..Default::default() // check_down = false
+    };
+    let checker = SafetyChecker::with_config(config);
+    let results = checker
+        .check_path(Utf8Path::from_path(&migration_dir).unwrap())
+        .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert!(results[0].0.contains("up.sql"));
+}
+
+#[test]
 fn test_config_disables_checks() {
     let temp_dir = TempDir::new().unwrap();
     let config_path = temp_dir.path().join("diesel-guard.toml");

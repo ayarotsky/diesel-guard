@@ -627,6 +627,7 @@ fn test_check_all_sqlx_fixtures() {
     use diesel_guard::Config;
 
     let config = Config {
+        framework: "sqlx".to_string(),
         check_down: false, // Only check up migrations
         ..Default::default()
     };
@@ -656,24 +657,20 @@ fn test_check_all_sqlx_fixtures() {
         }
     }
 
-    // Note: We're actually finding 5 files because the suffix fixture has both
-    // .up.sql and .down.sql, and both have violations (even with check_down=false,
-    // the down.sql file still gets processed since it's a separate file, not a section)
     // Expected violations (with check_down = false):
     // 1. sqlx_suffix_add_column_unsafe/.up.sql - 1 violation (ADD COLUMN with DEFAULT)
-    // 2. sqlx_suffix_add_column_unsafe/.down.sql - 1 violation (DROP COLUMN)
-    // 3. sqlx_marker_drop_column - 1 violation (DROP COLUMN in up section)
-    // 4. sqlx_directory_rename_column/up.sql - 1 violation (RENAME COLUMN)
-    // 5. sqlx_reindex_unsafe - 1 violation (REINDEX without CONCURRENTLY)
-    // Note: CONCURRENTLY and safe fixtures have 0 violations
+    // 2. sqlx_marker_drop_column - 1 violation (DROP COLUMN in up section)
+    // 3. sqlx_directory_rename_column/up.sql - 1 violation (RENAME COLUMN)
+    // 4. sqlx_reindex_unsafe - 1 violation (REINDEX without CONCURRENTLY)
+    // Note: .down.sql correctly skipped, CONCURRENTLY and safe fixtures have 0 violations
     assert_eq!(
-        files_with_violations, 5,
-        "Expected 5 files with violations, got {}",
+        files_with_violations, 4,
+        "Expected 4 files with violations, got {}",
         files_with_violations
     );
     assert_eq!(
-        all_violations, 5,
-        "Expected 5 total violations, got {}",
+        all_violations, 4,
+        "Expected 4 total violations, got {}",
         all_violations
     );
 }

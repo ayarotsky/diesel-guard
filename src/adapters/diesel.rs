@@ -10,8 +10,8 @@
 //! ```
 
 use super::{
-    collect_and_sort_entries, should_check_migration, MigrationAdapter, MigrationDirection,
-    MigrationFile, Result,
+    collect_and_sort_entries, is_single_migration_dir, should_check_migration, MigrationAdapter,
+    MigrationDirection, MigrationFile, Result,
 };
 use camino::Utf8Path;
 use regex::Regex;
@@ -38,6 +38,12 @@ impl MigrationAdapter for DieselAdapter {
         start_after: Option<&str>,
         check_down: bool,
     ) -> Result<Vec<MigrationFile>> {
+        if is_single_migration_dir(dir) {
+            // When the user targets a specific migration directory, skip the
+            // start_after filter — they explicitly chose this migration.
+            return self.process_migration_directory(dir, None, check_down);
+        }
+
         let entries = collect_and_sort_entries(dir);
         let mut files = Vec::new();
 
@@ -231,5 +237,67 @@ mod tests {
             Some("20240101000000"),
             "2024-01-01-000000"
         ));
+    }
+
+    #[test]
+    fn test_single_migration_dir_skips_down_sql() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
+        fs::create_dir(&migration_dir).unwrap();
+        fs::write(
+            migration_dir.join("up.sql"),
+            "ALTER TABLE users ADD COLUMN admin BOOLEAN;",
+        )
+        .unwrap();
+        fs::write(
+            migration_dir.join("down.sql"),
+            "ALTER TABLE users DROP COLUMN admin;",
+        )
+        .unwrap();
+
+        let adapter = DieselAdapter;
+        let migration_path =
+            Utf8Path::from_path(&migration_dir).expect("path should be valid UTF-8");
+        let files = adapter
+            .collect_migration_files(migration_path, None, false)
+            .unwrap();
+
+        assert_eq!(files.len(), 1);
+        assert!(files[0].path.as_str().contains("up.sql"));
+    }
+
+    #[test]
+    fn test_single_migration_dir_includes_down_sql() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
+        fs::create_dir(&migration_dir).unwrap();
+        fs::write(
+            migration_dir.join("up.sql"),
+            "ALTER TABLE users ADD COLUMN admin BOOLEAN;",
+        )
+        .unwrap();
+        fs::write(
+            migration_dir.join("down.sql"),
+            "ALTER TABLE users DROP COLUMN admin;",
+        )
+        .unwrap();
+
+        let adapter = DieselAdapter;
+        let migration_path =
+            Utf8Path::from_path(&migration_dir).expect("path should be valid UTF-8");
+        let files = adapter
+            .collect_migration_files(migration_path, None, true)
+            .unwrap();
+
+        assert_eq!(files.len(), 2);
+        let paths: Vec<String> = files.iter().map(|f| f.path.to_string()).collect();
+        assert!(paths.iter().any(|p| p.contains("up.sql")));
+        assert!(paths.iter().any(|p| p.contains("down.sql")));
     }
 }

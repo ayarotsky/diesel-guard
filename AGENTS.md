@@ -7,9 +7,8 @@ This document provides context for AI coding agents working on **diesel-guard**.
 **diesel-guard** detects unsafe PostgreSQL migration patterns before they cause production incidents. It parses SQL using `sqlparser` and identifies operations that acquire dangerous locks or trigger table rewrites.
 
 **Core Technology:**
-- Version: 0.4.0
 - Language: Rust
-- SQL Parser: `sqlparser` (v0.60.0)
+- SQL Parser: `sqlparser`
 - Frameworks: Diesel and SQLx migrations
 - Target: PostgreSQL 9.6+
 
@@ -24,38 +23,8 @@ src/
 ├── error.rs              # Error handling with miette
 ├── output.rs             # Output formatting (text/JSON)
 ├── config.rs             # Configuration loading/validation
-├── checks/               # Individual safety checks (23 checks)
-│   ├── mod.rs            # Registry that runs all checks
-│   ├── test_utils.rs     # Shared test macros (assert_detects_violation!, assert_allows!)
-│   ├── add_column.rs
-│   ├── add_index.rs
-│   ├── add_json_column.rs
-│   ├── add_not_null.rs
-│   ├── add_primary_key.rs
-│   ├── add_serial_column.rs
-│   ├── add_unique_constraint.rs
-│   ├── alter_column_type.rs
-│   ├── char_type.rs
-│   ├── create_extension.rs
-│   ├── drop_column.rs
-│   ├── drop_database.rs
-│   ├── drop_index.rs
-│   ├── drop_primary_key.rs
-│   ├── drop_table.rs
-│   ├── generated_column.rs
-│   ├── rename_column.rs
-│   ├── rename_table.rs
-│   ├── short_int_primary_key.rs
-│   ├── timestamp_type.rs
-│   ├── truncate_table.rs
-│   ├── unnamed_constraint.rs
-│   └── wide_index.rs
-├── parser/               # SQL parsing
-│   ├── mod.rs            # SqlParser with custom detection fallbacks
-│   ├── comment_parser.rs # Safety-assured block parsing
-│   ├── drop_index_concurrently_detector.rs  # Safe DROP INDEX CONCURRENTLY detection
-│   ├── primary_key_using_index_detector.rs  # Safe PRIMARY KEY USING INDEX detection
-│   └── unique_using_index_detector.rs       # Safe UNIQUE USING INDEX detection
+├── checks/               # One file per check + mod.rs (registry) + test_utils.rs (macros)
+├── parser/               # SQL parsing + regex detectors for syntax sqlparser can't handle
 └── adapters/             # Framework adapters
     ├── mod.rs            # MigrationAdapter trait
     ├── diesel.rs         # Diesel migration handling
@@ -73,10 +42,12 @@ tests/
 **Key Components:**
 - **Check trait**: All safety checks implement this trait (`fn check(&self, stmt: &Statement) -> Vec<Violation>`)
 - **Registry**: Holds all registered checks, filters by config, runs them against statements
-- **SafetyChecker**: Main API for checking files/directories
+- **SafetyChecker**: Main API for checking files/directories (uses `&Utf8Path` from camino, not `&Path`)
 - **Violation**: Contains operation name, problem description, and safe alternative
 - **MigrationAdapter trait**: Abstracts framework-specific migration discovery (Diesel, SQLx)
 - **Config**: Loads settings from `diesel-guard.toml` (framework, start_after, disable_checks)
+
+**REINDEX is a special case:** sqlparser cannot parse REINDEX at all, so detection happens via raw SQL regex in `SafetyChecker::detect_reindex_violations()` BEFORE parsing. The `ReindexCheck` struct in `src/checks/reindex.rs` is a **stub** (always returns empty) — it exists solely so `disable_checks = ["ReindexCheck"]` works. If you need to add another check for syntax sqlparser can't parse, follow this same pattern.
 
 ## How to Add a New Check
 
@@ -194,12 +165,6 @@ Pattern: `{operation}_{safe|unsafe}` or `{operation}_{variant}_{safe|unsafe}`
 | `{op}_{variant}_unsafe` | `alter_column_type_using_unsafe` | Variant with specific behavior |
 | `{op}_{variant}_safe` | `drop_not_null_safe` | Safe variant with specific behavior |
 
-**Examples of correct naming:**
-- `add_column_with_default_unsafe` (not `add_column_with_default`)
-- `add_index_safe` (not `add_index_with_concurrently`)
-- `drop_column_unsafe` (not `drop_column`)
-- `alter_column_type_using_unsafe` (not `alter_column_type_with_using`)
-
 **Fixture File Content:**
 
 Each `up.sql` MUST start with a comment describing safe/unsafe status:
@@ -223,47 +188,13 @@ If safe variant requires `run_in_transaction = false` (like CREATE INDEX CONCURR
 ### 5. Update Integration Tests
 
 In `tests/fixtures_test.rs`:
-
-```rust
-// Add to safe_fixtures list if applicable
-let safe_fixtures = vec![
-    // ... existing ...
-    "your_operation_safe",
-];
-
-// Add specific test for unsafe variant
-#[test]
-fn test_your_operation_detected() {
-    let checker = SafetyChecker::new();
-    let path = fixture_path("your_operation_unsafe");
-    let violations = checker.check_file(Path::new(&path)).unwrap();
-
-    assert_eq!(violations.len(), 1);
-    assert_eq!(violations[0].operation, "OPERATION NAME");
-}
-```
+- Add safe fixture to `safe_fixtures` vec in `test_safe_fixtures_pass`
+- Add a specific detection test for the unsafe variant (see existing tests for pattern — uses `Utf8Path::new`, not `Path::new`)
+- Update `test_check_entire_fixtures_directory` counts (see Pitfall #2 below)
 
 ### 6. Update README
 
-Add to "Supported Checks" section:
-
-```markdown
-### N. YOUR CHECK NAME
-
-**Unsafe:**
-```sql
--- SQL that triggers detection
-```
-
-**Safe:**
-```sql
--- Multi-step safe alternative
-```
-
-**Note:** Any important details about PostgreSQL versions, lock types, or edge cases.
-```
-
-Remove from "Coming Soon" if it was listed there.
+Add to "Supported Checks" section with Unsafe/Safe SQL examples. Remove from "Coming Soon" if it was listed there.
 
 ### 7. Verify Everything
 
@@ -312,12 +243,6 @@ Violation solutions MUST use numbered steps with actual SQL examples. This is a 
 - Using prose paragraphs instead of structured steps
 - Missing the safety-assured escape hatch option
 
-### Test Macro Usage
-
-- **Prefer macros** for simple detection tests (currently 14/29 unit tests use them)
-- **Use explicit code** for complex assertions that check violation message content
-- See existing checks for examples of both approaches
-
 ### Naming Conventions
 
 - **Check structs**: `YourOperationCheck` (descriptive, ends with "Check")
@@ -329,87 +254,14 @@ Violation solutions MUST use numbered steps with actual SQL examples. This is a 
 
 ## sqlparser AST Patterns
 
-### Research Existing Patterns
-
-Before implementing, search for similar patterns:
+Before implementing a new check, search for similar patterns in existing checks:
 
 ```bash
-# Find how other checks use AlterTableOperation
 rg "AlterTableOperation::" --type rust
-
-# Find CreateIndex usage
 rg "CreateIndex" --type rust
 ```
 
-### Common AST Patterns
-
-- `Statement::AlterTable { name, operations, .. }` - ALTER TABLE operations
-- `Statement::CreateIndex(create_index)` - CREATE INDEX
-- `Statement::Drop { object_type, .. }` - DROP operations
-- `AlterTableOperation::AlterColumn { column_name, op }` - ALTER COLUMN
-- `AlterTableOperation::AddColumn { column_def }` - ADD COLUMN
-- `AlterTableOperation::DropColumn { column_names, .. }` - DROP COLUMN
-- `AlterColumnOperation::SetNotNull` - SET NOT NULL
-- `AlterColumnOperation::SetDataType { data_type, using, .. }` - ALTER TYPE
-- `ColumnOption::Default(_)` - DEFAULT value on column
-
-### Pattern Matching Best Practices
-
-**Avoid nested if-let** (clippy warning):
-
-```rust
-// ❌ Bad - nested pattern matching
-if let AlterTableOperation::AlterColumn { column_name, op } = op {
-    if let AlterColumnOperation::SetDataType { data_type, using, .. } = op {
-        // ...
-    }
-}
-
-// ✅ Good - collapsed pattern
-if let AlterTableOperation::AlterColumn {
-    column_name,
-    op: AlterColumnOperation::SetDataType { data_type, using, .. },
-} = op {
-    // ...
-}
-```
-
-## Testing Strategy
-
-### Unit Tests (`src/checks/*.rs`)
-
-Each check module includes:
-- Detection of unsafe patterns
-- Verification that safe variants are allowed
-- Edge cases (IF EXISTS, multiple columns, etc.)
-- Operation-specific scenarios (USING clause, UNIQUE indexes, etc.)
-
-**Test coverage goal**: Every code path in the `check()` method should have a test.
-
-### Integration Tests (`tests/`)
-
-**`tests/fixtures_test.rs`** - Diesel fixture tests:
-- Safe fixtures produce zero violations
-- Unsafe fixtures produce expected violations
-- Directory scanning works correctly
-- Fixture counts match expectations
-
-**`tests/safety_assured_test.rs`** - Safety-assured block tests:
-- End-to-end checking with blocks
-- Multiple blocks in one file
-- Edge cases (interleaved blocks, same keywords in/out of blocks)
-
-**`tests/config_test.rs`** - Configuration tests:
-- Loading and validation of `diesel-guard.toml`
-- Framework validation (diesel/sqlx)
-- Check name validation against registry
-- Timestamp format validation
-
-**`tests/init_test.rs`** - CLI init command tests:
-- Config file creation
-- Force overwrite behavior
-
-**SQLx fixtures** (`tests/fixtures_sqlx/`) test all four SQLx migration formats.
+**Avoid nested if-let** (clippy `collapsible_match` warning) — collapse into single pattern match. See existing checks for examples.
 
 ## Common Pitfalls
 
@@ -421,146 +273,29 @@ Each check module includes:
 ### 2. Incorrect Fixture Counts
 
 **Symptom**: `test_check_entire_fixtures_directory()` fails
-**Fix**: Update total fixtures, unsafe count, and total violations count in test comments and assertions
+**Fix**: Update the file count and total violation count assertions in that test. Some fixtures produce multiple violations due to check overlaps — read the test's assertion message for the breakdown.
 
-### 3. Nested Pattern Matching
-
-**Symptom**: `clippy::collapsible_match` warning
-**Fix**: Combine nested `if let` into single pattern (see pattern matching section above)
-
-### 4. Macros After Test Module
+### 3. Macros After Test Module
 
 **Symptom**: `clippy::items_after_test_module` warning
 **Fix**: Keep macros before `mod test_helpers` in `test_utils.rs`
 
-### 5. Exaggerated Descriptions
+## Parser: Custom Detection for Unsupported Syntax
 
-**Symptom**: Violations sound alarmist or inaccurate
-**Fix**: Use precise lock types, qualify duration statements, avoid absolute claims
+sqlparser cannot parse certain PostgreSQL-specific patterns. Regex-based detectors in `src/parser/` handle these. Each detector uses `LazyLock<Regex>` with `(?i)` flag.
 
-### 6. Missing Fixture metadata.toml
+**Detection strategy:** On parse error, `parse_with_metadata()` checks SQL against safe pattern detectors. If a safe pattern matches, it returns empty statements (no violations). Otherwise, it returns the original parse error.
 
-**Symptom**: Safe CONCURRENTLY operation not tested correctly
-**Fix**: Add `metadata.toml` with `run_in_transaction = false` for CONCURRENTLY operations
+**Limitation:** When a safe pattern causes a parse error, ALL statements in the file are skipped (sqlparser fails on the entire file).
 
-## Parser Implementation
-
-### Custom Detection for Unsupported Syntax
-
-sqlparser 0.60 cannot parse certain PostgreSQL-specific safe patterns. Three detectors handle these:
-
-**1. UNIQUE USING INDEX** (`src/parser/unique_using_index_detector.rs`):
-```sql
-ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_idx;
-```
-- Safe pattern: promotes existing index to constraint without table lock
-- Pattern: `(?i)ALTER\s+TABLE\s+\S+\s+ADD\s+CONSTRAINT\s+\S+\s+UNIQUE\s+USING\s+INDEX\s+\S+`
-
-**2. PRIMARY KEY USING INDEX** (`src/parser/primary_key_using_index_detector.rs`):
-```sql
-ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY USING INDEX users_id_idx;
-```
-- Safe pattern: promotes existing unique index to primary key without table lock
-- Pattern: `(?i)ALTER\s+TABLE\s+\S+\s+ADD\s+CONSTRAINT\s+\S+\s+PRIMARY\s+KEY\s+USING\s+INDEX\s+\S+`
-
-**3. DROP INDEX CONCURRENTLY** (`src/parser/drop_index_concurrently_detector.rs`):
-```sql
-DROP INDEX CONCURRENTLY users_email_idx;
-```
-- Safe pattern: non-blocking index removal
-- Pattern: `(?i)DROP\s+INDEX\s+CONCURRENTLY`
-
-**Detection Strategy:**
-- When `parse_with_metadata()` encounters a parse error, it checks SQL against all three patterns
-- If any safe pattern detected: Returns empty statements (no violations)
-- If no pattern matches: Returns the original parse error
-
-**Implementation Details:**
-- Uses `std::sync::LazyLock` for regex compilation
-- Case-insensitive matching via `(?i)` flag
-- Each detector has comprehensive test coverage
-
-**Important Limitation:**
-
-⚠️ **Multi-statement files**: When a safe pattern causes a parse error, ALL statements in the file are skipped. This is because sqlparser fails on the entire file when it encounters unsupported syntax.
-
-**Mitigation:**
-- Migrations typically use one statement per file, so this is rarely an issue
-- Users can split multi-statement files into separate migration files
-- Use `-- safety-assured` blocks for known-safe multi-statement migrations
-
-**When to Add Custom Detection:**
-
-Only add regex-based detection when:
+**When to add a new detector:**
 1. The syntax is PostgreSQL-specific and sqlparser doesn't support it
-2. The syntax represents a **safe pattern** that should not trigger violations
-3. The pattern is well-defined and can be reliably detected with regex
+2. The pattern is well-defined and reliably detectable with regex
+3. Create detector in `src/parser/`, update `parse_with_metadata()` in `src/parser/mod.rs`
 
-**How to Add Custom Detection:**
-1. Create detector module in `src/parser/` with regex pattern and tests
-2. Update `parse_with_metadata()` in `src/parser/mod.rs` to check for pattern on parse errors
-3. Return empty statements if safe pattern detected, otherwise return original error
-4. Add integration tests to verify the pattern is recognized correctly
+## Safety-Assured Blocks
 
-## Safety-Assured Implementation
-
-Users can wrap SQL in `-- safety-assured:start` / `-- safety-assured:end` blocks to bypass checks.
-
-### Architecture
-
-**Comment Parser** (`src/parser/comment_parser.rs`):
-- Scans SQL line-by-line for directives
-- Builds `IgnoreRange` structs with start/end line numbers
-- Validates matching pairs (errors on unclosed/unmatched blocks)
-- Simple start/end directives: `-- safety-assured:start` and `-- safety-assured:end`
-
-**Parser** (`src/parser/mod.rs`):
-- `parse_with_metadata()` returns `ParsedSql` with:
-  - AST statements
-  - Statement line numbers (heuristic-based)
-  - Ignore ranges from comment parser
-- `extract_statement_lines()` maps statements to source lines using keyword matching
-
-**Registry** (`src/checks/mod.rs`):
-- `check_statements_with_context()` filters checks based on ignore ranges
-- `is_line_ignored()` checks if a line falls within any range
-- All checks are bypassed for statements within safety-assured blocks
-
-### Key Implementation Details
-
-**Line Number Handling:**
-- All line numbers are 1-indexed (matching editor conventions)
-- Ignore ranges are exclusive of start/end comment lines
-  - Line 5: `-- safety-assured:start`
-  - Line 6-9: Statements (IGNORED)
-  - Line 10: `-- safety-assured:end`
-
-**Statement Line Extraction:**
-- Heuristic-based since sqlparser doesn't preserve positions
-- Searches for SQL keywords (ALTER, CREATE, DROP, etc.)
-- Matches statements to lines in order of appearance
-- Skips already-matched lines to handle multiple statements
-
-**Directive Matching:**
-- Directives are case-insensitive (`-- SAFETY-ASSURED:START` works)
-- All checks are bypassed when a statement is within a block
-- No support for check-specific ignoring (keeps implementation simple)
-
-**Known Limitations:**
-- **Statement line tracking is heuristic-based**: The `extract_statement_lines` method in `src/parser/mod.rs` uses keyword matching to identify where statements begin in the source SQL. This approach has some edge case limitations:
-  - **Rare fallback to line 1**: If keyword matching fails (statement doesn't start with any known SQL keyword), the method defaults to line 1 and logs a warning to stderr. This should be rare in practice as the keyword list covers standard SQL operations.
-  - **Impact if fallback occurs**: When fallback occurs, statements may be incorrectly included or excluded from safety-assured blocks depending on whether line 1 falls within a block's range.
-  - **Edge cases**: Multiple statements on the same line, or statements with very unusual formatting, may not track correctly.
-- **Nested blocks**: Allowed and work as sequential blocks due to stack behavior in comment parser
-- **Debugging**: If fallback occurs, warnings are logged to stderr with the keyword and statement preview to help identify problematic SQL
-
-### Safety-Assured Testing
-
-**Unit tests** (`src/parser/comment_parser.rs`): Block parsing, case insensitivity, error cases
-
-**Fixtures** (`tests/fixtures/safety_assured_*`): `safety_assured_drop`, `safety_assured_multiple`
-
-**Edge cases**: See `tests/safety_assured_test.rs` for interleaved blocks, same keywords in/out of blocks, nested blocks
+Users can wrap SQL in `-- safety-assured:start` / `-- safety-assured:end` blocks to bypass checks. Directives are case-insensitive. Line ranges are exclusive of the comment lines themselves. Statement-to-line mapping is heuristic-based (keyword matching) since sqlparser doesn't preserve source positions.
 
 ## Framework Adapters
 
@@ -635,77 +370,10 @@ disable_checks = ["AddColumnCheck"]  # Disable specific checks
 
 **Timestamp normalization:** Separators (underscores, hyphens) are stripped for comparison.
 
-## Current Project State
-
-- **Checks implemented**: 23
-  - ADD COLUMN with DEFAULT (PostgreSQL < 11)
-  - ADD INDEX without CONCURRENTLY
-  - ADD JSON column (should use JSONB)
-  - ADD NOT NULL constraint
-  - ADD PRIMARY KEY to existing table
-  - ADD SERIAL column
-  - ADD UNIQUE constraint via ALTER TABLE
-  - ALTER COLUMN TYPE
-  - CHAR/CHARACTER column types
-  - CREATE EXTENSION
-  - DROP COLUMN
-  - DROP DATABASE
-  - DROP INDEX without CONCURRENTLY
-  - DROP PRIMARY KEY
-  - DROP TABLE
-  - GENERATED STORED column (table rewrite)
-  - RENAME COLUMN
-  - RENAME TABLE
-  - Short integer primary keys (SMALLINT/INT)
-  - TIMESTAMP without time zone (recommend TIMESTAMPTZ)
-  - TRUNCATE TABLE
-  - Unnamed constraints (UNIQUE, FOREIGN KEY, CHECK)
-  - Wide indexes (4+ columns)
-
-- **Code quality**: All passing
-  - ✅ `cargo test`
-  - ✅ `cargo fmt --check`
-  - ✅ `cargo clippy --all-targets --all-features -- -D warnings`
-
-## Build & Development Commands
+## Verification
 
 ```bash
-# Run all tests
-cargo test
-
-# Run only unit tests
-cargo test --lib
-
-# Run only integration tests
-cargo test --test fixtures_test
-
-# Run tests for specific check
-cargo test add_column
-cargo test add_index
-
-# Format code
-cargo fmt
-
-# Lint code
-cargo clippy --all-targets --all-features -- -D warnings
-
-# Build release binary
-cargo build --release
-
-# Initialize config file (for testing)
-cargo run -- init
-cargo run -- init --force  # overwrite existing
-
-# Check migrations
-cargo run -- check tests/fixtures/
+cargo test                                                    # all tests pass
+cargo clippy --all-targets --all-features -- -D warnings      # no warnings
+cargo fmt --check                                             # formatted
 ```
-
-## Additional Resources
-
-- **CONTRIBUTING.md**: Human contributor guide, PR process, community guidelines
-- **README.md**: User-facing documentation, usage examples, supported checks
-- **tests/fixtures/**: Example migrations demonstrating safe and unsafe patterns
-
----
-
-**For human contributors**: See CONTRIBUTING.md for development setup and PR guidelines.
