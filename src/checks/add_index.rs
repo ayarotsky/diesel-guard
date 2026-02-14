@@ -10,31 +10,42 @@
 //! Using CONCURRENTLY allows the index to be built while permitting concurrent writes,
 //! though it takes longer and cannot be run inside a transaction block.
 
-use crate::checks::{display_or_default, unique_prefix, Check};
+use crate::checks::pg_helpers::{range_var_name, NodeEnum};
+use crate::checks::{unique_prefix, Check};
 use crate::violation::Violation;
-use sqlparser::ast::Statement;
 
 pub struct AddIndexCheck;
 
 impl Check for AddIndexCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        let mut violations = vec![];
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let NodeEnum::IndexStmt(index_stmt) = node else {
+            return vec![];
+        };
 
-        if let Statement::CreateIndex(create_index) = stmt {
-            // Check if CONCURRENTLY is NOT used
-            if !create_index.concurrently {
-                let table_name = create_index.table_name.to_string();
-                let index_name = display_or_default(create_index.name.as_ref(), "<unnamed>");
-                let unique_str = unique_prefix(create_index.unique);
+        if index_stmt.concurrent {
+            return vec![];
+        }
 
-                violations.push(Violation::new(
-                    "ADD INDEX without CONCURRENTLY",
-                    format!(
-                        "Creating {unique}index '{index}' on table '{table}' without CONCURRENTLY acquires a SHARE lock, blocking writes \
-                        (INSERT, UPDATE, DELETE). Duration depends on table size. Reads are still allowed.",
-                        unique = unique_str, index = index_name, table = table_name
-                    ),
-                    format!(r#"Use CONCURRENTLY to build the index without blocking writes:
+        let table_name = index_stmt
+            .relation
+            .as_ref()
+            .map(range_var_name)
+            .unwrap_or_default();
+        let index_name = if index_stmt.idxname.is_empty() {
+            "<unnamed>".to_string()
+        } else {
+            index_stmt.idxname.clone()
+        };
+        let unique_str = unique_prefix(index_stmt.unique);
+
+        vec![Violation::new(
+            "ADD INDEX without CONCURRENTLY",
+            format!(
+                "Creating {unique}index '{index}' on table '{table}' without CONCURRENTLY acquires a SHARE lock, blocking writes \
+                (INSERT, UPDATE, DELETE). Duration depends on table size. Reads are still allowed.",
+                unique = unique_str, index = index_name, table = table_name
+            ),
+            format!(r#"Use CONCURRENTLY to build the index without blocking writes:
    CREATE {unique}INDEX CONCURRENTLY {index} ON {table};
 
 Note: CONCURRENTLY takes longer and uses more resources, but allows concurrent INSERT, UPDATE, and DELETE operations. The index build may fail if there are deadlocks or unique constraint violations.
@@ -56,15 +67,11 @@ For SQLx migrations:
 Considerations:
 - Requires more total work and takes longer to complete
 - If it fails, it leaves behind an "invalid" index that should be dropped"#,
-                        unique = unique_str,
-                        index = index_name,
-                        table = table_name
-                    ),
-                ));
-            }
-        }
-
-        violations
+                unique = unique_str,
+                index = index_name,
+                table = table_name
+            ),
+        )]
     }
 }
 

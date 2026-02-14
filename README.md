@@ -4,10 +4,10 @@
 
 Catch dangerous PostgreSQL migrations before they take down production.
 
-✓ Detects operations that lock tables or cause downtime<br>
-✓ Provides safe alternatives for each blocking operation<br>
-✓ Works with both Diesel and SQLx migration frameworks<br>
-✓ Supports safety-assured blocks for verified operations<br>
+✓ Detects operations that lock tables or cause downtime
+✓ Provides safe alternatives for each blocking operation
+✓ Works with both Diesel and SQLx migration frameworks
+✓ Supports safety-assured blocks for verified operations
 
 ## Installation
 
@@ -1247,159 +1247,6 @@ Diesel Guard will error if blocks are mismatched:
 
 ```
 Error: Unclosed 'safety-assured:start' at line 1
-```
-
-## Path to v1
-
-`diesel-guard` is on a roadmap to **v1** with 3 major phases, each adding progressively more sophisticated migration safety capabilities.
-
-### Phase 1: Complete Static Analysis Coverage
-
-**Goal:** Implement all linter checks that work through SQL parsing alone, without requiring database connection.
-
-#### Constraint & Lock Safety (4 remaining)
-- **ADD FOREIGN KEY constraint** - Detect missing NOT VALID; recommend two-step validation
-- **ADD CHECK constraint** - Detect missing NOT VALID; recommend separate VALIDATE
-- **ADD EXCLUSION constraint** - Warn about blocking behavior (no safe workaround)
-- **FOREIGN KEY with CASCADE** - Flag ON DELETE CASCADE and ON UPDATE CASCADE
-
-#### Table & Schema Operations (1 remaining)
-- **CLUSTER** - Warn about full table rewrite with ACCESS EXCLUSIVE lock
-
-#### Type & Best Practices (1 remaining)
-- **Mismatched foreign key column types** - Detect type inconsistencies via SQL parsing
-
-### Phase 2: Database-Connected Intelligence
-
-**Goal:** Add optional database connection to provide context-aware checking based on actual table state, relationships, and PostgreSQL version.
-
-#### New Database-Connected Checks
-
-1. **Missing timeout settings** - Verify timeout configuration at database/user level
-   - Query `SHOW lock_timeout` and `SHOW statement_timeout` to check effective values
-   - Only warn if both migration file AND database have no timeouts configured
-   - Avoids false positives when timeouts are set at database/role level
-   - Recommend `SET lock_timeout = '2s'` and `SET statement_timeout = '5s'` in migrations
-
-#### Existing Checks Enhanced by Database Connection
-
-1. **DROP PRIMARY KEY** (currently limited) - Currently relies on naming conventions (e.g., `users_pkey`)
-   - **With DB:** Query information_schema to find actual primary key name
-   - **With DB:** List all foreign keys that reference this PK
-
-2. **ADD COLUMN with DEFAULT** (currently version-agnostic)
-   - **With DB:** Query PostgreSQL version to give accurate warnings
-   - **With DB:** PG 11+ with constant defaults → mark as safe, no warning needed
-
-3. **ALTER COLUMN TYPE** (currently assumes all unsafe)
-   - **With DB:** Detect safe type changes (VARCHAR(50)→VARCHAR(100), VARCHAR→TEXT)
-   - **With DB:** Check actual column type to avoid false positives
-
-4. **Short Integer Primary Keys** (currently checks all tables)
-   - **With DB:** Query actual row counts to assess urgency
-   - **With DB:** Calculate time-to-exhaustion based on insert rate from pg_stat_user_tables
-
-5. **CREATE EXTENSION** (currently always warns)
-   - **With DB:** Check if extension already exists
-   - **With DB:** Verify current user has sufficient privileges
-
-6. **ADD NOT NULL** (currently always recommends CHECK constraint)
-   - **With DB:** On PG 12+, verify all values non-null → direct SET NOT NULL is safe
-   - **With DB:** Detect if equivalent CHECK constraint already exists
-
-#### Configuration
-
-```toml
-# diesel-guard.toml
-# Optional: connect to database for enhanced checking
-url = "postgresql://user:pass@localhost/dbname"
-enabled = false  # Default: false (static analysis only)
-
-# Table size thresholds for warnings
-large_table_rows = 100000
-large_table_size_mb = 1024
-```
-
-### Phase 3: Framework Integration - All-in-One Migration Suite
-
-**Goal:** Integration with Diesel and SQLx migration ecosystems to become the single tool for both safety checking and migration execution.
-
-#### Core Integration Features
-
-1. **Native migration CLI replacement**
-   ```bash
-   # Instead of:
-   diesel migration run
-   diesel migration revert
-
-   # Users can:
-   diesel-guard migrate run    # Checks safety, runs with sqlx migrate run
-   diesel-guard migrate revert # Checks safety, reverts migrations
-   ```
-
-2. **Automatic safety checking before execution**
-   - Run all safety checks before applying any migration
-
-3. **Migration generation with safe templates**
-   ```bash
-   # Works for both Diesel and SQLx based on diesel-guard.toml config
-   diesel-guard migration generate add_user_email
-
-   # Generates migration with safety comments and safe patterns
-   # (format depends on configured framework)
-   #
-   # Example for Diesel:
-   # up.sql:
-   # -- Migration: Add email column to users
-   # -- Safe pattern: Add without default, backfill separately
-   #
-   # SET lock_timeout = '2s';
-   # SET statement_timeout = '5s';
-   #
-   # ALTER TABLE users ADD COLUMN email TEXT;
-   ```
-
-4. **Interactive migration review**
-   ```bash
-   diesel-guard migrate review
-
-   # Shows:
-   # ✓ 2024_01_01_create_users - Safe
-   # ⚠ 2024_01_02_add_email - 1 warning (ADD COLUMN with DEFAULT)
-   # ✗ 2024_01_03_drop_column - 1 violation (DROP COLUMN)
-   #
-   # Run migrations? (y/N/review)
-   ```
-
-5. **Diesel schema.rs validation**
-   - Detect schema.rs drift from actual database
-   - Validate that migrations will produce expected schema
-   - Warn about schema changes not reflected in migrations
-
-6. **Migration splitting assistant**
-   ```bash
-   diesel-guard migrate split 2024_01_02_add_email
-
-   # Automatically splits unsafe migration into safe multi-step migrations:
-   # 2024_01_02_01_add_email_column
-   # 2024_01_02_02_add_email_default
-   ```
-
-#### Configuration
-
-```toml
-# diesel-guard.toml
-# Enforce timeout settings when running migrations
-enforce_timeouts = true
-
-# Timeouts applied if migration doesn't specify them
-# These are set before each migration runs
-lock_timeout = "2s"
-statement_timeout = "5s"
-idle_in_transaction_session_timeout = "10s"
-
-# Include timeout settings in generated migrations
-include_timeouts = true
 ```
 
 ## Contributing

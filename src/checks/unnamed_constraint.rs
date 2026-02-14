@@ -9,79 +9,75 @@
 //!
 //! Always name constraints explicitly for maintainable migrations.
 
+use crate::checks::pg_helpers::{
+    alter_table_cmds, cmd_def_as_constraint, constraint_columns_str, range_var_name, ConstrType,
+    NodeEnum,
+};
 use crate::checks::Check;
 use crate::violation::Violation;
-use sqlparser::ast::{AlterTable, AlterTableOperation, Statement, TableConstraint};
 
 pub struct UnnamedConstraintCheck;
 
 impl Check for UnnamedConstraintCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        let Statement::AlterTable(AlterTable {
-            name, operations, ..
-        }) = stmt
-        else {
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
 
-        let table_name = name.to_string();
+        cmds.iter()
+            .filter_map(|cmd| {
+                let c = cmd_def_as_constraint(cmd)?;
 
-        operations
-            .iter()
-            .filter_map(|op| {
-                let AlterTableOperation::AddConstraint { constraint, .. } = op else {
+                // Only check unnamed constraints
+                if !c.conname.is_empty() {
                     return None;
-                };
+                }
 
-                // Check if constraint has a name
-                let (constraint_type, columns_desc) = match constraint {
-                    TableConstraint::Unique(unique) => {
-                        if unique.name.is_some() {
-                            return None;
-                        }
-                        let cols = unique
-                            .columns
-                            .iter()
-                            .map(|ic| ic.column.expr.to_string())
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        ("UNIQUE", cols)
+                let (constraint_type, columns_desc) = match c.contype {
+                    x if x == ConstrType::ConstrUnique as i32 => {
+                        ("UNIQUE", constraint_columns_str(c))
                     }
-                    TableConstraint::ForeignKey(fk) => {
-                        if fk.name.is_some() {
-                            return None;
-                        }
-                        let cols = fk
-                            .columns
+                    x if x == ConstrType::ConstrForeign as i32 => {
+                        // FK columns are in fk_attrs, not keys
+                        let fk_cols = c
+                            .fk_attrs
                             .iter()
-                            .map(|c| c.to_string())
+                            .filter_map(|n| match &n.node {
+                                Some(NodeEnum::String(s)) => Some(s.sval.clone()),
+                                _ => None,
+                            })
                             .collect::<Vec<_>>()
                             .join(", ");
-                        let foreign_cols = fk
-                            .referred_columns
+
+                        let ref_table = c
+                            .pktable
+                            .as_ref()
+                            .map(range_var_name)
+                            .unwrap_or_default();
+
+                        let ref_cols = c
+                            .pk_attrs
                             .iter()
-                            .map(|c| c.to_string())
+                            .filter_map(|n| match &n.node {
+                                Some(NodeEnum::String(s)) => Some(s.sval.clone()),
+                                _ => None,
+                            })
                             .collect::<Vec<_>>()
                             .join(", ");
+
                         (
                             "FOREIGN KEY",
-                            format!(
-                                "({}) REFERENCES {}({})",
-                                cols, fk.foreign_table, foreign_cols
-                            ),
+                            format!("({}) REFERENCES {}({})", fk_cols, ref_table, ref_cols),
                         )
                     }
-                    TableConstraint::Check(check) => {
-                        if check.name.is_some() {
-                            return None;
-                        }
-                        ("CHECK", format!("({})", check.expr))
+                    x if x == ConstrType::ConstrCheck as i32 => {
+                        ("CHECK", "(...)".to_string())
                     }
-                    _ => return None, // Ignore other constraint types
+                    _ => return None,
                 };
 
                 Some(Violation::new(
-                    "Unnamed constraint",
+                    "CONSTRAINT without name",
                     format!(
                         "Adding unnamed {constraint_type} constraint on table '{table}' will receive an auto-generated name from PostgreSQL. \
                         This makes future migrations difficult, as the generated name varies between databases and requires querying \
@@ -133,7 +129,7 @@ mod tests {
         assert_detects_violation!(
             UnnamedConstraintCheck,
             "ALTER TABLE users ADD UNIQUE (email);",
-            "Unnamed constraint"
+            "CONSTRAINT without name"
         );
     }
 
@@ -142,7 +138,7 @@ mod tests {
         assert_detects_violation!(
             UnnamedConstraintCheck,
             "ALTER TABLE posts ADD FOREIGN KEY (user_id) REFERENCES users(id);",
-            "Unnamed constraint"
+            "CONSTRAINT without name"
         );
     }
 
@@ -151,7 +147,7 @@ mod tests {
         assert_detects_violation!(
             UnnamedConstraintCheck,
             "ALTER TABLE users ADD CHECK (age >= 0);",
-            "Unnamed constraint"
+            "CONSTRAINT without name"
         );
     }
 

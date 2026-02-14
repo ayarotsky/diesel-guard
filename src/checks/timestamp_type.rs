@@ -20,77 +20,52 @@
 //! ## PostgreSQL version specifics
 //! Applies to all PostgreSQL versions.
 
+use crate::checks::pg_helpers::{
+    alter_table_cmds, cmd_def_as_column_def, column_type_name, for_each_column_def,
+    is_timestamp_without_tz, NodeEnum,
+};
 use crate::checks::Check;
 use crate::violation::Violation;
-use sqlparser::ast::{
-    AlterTable, AlterTableOperation, ColumnDef, CreateTable, DataType, ObjectName, Statement,
-    TimezoneInfo,
-};
 
 pub struct TimestampTypeCheck;
 
 impl Check for TimestampTypeCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        match stmt {
-            Statement::AlterTable(AlterTable {
-                name, operations, ..
-            }) => check_alter_table_operations(name, operations),
-            Statement::CreateTable(CreateTable { name, columns, .. }) => {
-                check_create_table_columns(name, columns)
-            }
-            _ => vec![],
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let is_create = matches!(node, NodeEnum::CreateStmt(_));
+
+        // Handle CREATE TABLE via for_each_column_def
+        if is_create {
+            return for_each_column_def(node)
+                .into_iter()
+                .filter_map(|(table, col)| {
+                    if !is_timestamp_without_tz(&column_type_name(col)) {
+                        return None;
+                    }
+                    Some(create_create_table_violation(&table, &col.colname))
+                })
+                .collect();
         }
-    }
-}
 
-/// Check if a data type is TIMESTAMP without time zone (unsafe variants)
-fn is_timestamp_without_tz(data_type: &DataType) -> bool {
-    matches!(
-        data_type,
-        DataType::Timestamp(_, TimezoneInfo::None)
-            | DataType::Timestamp(_, TimezoneInfo::WithoutTimeZone)
-    )
-}
-
-/// Check ALTER TABLE operations for TIMESTAMP without time zone columns
-fn check_alter_table_operations(
-    table_name: &ObjectName,
-    operations: &[AlterTableOperation],
-) -> Vec<Violation> {
-    operations
-        .iter()
-        .filter_map(|op| {
-            let AlterTableOperation::AddColumn { column_def, .. } = op else {
-                return None;
+        // Handle ALTER TABLE ADD COLUMN
+        if let NodeEnum::AlterTableStmt(_) = node {
+            let Some((table_name, cmds)) = alter_table_cmds(node) else {
+                return vec![];
             };
 
-            if !is_timestamp_without_tz(&column_def.data_type) {
-                return None;
-            }
+            return cmds
+                .iter()
+                .filter_map(|cmd| {
+                    let col = cmd_def_as_column_def(cmd)?;
+                    if !is_timestamp_without_tz(&column_type_name(col)) {
+                        return None;
+                    }
+                    Some(create_alter_table_violation(&table_name, &col.colname))
+                })
+                .collect();
+        }
 
-            Some(create_alter_table_violation(
-                &table_name.to_string(),
-                &column_def.name.to_string(),
-            ))
-        })
-        .collect()
-}
-
-/// Check CREATE TABLE columns for TIMESTAMP without time zone
-fn check_create_table_columns(table_name: &ObjectName, columns: &[ColumnDef]) -> Vec<Violation> {
-    columns
-        .iter()
-        .filter_map(|col| {
-            if !is_timestamp_without_tz(&col.data_type) {
-                return None;
-            }
-
-            Some(create_create_table_violation(
-                &table_name.to_string(),
-                &col.name.to_string(),
-            ))
-        })
-        .collect()
+        vec![]
+    }
 }
 
 /// Create a violation for ALTER TABLE ADD COLUMN with TIMESTAMP
@@ -127,7 +102,7 @@ on the session's timezone setting, providing consistent behavior across timezone
 /// Create a violation for CREATE TABLE with TIMESTAMP column
 fn create_create_table_violation(table_name: &str, column_name: &str) -> Violation {
     Violation::new(
-        "CREATE TABLE with TIMESTAMP column",
+        "CREATE TABLE with TIMESTAMP",
         format!(
             "Column '{column}' uses TIMESTAMP without time zone. \
             This stores values without timezone context, which can cause issues in \
@@ -189,7 +164,7 @@ mod tests {
         assert_detects_violation!(
             TimestampTypeCheck,
             "CREATE TABLE events (id SERIAL PRIMARY KEY, created_at TIMESTAMP);",
-            "CREATE TABLE with TIMESTAMP column"
+            "CREATE TABLE with TIMESTAMP"
         );
     }
 
@@ -198,7 +173,7 @@ mod tests {
         assert_detects_violation!(
             TimestampTypeCheck,
             "CREATE TABLE events (id SERIAL PRIMARY KEY, created_at TIMESTAMP WITHOUT TIME ZONE);",
-            "CREATE TABLE with TIMESTAMP column"
+            "CREATE TABLE with TIMESTAMP"
         );
     }
 

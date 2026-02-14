@@ -11,44 +11,35 @@
 //! The recommended approach is to stage the removal: mark the column as unused
 //! in application code, deploy without references, and drop in a later migration.
 
+use crate::checks::pg_helpers::{alter_table_cmds, AlterTableType, NodeEnum};
 use crate::checks::{if_exists_clause, Check};
 use crate::violation::Violation;
-use sqlparser::ast::{AlterTable, AlterTableOperation, Statement};
 
 pub struct DropColumnCheck;
 
 impl Check for DropColumnCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        let Statement::AlterTable(AlterTable {
-            name, operations, ..
-        }) = stmt
-        else {
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
 
-        let table_name = name.to_string();
-
-        operations
-            .iter()
-            .filter_map(|op| {
-                let AlterTableOperation::DropColumn { column_names, if_exists, .. } = op else {
+        cmds.iter()
+            .filter_map(|cmd| {
+                if cmd.subtype != AlterTableType::AtDropColumn as i32 {
                     return None;
-                };
+                }
 
-                // Report a violation for each column being dropped
-                let violations: Vec<_> = column_names
-                    .iter()
-                    .map(|column_name| {
-                        let column_name_str = column_name.to_string();
+                let column_name = &cmd.name;
+                let if_exists = cmd.missing_ok;
 
-                        Violation::new(
-                            "DROP COLUMN",
-                            format!(
-                                "Dropping column '{column}' from table '{table}' requires an ACCESS EXCLUSIVE lock, blocking all operations. \
-                                This typically triggers a table rewrite with duration depending on table size.",
-                                column = column_name_str, table = table_name
-                            ),
-                            format!(r#"1. Mark the column as unused in your application code first.
+                Some(Violation::new(
+                    "DROP COLUMN",
+                    format!(
+                        "Dropping column '{column}' from table '{table}' requires an ACCESS EXCLUSIVE lock, blocking all operations. \
+                        This typically triggers a table rewrite with duration depending on table size.",
+                        column = column_name, table = table_name
+                    ),
+                    format!(r#"1. Mark the column as unused in your application code first.
 
 2. Deploy the application without the column references.
 
@@ -60,17 +51,12 @@ impl Check for DropColumnCheck {
    ALTER TABLE {table} DROP COLUMN {column}{if_exists};
 
 Note: PostgreSQL doesn't support DROP COLUMN CONCURRENTLY. The rewrite is unavoidable but staging the removal reduces risk."#,
-                                table = table_name,
-                                column = column_name_str,
-                                if_exists = if_exists_clause(*if_exists)
-                            ),
-                        )
-                    })
-                    .collect();
-
-                Some(violations)
+                        table = table_name,
+                        column = column_name,
+                        if_exists = if_exists_clause(if_exists)
+                    ),
+                ))
             })
-            .flatten()
             .collect()
     }
 }
@@ -78,6 +64,7 @@ Note: PostgreSQL doesn't support DROP COLUMN CONCURRENTLY. The rewrite is unavoi
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::checks::test_utils::parse_sql;
     use crate::{assert_allows, assert_detects_violation};
 
     #[test]
@@ -96,6 +83,20 @@ mod tests {
             "ALTER TABLE users DROP COLUMN IF EXISTS email;",
             "DROP COLUMN"
         );
+    }
+
+    #[test]
+    fn test_detects_drop_multiple_columns() {
+        let check = DropColumnCheck;
+        let stmt = parse_sql("ALTER TABLE users DROP COLUMN a, DROP COLUMN b;");
+
+        let violations = check.check(&stmt);
+        assert_eq!(
+            violations.len(),
+            2,
+            "Should detect both columns being dropped"
+        );
+        assert!(violations.iter().all(|v| v.operation == "DROP COLUMN"));
     }
 
     #[test]

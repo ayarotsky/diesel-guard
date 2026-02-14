@@ -13,7 +13,7 @@ categories = ["database", "development-tools"]
 
 [dependencies]
 # SQL parsing
-sqlparser = "0.60"
+pg_query = "6"
 
 # CLI
 clap = { version = "4.5", features = ["derive"] }

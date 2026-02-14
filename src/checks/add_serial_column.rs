@@ -11,41 +11,30 @@
 //! This operation acquires an ACCESS EXCLUSIVE lock, blocking all operations.
 //! Duration depends on table size and number of indexes.
 
+use crate::checks::pg_helpers::{
+    alter_table_cmds, cmd_def_as_column_def, column_type_name, is_serial_pattern, NodeEnum,
+};
 use crate::checks::Check;
 use crate::violation::Violation;
-use sqlparser::ast::{AlterTable, AlterTableOperation, DataType, Statement};
 
 pub struct AddSerialColumnCheck;
 
 impl Check for AddSerialColumnCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        let Statement::AlterTable(AlterTable {
-            name, operations, ..
-        }) = stmt
-        else {
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
 
-        let table_name = name.to_string();
+        cmds.iter()
+            .filter_map(|cmd| {
+                let col = cmd_def_as_column_def(cmd)?;
 
-        operations
-            .iter()
-            .filter_map(|op| {
-                let AlterTableOperation::AddColumn { column_def, .. } = op else {
-                    return None;
-                };
-
-                // Check if column uses SERIAL, SMALLSERIAL, or BIGSERIAL type
-                let is_serial = matches!(
-                    &column_def.data_type,
-                    DataType::Custom(name, _) if is_serial_type(&name.to_string())
-                );
-
-                if !is_serial {
+                if !is_serial_pattern(col) {
                     return None;
                 }
 
-                let column_name = &column_def.name;
+                let column_name = &col.colname;
+                let type_name = column_type_name(col);
 
                 Some(Violation::new(
                     "ADD COLUMN with SERIAL",
@@ -58,7 +47,7 @@ impl Check for AddSerialColumnCheck {
    CREATE SEQUENCE {table}_{column}_seq;
 
 2. Add the column WITHOUT default (fast, no rewrite):
-   ALTER TABLE {table} ADD COLUMN {column} INTEGER;
+   ALTER TABLE {table} ADD COLUMN {column} {type_name};
 
 3. Backfill existing rows in batches (outside migration):
    UPDATE {table} SET {column} = nextval('{table}_{column}_seq') WHERE {column} IS NULL;
@@ -72,20 +61,13 @@ impl Check for AddSerialColumnCheck {
 6. Set sequence ownership:
    ALTER SEQUENCE {table}_{column}_seq OWNED BY {table}.{column};"#,
                         table = table_name,
-                        column = column_name
+                        column = column_name,
+                        type_name = type_name
                     ),
                 ))
             })
             .collect()
     }
-}
-
-/// Helper function to check if a type name is a SERIAL variant
-fn is_serial_type(type_name: &str) -> bool {
-    matches!(
-        type_name.to_uppercase().as_str(),
-        "SERIAL" | "SMALLSERIAL" | "BIGSERIAL"
-    )
 }
 
 #[cfg(test)]

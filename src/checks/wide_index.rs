@@ -9,46 +9,69 @@
 //! Consider using partial indexes, separate narrower indexes, or rethinking your
 //! query patterns instead.
 
-use crate::checks::{display_or_default, Check};
+use crate::checks::pg_helpers::{range_var_name, NodeEnum};
+use crate::checks::Check;
 use crate::violation::Violation;
-use sqlparser::ast::Statement;
+
+const MAX_COLUMNS: usize = 3;
 
 pub struct WideIndexCheck;
 
 impl Check for WideIndexCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        let mut violations = vec![];
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let NodeEnum::IndexStmt(index_stmt) = node else {
+            return vec![];
+        };
 
-        if let Statement::CreateIndex(create_index) = stmt {
-            let column_count = create_index.columns.len();
+        let column_names: Vec<String> = index_stmt
+            .index_params
+            .iter()
+            .filter_map(|n| match &n.node {
+                Some(NodeEnum::IndexElem(elem)) => {
+                    if elem.name.is_empty() {
+                        Some("<expr>".to_string())
+                    } else {
+                        Some(elem.name.clone())
+                    }
+                }
+                _ => None,
+            })
+            .collect();
 
-            // Only flag if MORE than 3 columns (i.e., 4 or more)
-            if column_count > 3 {
-                let table_name = create_index.table_name.to_string();
-                let index_name = display_or_default(create_index.name.as_ref(), "<unnamed>");
-                let column_names: Vec<String> = create_index
-                    .columns
-                    .iter()
-                    .map(|col| col.to_string())
-                    .collect();
-                let columns_list = column_names.join(", ");
+        let column_count = column_names.len();
 
-                violations.push(Violation::new(
-                    "Wide index",
-                    format!(
-                        "Index '{index}' on table '{table}' has {count} columns ({columns}). \
-                        Wide indexes (4+ columns) are rarely effective because PostgreSQL can only use them efficiently \
-                        when filtering on leftmost columns in order. They also increase storage costs and slow down writes.",
-                        index = index_name,
-                        table = table_name,
-                        count = column_count,
-                        columns = columns_list
-                    ),
-                    format!(r#"Consider these alternatives:
+        if column_count <= MAX_COLUMNS {
+            return vec![];
+        }
+
+        let table_name = index_stmt
+            .relation
+            .as_ref()
+            .map(range_var_name)
+            .unwrap_or_default();
+        let index_name = if index_stmt.idxname.is_empty() {
+            "<unnamed>".to_string()
+        } else {
+            index_stmt.idxname.clone()
+        };
+        let columns_list = column_names.join(", ");
+
+        vec![Violation::new(
+            "CREATE INDEX with too many columns",
+            format!(
+                "Index '{index}' on table '{table}' has {count} columns ({columns}). \
+                Wide indexes (4+ columns) are rarely effective because PostgreSQL can only use them efficiently \
+                when filtering on leftmost columns in order. They also increase storage costs and slow down writes.",
+                index = index_name,
+                table = table_name,
+                count = column_count,
+                columns = columns_list
+            ),
+            format!(r#"Consider these alternatives:
 
 1. Use a partial index for specific query patterns:
    CREATE INDEX {index} ON {table}({first_col})
-   WHERE {condition};
+   WHERE <condition>;
 
 2. Create separate narrower indexes for different queries:
    CREATE INDEX idx_{table}_{first_col} ON {table}({first_col});
@@ -61,19 +84,14 @@ impl Check for WideIndexCheck {
    INCLUDE ({other_cols});
 
 Note: Multi-column indexes are occasionally useful (e.g., for composite foreign keys or specific query patterns). If you've verified this index is necessary, use a safety-assured block."#,
-                        index = index_name,
-                        table = table_name,
-                        first_col = column_names.first().unwrap_or(&"column1".to_string()),
-                        second_col = column_names.get(1).unwrap_or(&"column2".to_string()),
-                        other_cols = column_names.iter().skip(1).cloned().collect::<Vec<_>>().join(", "),
-                        count = column_count,
-                        condition = "condition"
-                    ),
-                ));
-            }
-        }
-
-        violations
+                index = index_name,
+                table = table_name,
+                first_col = column_names.first().unwrap_or(&"column1".to_string()),
+                second_col = column_names.get(1).unwrap_or(&"column2".to_string()),
+                other_cols = column_names.iter().skip(1).cloned().collect::<Vec<_>>().join(", "),
+                count = column_count,
+            ),
+        )]
     }
 }
 
@@ -87,7 +105,7 @@ mod tests {
         assert_detects_violation!(
             WideIndexCheck,
             "CREATE INDEX idx_users_composite ON users(a, b, c, d);",
-            "Wide index"
+            "CREATE INDEX with too many columns"
         );
     }
 
@@ -96,7 +114,7 @@ mod tests {
         assert_detects_violation!(
             WideIndexCheck,
             "CREATE INDEX idx_users_composite ON users(a, b, c, d, e);",
-            "Wide index"
+            "CREATE INDEX with too many columns"
         );
     }
 
@@ -105,7 +123,7 @@ mod tests {
         assert_detects_violation!(
             WideIndexCheck,
             "CREATE UNIQUE INDEX idx_users_composite ON users(tenant_id, user_id, email, status);",
-            "Wide index"
+            "CREATE INDEX with too many columns"
         );
     }
 

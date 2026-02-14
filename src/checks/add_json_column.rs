@@ -11,36 +11,29 @@
 //! The `jsonb` type stores data in a decomposed binary format with proper indexing
 //! and equality operators, making it suitable for all PostgreSQL operations.
 
+use crate::checks::pg_helpers::{
+    alter_table_cmds, cmd_def_as_column_def, column_type_name, is_json_type, NodeEnum,
+};
 use crate::checks::Check;
 use crate::violation::Violation;
-use sqlparser::ast::{AlterTable, AlterTableOperation, DataType, Statement};
 
 pub struct AddJsonColumnCheck;
 
 impl Check for AddJsonColumnCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        let Statement::AlterTable(AlterTable {
-            name, operations, ..
-        }) = stmt
-        else {
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
 
-        let table_name = name.to_string();
+        cmds.iter()
+            .filter_map(|cmd| {
+                let col = cmd_def_as_column_def(cmd)?;
 
-        operations
-            .iter()
-            .filter_map(|op| {
-                let AlterTableOperation::AddColumn { column_def, .. } = op else {
-                    return None;
-                };
-
-                // Check if column type is JSON (not JSONB)
-                if !matches!(column_def.data_type, DataType::JSON) {
+                if !is_json_type(&column_type_name(col)) {
                     return None;
                 }
 
-                let column_name = &column_def.name;
+                let column_name = &col.colname;
 
                 Some(Violation::new(
                     "ADD COLUMN with JSON type",
@@ -97,7 +90,6 @@ mod tests {
 
     #[test]
     fn test_allows_add_jsonb_column() {
-        // JSONB is the safe alternative
         assert_allows!(
             AddJsonColumnCheck,
             "ALTER TABLE users ADD COLUMN properties JSONB;"

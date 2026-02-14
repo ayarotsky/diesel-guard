@@ -9,61 +9,58 @@
 //!
 //! The safe alternative is to use CREATE UNIQUE INDEX CONCURRENTLY instead.
 
+use crate::checks::pg_helpers::{
+    alter_table_cmds, cmd_def_as_constraint, constraint_columns_str, ConstrType, NodeEnum,
+};
 use crate::checks::Check;
 use crate::violation::Violation;
-use sqlparser::ast::{AlterTable, AlterTableOperation, Statement, TableConstraint};
 
 pub struct AddUniqueConstraintCheck;
 
 impl Check for AddUniqueConstraintCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        let Statement::AlterTable(AlterTable {
-            name, operations, ..
-        }) = stmt
-        else {
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
 
-        let table_name = name.to_string();
+        cmds.iter()
+            .filter_map(|cmd| {
+                let c = cmd_def_as_constraint(cmd)?;
 
-        operations
-            .iter()
-            .filter_map(|op| {
-                let AlterTableOperation::AddConstraint { constraint, .. } = op else {
+                if c.contype != ConstrType::ConstrUnique as i32 {
                     return None;
+                }
+
+                // Non-empty indexname means USING INDEX, which is the safe pattern
+                if !c.indexname.is_empty() {
+                    return None;
+                }
+
+                let cols = constraint_columns_str(c);
+
+                let constraint_name = if c.conname.is_empty() {
+                    "<unnamed>".to_string()
+                } else {
+                    c.conname.clone()
                 };
 
-                if let TableConstraint::Unique(unique) = constraint {
-                    let constraint_name = unique
-                        .name
-                        .as_ref()
-                        .map(|n| n.to_string())
-                        .unwrap_or_else(|| "<unnamed>".to_string());
+                let suggested_index_name = if !c.conname.is_empty() {
+                    c.conname.clone()
+                } else {
+                    format!("{}_unique_idx", table_name)
+                };
 
-                    let cols = unique
-                        .columns
-                        .iter()
-                        .map(|ic| ic.column.expr.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ");
-
-                    let suggested_index_name = if let Some(name_ident) = &unique.name {
-                        name_ident.to_string()
-                    } else {
-                        format!("{}_unique_idx", table_name)
-                    };
-
-                    Some(Violation::new(
-                        "ADD UNIQUE constraint",
-                        format!(
-                            "Adding UNIQUE constraint '{constraint}' on table '{table}' ({columns}) via ALTER TABLE acquires an ACCESS EXCLUSIVE lock, \
-                            blocking all reads and writes during index creation. Duration depends on table size.",
-                            constraint = constraint_name,
-                            table = table_name,
-                            columns = cols
-                        ),
-                        format!(
-                            r#"Use CREATE UNIQUE INDEX CONCURRENTLY instead:
+                Some(Violation::new(
+                    "ADD UNIQUE constraint",
+                    format!(
+                        "Adding UNIQUE constraint '{constraint}' on table '{table}' ({columns}) via ALTER TABLE acquires an ACCESS EXCLUSIVE lock, \
+                        blocking all reads and writes during index creation. Duration depends on table size.",
+                        constraint = constraint_name,
+                        table = table_name,
+                        columns = cols
+                    ),
+                    format!(
+                        r#"Use CREATE UNIQUE INDEX CONCURRENTLY instead:
 
 1. Create the unique index concurrently:
    CREATE UNIQUE INDEX CONCURRENTLY {index_name} ON {table} ({columns});
@@ -82,19 +79,16 @@ Considerations:
   For SQLx migrations: Add -- no-transaction directive at the top of the file
 - Takes longer than non-concurrent creation
 - May fail if duplicate values exist (leaves behind invalid index that should be dropped)"#,
-                            index_name = suggested_index_name,
-                            table = table_name,
-                            columns = cols,
-                            constraint_name = if unique.name.is_some() {
-                                constraint_name
-                            } else {
-                                format!("{}_unique_constraint", table_name)
-                            }
-                        ),
-                    ))
-                } else {
-                    None
-                }
+                        index_name = suggested_index_name,
+                        table = table_name,
+                        columns = cols,
+                        constraint_name = if !c.conname.is_empty() {
+                            constraint_name
+                        } else {
+                            format!("{}_unique_constraint", table_name)
+                        }
+                    ),
+                ))
             })
             .collect()
     }
@@ -129,6 +123,14 @@ mod tests {
             AddUniqueConstraintCheck,
             "ALTER TABLE users ADD CONSTRAINT users_email_username_key UNIQUE (email, username);",
             "ADD UNIQUE constraint"
+        );
+    }
+
+    #[test]
+    fn test_allows_unique_using_index() {
+        assert_allows!(
+            AddUniqueConstraintCheck,
+            "ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_idx;"
         );
     }
 

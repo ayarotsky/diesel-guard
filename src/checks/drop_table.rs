@@ -11,48 +11,41 @@
 //! The recommended approach is to verify the table is no longer in use, ensure
 //! backups exist, and check for foreign key dependencies before dropping.
 
+use crate::checks::pg_helpers::{drop_object_names, DropBehavior, NodeEnum, ObjectType};
 use crate::checks::{if_exists_clause, Check};
 use crate::violation::Violation;
-use sqlparser::ast::{ObjectType, Statement};
 
 pub struct DropTableCheck;
 
 impl Check for DropTableCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        let mut violations = vec![];
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let NodeEnum::DropStmt(drop_stmt) = node else {
+            return vec![];
+        };
 
-        if let Statement::Drop {
-            object_type,
-            if_exists,
-            names,
-            cascade,
-            restrict,
-            ..
-        } = stmt
-        {
-            // Check if this is dropping a table
-            if matches!(object_type, ObjectType::Table) {
-                for name in names {
-                    let table_name = name.to_string();
-                    let if_exists_str = if_exists_clause(*if_exists);
+        if drop_stmt.remove_type != ObjectType::ObjectTable as i32 {
+            return vec![];
+        }
 
-                    // Build modifiers string for display
-                    let mut modifiers = String::new();
-                    if *cascade {
-                        modifiers.push_str(" CASCADE");
-                    }
-                    if *restrict {
-                        modifiers.push_str(" RESTRICT");
-                    }
+        let if_exists_str = if_exists_clause(drop_stmt.missing_ok);
 
-                    violations.push(Violation::new(
-                        "DROP TABLE",
-                        format!(
-                            "Dropping table '{table}' permanently deletes all data and acquires an ACCESS EXCLUSIVE lock. \
-                            This operation cannot be undone after the transaction commits.",
-                            table = table_name
-                        ),
-                        format!(r#"Before dropping a table in production:
+        let modifiers = match drop_stmt.behavior {
+            x if x == DropBehavior::DropCascade as i32 => " CASCADE",
+            x if x == DropBehavior::DropRestrict as i32 => " RESTRICT",
+            _ => "",
+        };
+
+        drop_object_names(&drop_stmt.objects)
+            .into_iter()
+            .map(|name| {
+                Violation::new(
+                    "DROP TABLE",
+                    format!(
+                        "Dropping table '{table}' permanently deletes all data and acquires an ACCESS EXCLUSIVE lock. \
+                        This operation cannot be undone after the transaction commits.",
+                        table = name
+                    ),
+                    format!(r#"Before dropping a table in production:
 
 1. Verify this is intentional and the table is no longer in use
 2. Ensure a backup exists or data has been migrated
@@ -64,16 +57,13 @@ If this drop is intentional, wrap it in a safety-assured block:
    -- safety-assured:end
 
 Note: DROP TABLE acquires ACCESS EXCLUSIVE lock, blocking all operations until complete."#,
-                            if_exists = if_exists_str,
-                            table = table_name,
-                            modifiers = modifiers
-                        ),
-                    ));
-                }
-            }
-        }
-
-        violations
+                        if_exists = if_exists_str,
+                        table = name,
+                        modifiers = modifiers
+                    ),
+                )
+            })
+            .collect()
     }
 }
 

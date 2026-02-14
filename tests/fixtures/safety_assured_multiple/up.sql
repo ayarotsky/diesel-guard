@@ -1,3 +1,4 @@
+-- Safe: Multiple operations wrapped in safety-assured blocks
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
 ALTER TABLE posts DROP COLUMN body;

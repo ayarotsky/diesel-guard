@@ -10,34 +10,25 @@
 //! For large tables, a safer approach is to add a CHECK constraint first, validate it
 //! separately, then add the NOT NULL constraint.
 
+use crate::checks::pg_helpers::{alter_table_cmds, AlterTableType, NodeEnum};
 use crate::checks::Check;
 use crate::violation::Violation;
-use sqlparser::ast::{AlterColumnOperation, AlterTable, AlterTableOperation, Statement};
 
 pub struct AddNotNullCheck;
 
 impl Check for AddNotNullCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        let Statement::AlterTable(AlterTable {
-            name, operations, ..
-        }) = stmt
-        else {
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
 
-        let table_name = name.to_string();
-
-        operations
-            .iter()
-            .filter_map(|op| {
-                let AlterTableOperation::AlterColumn {
-                    column_name,
-                    op: AlterColumnOperation::SetNotNull,
-                } = op else {
+        cmds.iter()
+            .filter_map(|cmd| {
+                if cmd.subtype != AlterTableType::AtSetNotNull as i32 {
                     return None;
-                };
+                }
 
-                let column_name_str = column_name.to_string();
+                let column_name = &cmd.name;
 
                 Some(Violation::new(
                     "ADD NOT NULL constraint",
@@ -45,7 +36,7 @@ impl Check for AddNotNullCheck {
                         "Adding NOT NULL constraint to column '{column}' on table '{table}' requires a full table scan to verify \
                         all values are non-null, acquiring an ACCESS EXCLUSIVE lock and blocking all operations. \
                         Duration depends on table size.",
-                        column = column_name_str, table = table_name
+                        column = column_name, table = table_name
                     ),
                     format!(r#"For safer constraint addition on large tables:
 
@@ -63,7 +54,7 @@ impl Check for AddNotNullCheck {
 
 Note: The VALIDATE step allows concurrent reads and writes, only blocking other schema changes. On PostgreSQL 12+, NOT NULL constraints are more efficient, but the CHECK approach still provides better control over large migrations."#,
                         table = table_name,
-                        column = column_name_str
+                        column = column_name
                     ),
                 ))
             })

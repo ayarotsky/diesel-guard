@@ -5,7 +5,7 @@
 //! is one of the most destructive operations possible and should almost never
 //! appear in application migrations.
 //!
-//! DROP DATABASE requires exclusive access to the target database—PostgreSQL will
+//! DROP DATABASE requires exclusive access to the target database. PostgreSQL will
 //! refuse to execute the command if any active connections exist. Unlike table
 //! operations, DROP DATABASE cannot be executed inside a transaction block.
 //! There is no table rewrite involved; the entire database is removed at the
@@ -17,39 +17,32 @@
 //! The recommended approach is to handle database lifecycle through infrastructure
 //! automation or DBA operations, not application migrations.
 
+use crate::checks::pg_helpers::NodeEnum;
 use crate::checks::{if_exists_clause, Check};
 use crate::violation::Violation;
-use sqlparser::ast::{ObjectType, Statement};
 
 pub struct DropDatabaseCheck;
 
 impl Check for DropDatabaseCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        let mut violations = vec![];
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let NodeEnum::DropdbStmt(drop_db) = node else {
+            return vec![];
+        };
 
-        if let Statement::Drop {
-            object_type,
-            if_exists,
-            names,
-            ..
-        } = stmt
-        {
-            // Check if this is dropping a database
-            if matches!(object_type, ObjectType::Database) {
-                for name in names {
-                    let db_name = name.to_string();
-                    let if_exists_str = if_exists_clause(*if_exists);
+        let db_name = &drop_db.dbname;
+        let if_exists_str = if_exists_clause(drop_db.missing_ok);
 
-                    violations.push(Violation::new(
-                        "DROP DATABASE",
-                        format!(
-                            "Dropping database '{db}' permanently deletes the entire database \
-                            including all tables, data, and objects. This operation requires \
-                            exclusive access (all connections must be terminated) and cannot \
-                            run inside a transaction block.",
-                            db = db_name
-                        ),
-                        format!(r#"DROP DATABASE should almost never appear in application migrations.
+        vec![Violation::new(
+            "DROP DATABASE",
+            format!(
+                "Dropping database '{db}' permanently deletes the entire database \
+                including all tables, data, and objects. This operation requires \
+                exclusive access (all connections must be terminated) and cannot \
+                run inside a transaction block.",
+                db = db_name
+            ),
+            format!(
+                r#"DROP DATABASE should almost never appear in application migrations.
 
 If you need to drop a database:
 
@@ -73,15 +66,10 @@ If this is intentional (e.g., test cleanup), use a safety-assured block:
    -- safety-assured:end
 
 Note: PostgreSQL 13+ supports WITH (FORCE) to auto-terminate connections, but this is even more dangerous."#,
-                            if_exists = if_exists_str,
-                            db = db_name
-                        ),
-                    ));
-                }
-            }
-        }
-
-        violations
+                if_exists = if_exists_str,
+                db = db_name
+            ),
+        )]
     }
 }
 
@@ -102,18 +90,6 @@ mod tests {
             "DROP DATABASE IF EXISTS mydb;",
             "DROP DATABASE"
         );
-    }
-
-    #[test]
-    fn test_detects_drop_multiple_databases() {
-        use crate::checks::test_utils::parse_sql;
-
-        let check = DropDatabaseCheck;
-        let stmt = parse_sql("DROP DATABASE db1, db2;");
-
-        let violations = check.check(&stmt);
-        assert_eq!(violations.len(), 2, "Should detect all 2 databases");
-        assert!(violations.iter().all(|v| v.operation == "DROP DATABASE"));
     }
 
     #[test]

@@ -11,57 +11,54 @@
 //! The safe alternative is to create a UNIQUE INDEX CONCURRENTLY first, then add the
 //! PRIMARY KEY constraint using that existing index (PostgreSQL 11+).
 
+use crate::checks::pg_helpers::{
+    alter_table_cmds, cmd_def_as_constraint, constraint_columns_str, ConstrType, NodeEnum,
+};
 use crate::checks::Check;
 use crate::violation::Violation;
-use sqlparser::ast::{AlterTable, AlterTableOperation, Statement, TableConstraint};
 
 pub struct AddPrimaryKeyCheck;
 
 impl Check for AddPrimaryKeyCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        let Statement::AlterTable(AlterTable {
-            name, operations, ..
-        }) = stmt
-        else {
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
 
-        let table_name = name.to_string();
+        cmds.iter()
+            .filter_map(|cmd| {
+                let c = cmd_def_as_constraint(cmd)?;
 
-        operations
-            .iter()
-            .filter_map(|op| {
-                let AlterTableOperation::AddConstraint { constraint, .. } = op else {
+                if c.contype != ConstrType::ConstrPrimary as i32 {
                     return None;
+                }
+
+                // Non-empty indexname means USING INDEX, which is the safe pattern
+                if !c.indexname.is_empty() {
+                    return None;
+                }
+
+                let cols = constraint_columns_str(c);
+
+                let constraint_name = if c.conname.is_empty() {
+                    format!("{}_pkey", table_name)
+                } else {
+                    c.conname.clone()
                 };
 
-                if let TableConstraint::PrimaryKey(pk) = constraint {
-                    let constraint_name = pk
-                        .name
-                        .as_ref()
-                        .map(|n| n.to_string())
-                        .unwrap_or_else(|| format!("{}_pkey", table_name));
+                let suggested_index_name = format!("{}_pkey", table_name);
 
-                    let cols = pk
-                        .columns
-                        .iter()
-                        .map(|ic| ic.column.expr.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ");
-
-                    let suggested_index_name = format!("{}_pkey", table_name);
-
-                    Some(Violation::new(
-                        "ADD PRIMARY KEY",
-                        format!(
-                            "Adding PRIMARY KEY constraint '{constraint}' on table '{table}' ({columns}) via ALTER TABLE acquires an ACCESS EXCLUSIVE lock, \
-                            blocking all reads and writes. This also implicitly creates a unique index (blocking operation) and validates all rows for uniqueness.",
-                            constraint = constraint_name,
-                            table = table_name,
-                            columns = cols
-                        ),
-                        format!(
-                            r#"Use CREATE UNIQUE INDEX CONCURRENTLY first, then add the constraint:
+                Some(Violation::new(
+                    "ADD PRIMARY KEY",
+                    format!(
+                        "Adding PRIMARY KEY constraint '{constraint}' on table '{table}' ({columns}) via ALTER TABLE acquires an ACCESS EXCLUSIVE lock, \
+                        blocking all reads and writes. This also implicitly creates a unique index (blocking operation) and validates all rows for uniqueness.",
+                        constraint = constraint_name,
+                        table = table_name,
+                        columns = cols
+                    ),
+                    format!(
+                        r#"Use CREATE UNIQUE INDEX CONCURRENTLY first, then add the constraint:
 
 1. Create the unique index concurrently (no blocking):
    CREATE UNIQUE INDEX CONCURRENTLY {index_name} ON {table} ({columns});
@@ -84,15 +81,12 @@ Considerations:
 - May fail if duplicate or NULL values exist (leaves behind invalid index that should be dropped)
 
 Note: Ensure all columns in the primary key have NOT NULL constraints before creating the index."#,
-                            index_name = suggested_index_name,
-                            table = table_name,
-                            columns = cols,
-                            constraint_name = constraint_name
-                        ),
-                    ))
-                } else {
-                    None
-                }
+                        index_name = suggested_index_name,
+                        table = table_name,
+                        columns = cols,
+                        constraint_name = constraint_name
+                    ),
+                ))
             })
             .collect()
     }
@@ -127,6 +121,14 @@ mod tests {
             AddPrimaryKeyCheck,
             "ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY (id);",
             "ADD PRIMARY KEY"
+        );
+    }
+
+    #[test]
+    fn test_allows_primary_key_using_index() {
+        assert_allows!(
+            AddPrimaryKeyCheck,
+            "ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY USING INDEX users_pkey;"
         );
     }
 

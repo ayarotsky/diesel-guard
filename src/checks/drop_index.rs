@@ -9,46 +9,42 @@
 //!
 //! Using CONCURRENTLY (PostgreSQL 9.2+) allows the index to be dropped while permitting
 //! concurrent queries, though it takes longer and cannot be run inside a transaction block.
-//!
-//! **Parser Handling**: sqlparser cannot parse `DROP INDEX CONCURRENTLY` syntax, but
-//! diesel-guard detects this safe pattern and treats it as valid (returns no violations).
-//! A warning is shown that the file contains this safe pattern. Like CREATE INDEX
-//! CONCURRENTLY, it requires `metadata.toml` with `run_in_transaction = false`.
 
+use crate::checks::pg_helpers::{drop_object_names, NodeEnum, ObjectType};
 use crate::checks::{if_exists_clause, Check};
 use crate::violation::Violation;
-use sqlparser::ast::{ObjectType, Statement};
 
 pub struct DropIndexCheck;
 
 impl Check for DropIndexCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        let mut violations = vec![];
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let NodeEnum::DropStmt(drop_stmt) = node else {
+            return vec![];
+        };
 
-        if let Statement::Drop {
-            object_type,
-            if_exists,
-            names,
-            ..
-        } = stmt
-        {
-            // Check if this is dropping an index
-            if matches!(object_type, ObjectType::Index) {
-                // Flag all DROP INDEX statements since sqlparser cannot distinguish
-                // DROP INDEX CONCURRENTLY (which fails to parse)
-                for name in names {
-                    let index_name = name.to_string();
-                    let if_exists_str = if_exists_clause(*if_exists);
+        if drop_stmt.remove_type != ObjectType::ObjectIndex as i32 {
+            return vec![];
+        }
 
-                    violations.push(Violation::new(
-                        "DROP INDEX without CONCURRENTLY",
-                        format!(
-                            "Dropping index '{index}'{if_exists} without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock, blocking all \
-                            queries (SELECT, INSERT, UPDATE, DELETE) on the table until complete. Duration depends on system load and concurrent transactions.",
-                            index = index_name,
-                            if_exists = if_exists_str
-                        ),
-                        format!(r#"Use CONCURRENTLY to drop the index without blocking queries:
+        // DROP INDEX CONCURRENTLY is safe, skip it
+        if drop_stmt.concurrent {
+            return vec![];
+        }
+
+        let if_exists_str = if_exists_clause(drop_stmt.missing_ok);
+
+        drop_object_names(&drop_stmt.objects)
+            .into_iter()
+            .map(|name| {
+                Violation::new(
+                    "DROP INDEX without CONCURRENTLY",
+                    format!(
+                        "Dropping index '{index}'{if_exists} without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock, blocking all \
+                        queries (SELECT, INSERT, UPDATE, DELETE) on the table until complete. Duration depends on system load and concurrent transactions.",
+                        index = name,
+                        if_exists = if_exists_str
+                    ),
+                    format!(r#"Use CONCURRENTLY to drop the index without blocking queries:
    DROP INDEX CONCURRENTLY{if_exists} {index};
 
 Note: CONCURRENTLY requires PostgreSQL 9.2+ and cannot be run inside a transaction block.
@@ -72,15 +68,12 @@ Considerations:
 - Allows concurrent SELECT, INSERT, UPDATE, DELETE operations
 - If it fails, the index may be marked "invalid" and should be dropped again
 - Cannot be rolled back (no transaction support)"#,
-                            if_exists = if_exists_str,
-                            index = index_name
-                        ),
-                    ));
-                }
-            }
-        }
-
-        violations
+                        if_exists = if_exists_str,
+                        index = name
+                    ),
+                )
+            })
+            .collect()
     }
 }
 
@@ -146,6 +139,11 @@ mod tests {
             "DROP INDEX IF EXISTS idx_users_email CASCADE;",
             "DROP INDEX without CONCURRENTLY"
         );
+    }
+
+    #[test]
+    fn test_allows_drop_index_concurrently() {
+        assert_allows!(DropIndexCheck, "DROP INDEX CONCURRENTLY idx_users_email;");
     }
 
     #[test]
