@@ -1,4 +1,3 @@
--- Example of unsafe ADD UNIQUE constraint via ALTER TABLE
--- This acquires ACCESS EXCLUSIVE lock, blocking all reads and writes
+-- Unsafe: ADD UNIQUE constraint acquires ACCESS EXCLUSIVE lock
 
 ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);

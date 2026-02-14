@@ -13,10 +13,10 @@
 //! **Future Enhancement:** Future versions of diesel-guard will support optional database
 //! connections to verify constraint types with certainty.
 
+use crate::checks::pg_helpers::{alter_table_cmds, AlterTableType, NodeEnum};
 use crate::checks::Check;
 use crate::violation::Violation;
 use regex::Regex;
-use sqlparser::ast::{AlterTable, AlterTableOperation, Statement};
 use std::sync::LazyLock;
 
 /// Uses common PostgreSQL naming conventions:
@@ -39,31 +39,21 @@ impl DropPrimaryKeyCheck {
 }
 
 impl Check for DropPrimaryKeyCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        let Statement::AlterTable(AlterTable {
-            name, operations, ..
-        }) = stmt
-        else {
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
 
-        let table_name = name.to_string();
-
-        operations
-            .iter()
-            .filter_map(|op| {
-                let AlterTableOperation::DropConstraint {
-                    name: constraint_name,
-                    ..
-                } = op
-                else {
+        cmds.iter()
+            .filter_map(|cmd| {
+                if cmd.subtype != AlterTableType::AtDropConstraint as i32 {
                     return None;
-                };
+                }
 
-                let constraint_name_str = constraint_name.to_string();
+                let constraint_name_str = &cmd.name;
 
                 // Only flag if the constraint name matches primary key patterns
-                if !Self::is_likely_primary_key(&constraint_name_str) {
+                if !Self::is_likely_primary_key(constraint_name_str) {
                     return None;
                 }
 

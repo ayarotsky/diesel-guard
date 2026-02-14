@@ -1,6 +1,4 @@
--- Example of properly named constraints in a migration
--- Note: UNIQUE constraints via ALTER TABLE are always unsafe (even when named)
--- For UNIQUE, use CREATE UNIQUE INDEX CONCURRENTLY instead (see add_unique_constraint_safe)
+-- Safe: Properly named constraints (CHECK and FOREIGN KEY)
 
 -- Named CHECK constraint (safe)
 ALTER TABLE users ADD CONSTRAINT users_age_check CHECK (age >= 0);

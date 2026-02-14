@@ -10,23 +10,26 @@
 //! The recommended approach is to use DELETE with batching to remove rows incrementally,
 //! allowing concurrent access to the table.
 
+use crate::checks::pg_helpers::{range_var_name, NodeEnum};
 use crate::checks::Check;
 use crate::violation::Violation;
-use sqlparser::ast::Statement;
 
 pub struct TruncateTableCheck;
 
 impl Check for TruncateTableCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        if let Statement::Truncate(truncate_stmt) = stmt {
-            // Report a violation for each table being truncated
-            return truncate_stmt
-                .table_names
-                .iter()
-                .map(|table_name| {
-                    let table_name_str = table_name.to_string();
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let NodeEnum::TruncateStmt(truncate) = node else {
+            return vec![];
+        };
 
-                    Violation::new(
+        truncate
+            .relations
+            .iter()
+            .filter_map(|rel_node| {
+                if let Some(NodeEnum::RangeVar(rv)) = &rel_node.node {
+                    let table_name_str = range_var_name(rv);
+
+                    Some(Violation::new(
                         "TRUNCATE TABLE",
                         format!(
                             "TRUNCATE TABLE on '{table}' acquires an ACCESS EXCLUSIVE lock, blocking all operations (reads and writes). \
@@ -51,12 +54,12 @@ impl Check for TruncateTableCheck {
 Note: If you absolutely must use TRUNCATE (e.g., in a test environment), use a safety-assured block."#,
                             table = table_name_str
                         ),
-                    )
-                })
-                .collect();
-        }
-
-        vec![]
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 

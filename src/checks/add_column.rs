@@ -7,41 +7,31 @@
 //! a full table rewrite to backfill the default value for existing rows. This acquires
 //! an ACCESS EXCLUSIVE lock and blocks all operations. Duration depends on table size.
 
+use crate::checks::pg_helpers::{
+    alter_table_cmds, cmd_def_as_column_def, column_has_constraint, column_type_name, ConstrType,
+    NodeEnum,
+};
 use crate::checks::Check;
 use crate::violation::Violation;
-use sqlparser::ast::{AlterTable, AlterTableOperation, ColumnOption, Statement};
 
 pub struct AddColumnCheck;
 
 impl Check for AddColumnCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        let Statement::AlterTable(AlterTable {
-            name, operations, ..
-        }) = stmt
-        else {
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
 
-        let table_name = name.to_string();
+        cmds.iter()
+            .filter_map(|cmd| {
+                let col = cmd_def_as_column_def(cmd)?;
 
-        operations
-            .iter()
-            .filter_map(|op| {
-                let AlterTableOperation::AddColumn { column_def, .. } = op else {
-                    return None;
-                };
-
-                // Check if column has a DEFAULT value
-                let has_default = column_def
-                    .options
-                    .iter()
-                    .any(|opt| matches!(opt.option, ColumnOption::Default(_)));
-
-                if !has_default {
+                if !column_has_constraint(col, ConstrType::ConstrDefault as i32) {
                     return None;
                 }
 
-                let column_name = &column_def.name;
+                let column_name = &col.colname;
+                let data_type = column_type_name(col);
 
                 Some(Violation::new(
                     "ADD COLUMN with DEFAULT",
@@ -62,7 +52,7 @@ impl Check for AddColumnCheck {
 Note: For PostgreSQL 11+, this is safe if the default is a constant value."#,
                         table = table_name,
                         column = column_name,
-                        data_type = column_def.data_type
+                        data_type = data_type
                     ),
                 ))
             })

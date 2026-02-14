@@ -18,83 +18,75 @@
 //! ## PostgreSQL version specifics
 //! Applies to all PostgreSQL versions.
 
+use crate::checks::pg_helpers::{
+    alter_table_cmds, cmd_def_as_column_def, column_type_name, for_each_column_def, is_char_type,
+    ColumnDef, NodeEnum,
+};
 use crate::checks::Check;
 use crate::violation::Violation;
-use sqlparser::ast::{
-    AlterTable, AlterTableOperation, ColumnDef, CreateTable, DataType, ObjectName, Statement,
-};
 
 pub struct CharTypeCheck;
 
 impl Check for CharTypeCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        match stmt {
-            Statement::AlterTable(AlterTable {
-                name, operations, ..
-            }) => check_alter_table_operations(name, operations),
-            Statement::CreateTable(CreateTable { name, columns, .. }) => {
-                check_create_table_columns(name, columns)
-            }
-            _ => vec![],
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        // Handle CREATE TABLE via for_each_column_def
+        if let NodeEnum::CreateStmt(_) = node {
+            return for_each_column_def(node)
+                .into_iter()
+                .filter_map(|(table, col)| {
+                    if !is_char_type(&column_type_name(col)) {
+                        return None;
+                    }
+                    let length = get_char_length(col);
+                    Some(create_create_table_violation(&table, &col.colname, &length))
+                })
+                .collect();
         }
-    }
-}
 
-/// Check if a data type is CHAR or CHARACTER
-fn is_char_type(data_type: &DataType) -> bool {
-    matches!(data_type, DataType::Char(_) | DataType::Character(_))
-}
-
-/// Extract the length from a CHAR/CHARACTER type for display
-fn get_char_length(data_type: &DataType) -> String {
-    match data_type {
-        DataType::Char(Some(len)) | DataType::Character(Some(len)) => len.to_string(),
-        DataType::Char(None) | DataType::Character(None) => "1".to_string(),
-        _ => "".to_string(),
-    }
-}
-
-/// Check ALTER TABLE operations for CHAR type columns
-fn check_alter_table_operations(
-    table_name: &ObjectName,
-    operations: &[AlterTableOperation],
-) -> Vec<Violation> {
-    operations
-        .iter()
-        .filter_map(|op| {
-            let AlterTableOperation::AddColumn { column_def, .. } = op else {
-                return None;
+        // Handle ALTER TABLE ADD COLUMN
+        if let NodeEnum::AlterTableStmt(_) = node {
+            let Some((table_name, cmds)) = alter_table_cmds(node) else {
+                return vec![];
             };
 
-            if !is_char_type(&column_def.data_type) {
-                return None;
-            }
+            return cmds
+                .iter()
+                .filter_map(|cmd| {
+                    let col = cmd_def_as_column_def(cmd)?;
+                    if !is_char_type(&column_type_name(col)) {
+                        return None;
+                    }
+                    let length = get_char_length(col);
+                    Some(create_alter_table_violation(
+                        &table_name,
+                        &col.colname,
+                        &length,
+                    ))
+                })
+                .collect();
+        }
 
-            Some(create_alter_table_violation(
-                &table_name.to_string(),
-                &column_def.name.to_string(),
-                &get_char_length(&column_def.data_type),
-            ))
-        })
-        .collect()
+        vec![]
+    }
 }
 
-/// Check CREATE TABLE columns for CHAR type
-fn check_create_table_columns(table_name: &ObjectName, columns: &[ColumnDef]) -> Vec<Violation> {
-    columns
-        .iter()
-        .filter_map(|col| {
-            if !is_char_type(&col.data_type) {
-                return None;
-            }
-
-            Some(create_create_table_violation(
-                &table_name.to_string(),
-                &col.name.to_string(),
-                &get_char_length(&col.data_type),
-            ))
+/// Extract the CHAR length from a ColumnDef's TypeName typmods.
+///
+/// pg_query uses "bpchar" as the internal type name. The length modifier
+/// is stored in the TypeName's `typmods` field as an AConst node wrapping
+/// an Integer value. If no typmods are present, CHAR defaults to length 1.
+fn get_char_length(col: &ColumnDef) -> String {
+    col.type_name
+        .as_ref()
+        .and_then(|tn| tn.typmods.first())
+        .and_then(|n| match &n.node {
+            Some(NodeEnum::AConst(ac)) => match &ac.val {
+                Some(pg_query::protobuf::a_const::Val::Ival(i)) => Some(i.ival.to_string()),
+                _ => None,
+            },
+            _ => None,
         })
-        .collect()
+        .unwrap_or_else(|| "1".to_string())
 }
 
 /// Create a violation for ALTER TABLE ADD COLUMN with CHAR type
@@ -134,7 +126,7 @@ If this is intentional, use a safety-assured block:
 /// Create a violation for CREATE TABLE with CHAR type column
 fn create_create_table_violation(table_name: &str, column_name: &str, length: &str) -> Violation {
     Violation::new(
-        "CREATE TABLE with CHAR column",
+        "CREATE TABLE with CHAR type",
         format!(
             "Column '{column}' uses CHAR({length}) which is fixed-length and padded with spaces. \
             This wastes storage and can cause subtle bugs with string comparisons. \
@@ -203,7 +195,7 @@ mod tests {
         assert_detects_violation!(
             CharTypeCheck,
             "CREATE TABLE users (id SERIAL PRIMARY KEY, country_code CHAR(2));",
-            "CREATE TABLE with CHAR column"
+            "CREATE TABLE with CHAR type"
         );
     }
 

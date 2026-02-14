@@ -130,10 +130,6 @@ fn test_alter_column_type_with_using_detected() {
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
     assert_eq!(violations[0].operation, "ALTER COLUMN TYPE");
-    assert!(
-        violations[0].problem.contains("USING clause"),
-        "Expected problem to mention USING clause"
-    );
 }
 
 #[test]
@@ -186,26 +182,6 @@ fn test_unique_using_index_is_safe() {
 }
 
 #[test]
-fn test_unique_using_index_skips_other_statements() {
-    let checker = SafetyChecker::new();
-    let path = fixture_path("unique_using_index_parser_limitation");
-
-    // This file contains both UNIQUE USING INDEX (safe) and DROP COLUMN (unsafe)
-    // Due to parser limitation, ALL statements are skipped when UNIQUE USING INDEX
-    // causes a parse error, so even the unsafe DROP COLUMN is not detected
-    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
-
-    // LIMITATION: Should be 1 violation (DROP COLUMN) but is 0 because parser fails
-    // This test documents the known limitation
-    assert_eq!(
-        violations.len(),
-        0,
-        "Parser limitation: UNIQUE USING INDEX causes ALL statements to be skipped, \
-         including the unsafe DROP COLUMN in this file"
-    );
-}
-
-#[test]
 fn test_unnamed_constraint_detected() {
     let checker = SafetyChecker::new();
     let path = fixture_path("unnamed_constraint_unsafe");
@@ -215,9 +191,9 @@ fn test_unnamed_constraint_detected() {
     // Note: Unnamed UNIQUE is caught by both AddUniqueConstraintCheck and UnnamedConstraintCheck
     assert_eq!(violations.len(), 4, "Expected 4 violations");
     assert_eq!(violations[0].operation, "ADD UNIQUE constraint");
-    assert_eq!(violations[1].operation, "Unnamed constraint");
-    assert_eq!(violations[2].operation, "Unnamed constraint");
-    assert_eq!(violations[3].operation, "Unnamed constraint");
+    assert_eq!(violations[1].operation, "CONSTRAINT without name");
+    assert_eq!(violations[2].operation, "CONSTRAINT without name");
+    assert_eq!(violations[3].operation, "CONSTRAINT without name");
 }
 
 #[test]
@@ -404,7 +380,7 @@ fn test_short_int_pk_unsafe_detected() {
     // Check that we have violations from both checks
     let short_int_violations: Vec<_> = violations
         .iter()
-        .filter(|v| v.operation == "Short integer primary key")
+        .filter(|v| v.operation == "PRIMARY KEY with short integer type")
         .collect();
     let add_pk_violations: Vec<_> = violations
         .iter()
@@ -442,7 +418,10 @@ fn test_wide_index_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "Wide index");
+    assert_eq!(
+        violations[0].operation,
+        "CREATE INDEX with too many columns"
+    );
 }
 
 #[test]

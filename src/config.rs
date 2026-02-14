@@ -336,7 +336,7 @@ mod tests {
         let help = error.help().unwrap().to_string();
 
         // Verify help text includes all check names from the registry
-        for &check_name in &crate::checks::Registry::all_check_names() {
+        for &check_name in crate::checks::Registry::all_check_names() {
             assert!(
                 help.contains(check_name),
                 "Help text should include '{}', got: {}",

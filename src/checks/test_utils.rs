@@ -42,20 +42,23 @@ pub use test_helpers::*;
 
 #[cfg(test)]
 mod test_helpers {
-    use sqlparser::ast::Statement;
-    use sqlparser::dialect::PostgreSqlDialect;
-    use sqlparser::parser::Parser;
+    use crate::checks::pg_helpers::NodeEnum;
 
-    /// Parse a SQL string into a Statement for testing.
+    /// Parse a SQL string into a NodeEnum for testing.
     ///
     /// # Panics
     /// Panics if the SQL cannot be parsed or contains no statements.
-    pub fn parse_sql(sql: &str) -> Statement {
-        let dialect = PostgreSqlDialect {};
-        Parser::parse_sql(&dialect, sql)
-            .expect("Failed to parse SQL")
+    pub fn parse_sql(sql: &str) -> NodeEnum {
+        let result = pg_query::parse(sql).expect("Failed to parse SQL");
+        result
+            .protobuf
+            .stmts
             .into_iter()
             .next()
             .expect("No statements found")
+            .stmt
+            .expect("No stmt node")
+            .node
+            .expect("No node")
     }
 }

@@ -1,22 +1,22 @@
 use derive_more::Display;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Display)]
+#[derive(Debug, Clone, Serialize, Display)]
 #[display("{}: {}", operation, problem)]
 pub struct Violation {
-    pub operation: String,
+    pub operation: &'static str,
     pub problem: String,
     pub safe_alternative: String,
 }
 
 impl Violation {
     pub fn new(
-        operation: impl Into<String>,
+        operation: &'static str,
         problem: impl Into<String>,
         safe_alternative: impl Into<String>,
     ) -> Self {
         Self {
-            operation: operation.into(),
+            operation,
             problem: problem.into(),
             safe_alternative: safe_alternative.into(),
         }

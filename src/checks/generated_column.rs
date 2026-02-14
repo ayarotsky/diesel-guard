@@ -14,37 +14,31 @@
 //!
 //! CREATE TABLE with GENERATED STORED is safe because the table is empty.
 
+use crate::checks::pg_helpers::{
+    alter_table_cmds, cmd_def_as_column_def, column_has_constraint, column_type_name, ConstrType,
+    NodeEnum,
+};
 use crate::checks::Check;
 use crate::violation::Violation;
-use sqlparser::ast::{
-    AlterTable, AlterTableOperation, ColumnOption, GeneratedExpressionMode, Statement,
-};
 
 pub struct GeneratedColumnCheck;
 
 impl Check for GeneratedColumnCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        let Statement::AlterTable(AlterTable {
-            name, operations, ..
-        }) = stmt
-        else {
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
 
-        let table_name = name.to_string();
+        cmds.iter()
+            .filter_map(|cmd| {
+                let col = cmd_def_as_column_def(cmd)?;
 
-        operations
-            .iter()
-            .filter_map(|op| {
-                let AlterTableOperation::AddColumn { column_def, .. } = op else {
-                    return None;
-                };
-
-                if !has_stored_generated_column(&column_def.options) {
+                if !column_has_constraint(col, ConstrType::ConstrGenerated as i32) {
                     return None;
                 }
 
-                let column_name = &column_def.name;
+                let column_name = &col.colname;
+                let data_type = column_type_name(col);
 
                 Some(Violation::new(
                     "ADD COLUMN with GENERATED STORED",
@@ -86,26 +80,12 @@ Note: PostgreSQL does not support VIRTUAL generated columns (only STORED).
 For new empty tables, GENERATED STORED columns are acceptable."#,
                         table = table_name,
                         column = column_name,
-                        data_type = column_def.data_type
+                        data_type = data_type
                     ),
                 ))
             })
             .collect()
     }
-}
-
-/// Check if any column option is a GENERATED ALWAYS AS ... STORED expression.
-fn has_stored_generated_column(options: &[sqlparser::ast::ColumnOptionDef]) -> bool {
-    options.iter().any(|opt| {
-        matches!(
-            &opt.option,
-            ColumnOption::Generated {
-                generation_expr: Some(_),
-                generation_expr_mode: Some(GeneratedExpressionMode::Stored),
-                ..
-            }
-        )
-    })
 }
 
 #[cfg(test)]
@@ -149,7 +129,7 @@ mod tests {
 
     #[test]
     fn test_ignores_safe_variant_identity_column() {
-        // GENERATED AS IDENTITY is different from GENERATED ALWAYS AS ... STORED
+        // GENERATED ALWAYS AS IDENTITY is not a stored generated column
         assert_allows!(
             GeneratedColumnCheck,
             "ALTER TABLE users ADD COLUMN id INTEGER GENERATED ALWAYS AS IDENTITY;"

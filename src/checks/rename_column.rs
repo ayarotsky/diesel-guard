@@ -12,48 +12,42 @@
 //! add a new column, backfill data, update application code to use the new column,
 //! and finally remove the old column in a subsequent migration.
 
+use crate::checks::pg_helpers::{range_var_name, NodeEnum, ObjectType};
 use crate::checks::Check;
 use crate::violation::Violation;
-use sqlparser::ast::{AlterTable, AlterTableOperation, Statement};
 
 pub struct RenameColumnCheck;
 
 impl Check for RenameColumnCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        let Statement::AlterTable(AlterTable {
-            name, operations, ..
-        }) = stmt
-        else {
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let NodeEnum::RenameStmt(rename) = node else {
             return vec![];
         };
 
-        let table_name = name.to_string();
+        if rename.rename_type != ObjectType::ObjectColumn as i32 {
+            return vec![];
+        }
 
-        operations
-            .iter()
-            .filter_map(|op| {
-                let AlterTableOperation::RenameColumn {
-                    old_column_name,
-                    new_column_name,
-                } = op
-                else {
-                    return None;
-                };
+        let table_name = rename
+            .relation
+            .as_ref()
+            .map(range_var_name)
+            .unwrap_or_default();
 
-                let old_name = old_column_name.to_string();
-                let new_name = new_column_name.to_string();
+        let old_name = &rename.subname;
+        let new_name = &rename.newname;
 
-                Some(Violation::new(
-                    "RENAME COLUMN",
-                    format!(
-                        "Renaming column '{old}' to '{new}' in table '{table}' will cause immediate errors in running application instances. \
-                        Any code referencing the old column name will fail after the rename is applied, causing downtime.",
-                        old = old_name,
-                        new = new_name,
-                        table = table_name
-                    ),
-                    format!(
-                        r#"1. Add a new column with the desired name (allows NULL initially):
+        vec![Violation::new(
+            "RENAME COLUMN",
+            format!(
+                "Renaming column '{old}' to '{new}' in table '{table}' will cause immediate errors in running application instances. \
+                Any code referencing the old column name will fail after the rename is applied, causing downtime.",
+                old = old_name,
+                new = new_name,
+                table = table_name
+            ),
+            format!(
+                r#"1. Add a new column with the desired name (allows NULL initially):
    ALTER TABLE {table} ADD COLUMN {new} <data_type>;
 
 2. Backfill the new column with data from the old column:
@@ -70,13 +64,11 @@ impl Check for RenameColumnCheck {
    ALTER TABLE {table} DROP COLUMN {old};
 
 This approach maintains compatibility with running instances during the transition."#,
-                        table = table_name,
-                        old = old_name,
-                        new = new_name
-                    ),
-                ))
-            })
-            .collect()
+                table = table_name,
+                old = old_name,
+                new = new_name
+            ),
+        )]
     }
 }
 

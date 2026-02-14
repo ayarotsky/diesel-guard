@@ -8,43 +8,82 @@
 //!
 //! Changing the type later requires an ALTER COLUMN TYPE operation that triggers a full
 //! table rewrite with an ACCESS EXCLUSIVE lock, blocking all operations.
+//!
+//! SERIAL is equivalent to INT with a sequence, so SERIAL PRIMARY KEY is correctly
+//! flagged by this check. Use BIGSERIAL PRIMARY KEY instead.
 
+use crate::checks::pg_helpers::{
+    alter_table_cmds, cmd_def_as_column_def, cmd_def_as_constraint, column_has_constraint,
+    column_type_name, for_each_column_def, is_short_integer, range_var_name, ColumnDef, ConstrType,
+    Constraint, NodeEnum,
+};
 use crate::checks::Check;
 use crate::violation::Violation;
-use sqlparser::ast::{
-    AlterTable, AlterTableOperation, ColumnDef, ColumnOption, DataType, Expr, ObjectName,
-    Statement, TableConstraint,
-};
+
+const CONSTR_PRIMARY: i32 = ConstrType::ConstrPrimary as i32;
 
 pub struct ShortIntegerPrimaryKeyCheck;
 
 impl Check for ShortIntegerPrimaryKeyCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
         let mut violations = vec![];
 
-        match stmt {
-            Statement::CreateTable(create_table) => {
-                // Check inline PRIMARY KEY constraints (id INT PRIMARY KEY)
-                violations.extend(check_inline_pk_columns(
-                    &create_table.name,
-                    &create_table.columns,
-                ));
+        // Inline PRIMARY KEY on column definitions
+        // (for_each_column_def handles both CreateStmt and AlterTableStmt)
+        violations.extend(
+            for_each_column_def(node)
+                .into_iter()
+                .filter(|(_, col)| column_has_constraint(col, CONSTR_PRIMARY))
+                .filter_map(|(table, col)| check_column_type(&table, col)),
+        );
 
-                // Check separate PRIMARY KEY constraints (PRIMARY KEY (id))
-                violations.extend(check_table_pk_constraints(
-                    &create_table.name,
-                    &create_table.columns,
-                    &create_table.constraints,
-                ));
+        // Separate PRIMARY KEY constraints referencing column defs by name
+        match node {
+            NodeEnum::CreateStmt(create) => {
+                let table_name = create
+                    .relation
+                    .as_ref()
+                    .map(range_var_name)
+                    .unwrap_or_default();
+
+                let col_defs: Vec<&ColumnDef> = create
+                    .table_elts
+                    .iter()
+                    .filter_map(|n| match &n.node {
+                        Some(NodeEnum::ColumnDef(col)) => Some(col.as_ref()),
+                        _ => None,
+                    })
+                    .collect();
+
+                for elt in &create.table_elts {
+                    if let Some(NodeEnum::Constraint(c)) = &elt.node {
+                        if c.contype == CONSTR_PRIMARY {
+                            violations.extend(check_pk_key_columns(&table_name, c, &col_defs));
+                        }
+                    }
+                }
             }
-            Statement::AlterTable(AlterTable {
-                name, operations, ..
-            }) => {
-                // Check inline PRIMARY KEY in ADD COLUMN
-                violations.extend(check_alter_add_column_pk(name, operations));
+            NodeEnum::AlterTableStmt(_) => {
+                if let Some((table_name, cmds)) = alter_table_cmds(node) {
+                    let col_defs: Vec<&ColumnDef> = cmds
+                        .iter()
+                        .filter_map(|cmd| cmd_def_as_column_def(cmd))
+                        .collect();
 
-                // Check ADD CONSTRAINT PRIMARY KEY
-                violations.extend(check_alter_add_constraint_pk(name, operations));
+                    if !col_defs.is_empty() {
+                        for cmd in &cmds {
+                            if let Some(c) = cmd_def_as_constraint(cmd) {
+                                if c.contype == CONSTR_PRIMARY {
+                                    violations.extend(check_pk_key_columns(
+                                        &table_name,
+                                        c,
+                                        &col_defs,
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
             }
             _ => {}
         }
@@ -53,185 +92,49 @@ impl Check for ShortIntegerPrimaryKeyCheck {
     }
 }
 
-/// Check if a data type is a short integer, returning (type_name, exhaustion_limit)
-fn is_short_integer_type(data_type: &DataType) -> Option<(&'static str, &'static str)> {
-    match data_type {
-        DataType::SmallInt(_) => Some(("SMALLINT", "~32,767")),
-        DataType::Int(_) => Some(("INT", "~2.1 billion")),
-        DataType::Integer(_) => Some(("INTEGER", "~2.1 billion")),
-        DataType::Int2(_) => Some(("INT2", "~32,767")),
-        DataType::Int4(_) => Some(("INT4", "~2.1 billion")),
+/// Look up each constraint key column by name and check its type.
+fn check_pk_key_columns(
+    table: &str,
+    constraint: &Constraint,
+    col_defs: &[&ColumnDef],
+) -> Vec<Violation> {
+    constraint
+        .keys
+        .iter()
+        .filter_map(|key| {
+            let name = match &key.node {
+                Some(NodeEnum::String(s)) => &s.sval,
+                _ => return None,
+            };
+            let col = col_defs.iter().find(|cd| cd.colname == *name)?;
+            check_column_type(table, col)
+        })
+        .collect()
+}
+
+/// Check if a column's type is a short integer and return a violation if so.
+fn check_column_type(table_name: &str, col: &ColumnDef) -> Option<Violation> {
+    let type_name = column_type_name(col);
+    if !is_short_integer(&type_name) {
+        return None;
+    }
+
+    let (display_name, limit) = short_integer_info(&type_name)?;
+    Some(create_violation(
+        table_name.to_string(),
+        col.colname.clone(),
+        display_name,
+        limit,
+    ))
+}
+
+/// Map pg_query internal type names to display names and limits.
+fn short_integer_info(type_name: &str) -> Option<(&'static str, &'static str)> {
+    match type_name {
+        "int2" | "smallserial" => Some(("SMALLINT", "~32,767")),
+        "int4" | "serial" => Some(("INT", "~2.1 billion")),
         _ => None,
     }
-}
-
-/// Extract column name from an index/constraint column expression
-fn extract_column_name(expr: &Expr) -> Option<String> {
-    match expr {
-        Expr::Identifier(ident) => Some(ident.to_string()),
-        Expr::CompoundIdentifier(idents) => {
-            // Handle qualified names like schema.table.column - take last part
-            idents.last().map(|i| i.to_string())
-        }
-        _ => None, // Complex expressions in PK - rare, skip
-    }
-}
-
-/// Check inline PRIMARY KEY constraints in column definitions
-fn check_inline_pk_columns(table_name: &ObjectName, columns: &[ColumnDef]) -> Vec<Violation> {
-    columns
-        .iter()
-        .filter_map(|col| {
-            // Check if column has PRIMARY KEY constraint
-            let is_primary_key = col
-                .options
-                .iter()
-                .any(|opt| matches!(opt.option, ColumnOption::PrimaryKey(_)));
-
-            if !is_primary_key {
-                return None;
-            }
-
-            // Check if data type is short integer
-            is_short_integer_type(&col.data_type).map(|(type_name, limit)| {
-                create_violation(
-                    table_name.to_string(),
-                    col.name.to_string(),
-                    type_name,
-                    limit,
-                )
-            })
-        })
-        .collect()
-}
-
-/// Check separate PRIMARY KEY table constraints
-fn check_table_pk_constraints(
-    table_name: &ObjectName,
-    columns: &[ColumnDef],
-    constraints: &[TableConstraint],
-) -> Vec<Violation> {
-    let mut violations = vec![];
-
-    for constraint in constraints {
-        if let TableConstraint::PrimaryKey(pk_constraint) = constraint {
-            // Extract column names from PRIMARY KEY constraint
-            for pk_col in &pk_constraint.columns {
-                if let Some(pk_col_name) = extract_column_name(&pk_col.column.expr) {
-                    // Find the column definition
-                    if let Some(col_def) =
-                        columns.iter().find(|c| c.name.to_string() == pk_col_name)
-                    {
-                        if let Some((type_name, limit)) = is_short_integer_type(&col_def.data_type)
-                        {
-                            violations.push(create_violation(
-                                table_name.to_string(),
-                                pk_col_name,
-                                type_name,
-                                limit,
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    violations
-}
-
-/// Check ALTER TABLE ADD COLUMN with PRIMARY KEY
-fn check_alter_add_column_pk(
-    table_name: &ObjectName,
-    operations: &[AlterTableOperation],
-) -> Vec<Violation> {
-    operations
-        .iter()
-        .filter_map(|op| {
-            let AlterTableOperation::AddColumn { column_def, .. } = op else {
-                return None;
-            };
-
-            // Check if column has PRIMARY KEY constraint
-            let is_primary_key = column_def
-                .options
-                .iter()
-                .any(|opt| matches!(opt.option, ColumnOption::PrimaryKey(_)));
-
-            if !is_primary_key {
-                return None;
-            }
-
-            // Check if data type is short integer
-            is_short_integer_type(&column_def.data_type).map(|(type_name, limit)| {
-                create_violation(
-                    table_name.to_string(),
-                    column_def.name.to_string(),
-                    type_name,
-                    limit,
-                )
-            })
-        })
-        .collect()
-}
-
-/// Check ALTER TABLE ADD CONSTRAINT PRIMARY KEY
-///
-/// This handles cases like:
-/// - ALTER TABLE foo ADD CONSTRAINT pk_foo PRIMARY KEY (id);
-/// - ALTER TABLE foo ADD COLUMN id INT, ADD CONSTRAINT pk_foo PRIMARY KEY (id);
-fn check_alter_add_constraint_pk(
-    table_name: &ObjectName,
-    operations: &[AlterTableOperation],
-) -> Vec<Violation> {
-    // First, collect columns being added in this ALTER TABLE statement
-    let added_columns: Vec<&ColumnDef> = operations
-        .iter()
-        .filter_map(|op| match op {
-            AlterTableOperation::AddColumn { column_def, .. } => Some(column_def),
-            _ => None,
-        })
-        .collect();
-
-    // If no columns are being added, we can't determine types from this statement alone
-    // (the columns would already exist in the table, and we don't track table state)
-    if added_columns.is_empty() {
-        return vec![];
-    }
-
-    // Now check for PRIMARY KEY constraints being added
-    let mut violations = vec![];
-
-    for operation in operations {
-        if let AlterTableOperation::AddConstraint {
-            constraint: TableConstraint::PrimaryKey(pk_constraint),
-            ..
-        } = operation
-        {
-            // Check each column in the PRIMARY KEY constraint
-            for pk_col in &pk_constraint.columns {
-                if let Some(pk_col_name) = extract_column_name(&pk_col.column.expr) {
-                    // Find if this column was added in the same ALTER TABLE
-                    if let Some(col_def) = added_columns
-                        .iter()
-                        .find(|c| c.name.to_string() == pk_col_name)
-                    {
-                        if let Some((type_name, limit)) = is_short_integer_type(&col_def.data_type)
-                        {
-                            violations.push(create_violation(
-                                table_name.to_string(),
-                                pk_col_name,
-                                type_name,
-                                limit,
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    violations
 }
 
 /// Create a violation for a short integer primary key
@@ -242,7 +145,7 @@ fn create_violation(
     limit: &str,
 ) -> Violation {
     Violation::new(
-        "Short integer primary key",
+        "PRIMARY KEY with short integer type",
         format!(
             "Using {type_name} for primary key column '{column}' on table '{table}' risks ID exhaustion at {limit} records. \
             {type_name} can be quickly exhausted in production applications. \
@@ -289,7 +192,7 @@ mod tests {
         assert_detects_violation!(
             ShortIntegerPrimaryKeyCheck,
             "CREATE TABLE users (id INT PRIMARY KEY);",
-            "Short integer primary key"
+            "PRIMARY KEY with short integer type"
         );
     }
 
@@ -298,7 +201,7 @@ mod tests {
         assert_detects_violation!(
             ShortIntegerPrimaryKeyCheck,
             "CREATE TABLE users (id INTEGER PRIMARY KEY);",
-            "Short integer primary key"
+            "PRIMARY KEY with short integer type"
         );
     }
 
@@ -307,7 +210,7 @@ mod tests {
         assert_detects_violation!(
             ShortIntegerPrimaryKeyCheck,
             "CREATE TABLE users (id SMALLINT PRIMARY KEY);",
-            "Short integer primary key"
+            "PRIMARY KEY with short integer type"
         );
     }
 
@@ -316,7 +219,7 @@ mod tests {
         assert_detects_violation!(
             ShortIntegerPrimaryKeyCheck,
             "CREATE TABLE users (id INT2 PRIMARY KEY);",
-            "Short integer primary key"
+            "PRIMARY KEY with short integer type"
         );
     }
 
@@ -325,7 +228,7 @@ mod tests {
         assert_detects_violation!(
             ShortIntegerPrimaryKeyCheck,
             "CREATE TABLE users (id INT4 PRIMARY KEY);",
-            "Short integer primary key"
+            "PRIMARY KEY with short integer type"
         );
     }
 
@@ -336,7 +239,7 @@ mod tests {
         assert_detects_violation!(
             ShortIntegerPrimaryKeyCheck,
             "CREATE TABLE users (id INT, name TEXT, PRIMARY KEY (id));",
-            "Short integer primary key"
+            "PRIMARY KEY with short integer type"
         );
     }
 
@@ -351,7 +254,10 @@ mod tests {
 
         let violations = check.check(&stmt);
         assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].operation, "Short integer primary key");
+        assert_eq!(
+            violations[0].operation,
+            "PRIMARY KEY with short integer type"
+        );
         assert!(violations[0].problem.contains("id"));
         assert!(violations[0].problem.contains("INT"));
     }
@@ -378,7 +284,7 @@ mod tests {
         assert_detects_violation!(
             ShortIntegerPrimaryKeyCheck,
             "ALTER TABLE users ADD COLUMN id INT PRIMARY KEY;",
-            "Short integer primary key"
+            "PRIMARY KEY with short integer type"
         );
     }
 
@@ -387,7 +293,16 @@ mod tests {
         assert_detects_violation!(
             ShortIntegerPrimaryKeyCheck,
             "ALTER TABLE users ADD COLUMN id SMALLINT PRIMARY KEY;",
-            "Short integer primary key"
+            "PRIMARY KEY with short integer type"
+        );
+    }
+
+    #[test]
+    fn test_detects_serial_primary_key() {
+        assert_detects_violation!(
+            ShortIntegerPrimaryKeyCheck,
+            "CREATE TABLE users (id SERIAL PRIMARY KEY);",
+            "PRIMARY KEY with short integer type"
         );
     }
 
@@ -406,14 +321,6 @@ mod tests {
         assert_allows!(
             ShortIntegerPrimaryKeyCheck,
             "CREATE TABLE users (id INT8 PRIMARY KEY);"
-        );
-    }
-
-    #[test]
-    fn test_allows_serial_primary_key() {
-        assert_allows!(
-            ShortIntegerPrimaryKeyCheck,
-            "CREATE TABLE users (id SERIAL PRIMARY KEY);"
         );
     }
 
@@ -480,7 +387,7 @@ mod tests {
         assert_detects_violation!(
             ShortIntegerPrimaryKeyCheck,
             "ALTER TABLE users ADD COLUMN id INT, ADD CONSTRAINT pk_users PRIMARY KEY (id);",
-            "Short integer primary key"
+            "PRIMARY KEY with short integer type"
         );
     }
 
@@ -489,7 +396,7 @@ mod tests {
         assert_detects_violation!(
             ShortIntegerPrimaryKeyCheck,
             "ALTER TABLE users ADD COLUMN id SMALLINT, ADD CONSTRAINT pk_users PRIMARY KEY (id);",
-            "Short integer primary key"
+            "PRIMARY KEY with short integer type"
         );
     }
 
@@ -504,7 +411,10 @@ mod tests {
 
         let violations = check.check(&stmt);
         assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].operation, "Short integer primary key");
+        assert_eq!(
+            violations[0].operation,
+            "PRIMARY KEY with short integer type"
+        );
         assert!(violations[0].problem.contains("id"));
         assert!(violations[0].problem.contains("INT"));
     }

@@ -1,5 +1,4 @@
--- Example of unnamed constraints in a migration
--- These will receive auto-generated names from PostgreSQL
+-- Unsafe: Unnamed constraints get auto-generated names from PostgreSQL
 
 -- Unnamed UNIQUE constraint
 ALTER TABLE users ADD UNIQUE (email);

@@ -1,4 +1,2 @@
--- Adding NOT NULL constraint to existing column
--- This requires a full table scan to verify all values are non-null
--- Acquires ACCESS EXCLUSIVE lock, blocking all operations
+-- Unsafe: Adding NOT NULL constraint requires full table scan and ACCESS EXCLUSIVE lock
 ALTER TABLE users ALTER COLUMN email SET NOT NULL;

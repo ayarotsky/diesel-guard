@@ -10,43 +10,41 @@
 //! The recommended approach is a multi-step dual-write migration that maintains
 //! compatibility with running instances and avoids dangerous locks.
 
+use crate::checks::pg_helpers::{range_var_name, NodeEnum, ObjectType};
 use crate::checks::Check;
 use crate::violation::Violation;
-use sqlparser::ast::{AlterTable, AlterTableOperation, Statement};
 
 pub struct RenameTableCheck;
 
 impl Check for RenameTableCheck {
-    fn check(&self, stmt: &Statement) -> Vec<Violation> {
-        let Statement::AlterTable(AlterTable {
-            name, operations, ..
-        }) = stmt
-        else {
+    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+        let NodeEnum::RenameStmt(rename) = node else {
             return vec![];
         };
 
-        let old_table_name = name.to_string();
+        if rename.rename_type != ObjectType::ObjectTable as i32 {
+            return vec![];
+        }
 
-        operations
-            .iter()
-            .filter_map(|op| {
-                let AlterTableOperation::RenameTable { table_name } = op else {
-                    return None;
-                };
+        let old_table_name = rename
+            .relation
+            .as_ref()
+            .map(range_var_name)
+            .unwrap_or_default();
 
-                let new_table_name = table_name.to_string();
+        let new_table_name = &rename.newname;
 
-                Some(Violation::new(
-                    "RENAME TABLE",
-                    format!(
-                        "Renaming table '{old}' to '{new}' will cause immediate errors in running application instances. \
-                        Any code referencing the old table name will fail after the rename is applied. \
-                        Additionally, this operation requires an ACCESS EXCLUSIVE lock which can block on busy tables.",
-                        old = old_table_name,
-                        new = new_table_name
-                    ),
-                    format!(
-                        r#"Use a multi-step migration to safely rename the table:
+        vec![Violation::new(
+            "RENAME TABLE",
+            format!(
+                "Renaming table '{old}' to '{new}' will cause immediate errors in running application instances. \
+                Any code referencing the old table name will fail after the rename is applied. \
+                Additionally, this operation requires an ACCESS EXCLUSIVE lock which can block on busy tables.",
+                old = old_table_name,
+                new = new_table_name
+            ),
+            format!(
+                r#"Use a multi-step migration to safely rename the table:
 
 1. Create the new table with the same structure:
    CREATE TABLE {new} (LIKE {old} INCLUDING ALL);
@@ -66,12 +64,10 @@ impl Check for RenameTableCheck {
    DROP TABLE {old};
 
 This approach avoids dangerous locks and maintains compatibility with running instances throughout the migration."#,
-                        old = old_table_name,
-                        new = new_table_name
-                    ),
-                ))
-            })
-            .collect()
+                old = old_table_name,
+                new = new_table_name
+            ),
+        )]
     }
 }
 
@@ -93,7 +89,7 @@ mod tests {
     fn test_detects_rename_table_with_schema() {
         assert_detects_violation!(
             RenameTableCheck,
-            "ALTER TABLE public.users RENAME TO public.customers;",
+            "ALTER TABLE public.users RENAME TO customers;",
             "RENAME TABLE"
         );
     }

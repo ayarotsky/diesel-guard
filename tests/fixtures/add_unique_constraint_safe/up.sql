@@ -1,5 +1,4 @@
--- Example of safe way to add unique constraint
--- Step 1: Create unique index concurrently
+-- Safe: Add unique constraint via CONCURRENTLY index then USING INDEX
 CREATE UNIQUE INDEX CONCURRENTLY users_email_idx ON users(email);
 
 -- Step 2 (Optional): Add constraint using the existing index

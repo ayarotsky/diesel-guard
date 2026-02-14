@@ -1,3 +1,2 @@
--- Dropping NOT NULL constraint is safe
--- This is a metadata-only change in PostgreSQL
+-- Safe: Dropping NOT NULL is a metadata-only change
 ALTER TABLE users ALTER COLUMN email DROP NOT NULL;

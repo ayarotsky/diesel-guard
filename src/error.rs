@@ -40,7 +40,7 @@ pub enum DieselGuardError {
 }
 
 impl DieselGuardError {
-    /// Create a simple parse error with just a message (backward compatible)
+    /// Create a parse error with just a message (no source location).
     pub fn parse_error(msg: impl Into<String>) -> Self {
         Self::ParseError {
             msg: msg.into(),
@@ -49,15 +49,15 @@ impl DieselGuardError {
         }
     }
 
-    /// Attach file context to an existing error.
+    /// Attach file context to a parse error.
     ///
-    /// For parse errors, this adds the source code with filename and computes
-    /// the span from any line/column info in the error message.
+    /// Adds source code with filename and computes the span from any
+    /// position info in the error message. Non-parse errors are returned as-is.
     pub fn with_file_context(self, path: &str, source: String) -> Self {
         match self {
             Self::ParseError { msg, .. } => {
-                let span = parse_location(&msg)
-                    .map(|(line, col)| SourceOffset::from_location(&source, line, col).into());
+                let span = parse_byte_position(&msg)
+                    .map(|pos| SourceSpan::new(SourceOffset::from(pos), 0));
 
                 Self::ParseError {
                     msg,
@@ -70,17 +70,17 @@ impl DieselGuardError {
     }
 }
 
-/// Parse line and column from sqlparser error messages.
+/// Parse byte position from pg_query error messages.
 ///
-/// Format: `"... at Line: {line}, Column: {column}"`
-fn parse_location(msg: &str) -> Option<(usize, usize)> {
-    let (_, after_line) = msg.split_once("at Line: ")?;
-    let (line_str, col_str) = after_line.split_once(", Column: ")?;
-
-    let line = line_str.parse().ok()?;
-    let col = col_str.parse().ok()?;
-
-    Some((line, col))
+/// pg_query format: `"... at position N"` where N is a 1-based byte offset.
+fn parse_byte_position(msg: &str) -> Option<usize> {
+    let pos_str = msg.rsplit_once("at position ")?.1;
+    let end = pos_str
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(pos_str.len());
+    let pos: usize = pos_str[..end].parse().ok()?;
+    // pg_query positions are 1-based; convert to 0-based
+    Some(pos.saturating_sub(1))
 }
 
 pub type Result<T> = std::result::Result<T, DieselGuardError>;
@@ -90,20 +90,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_location() {
-        let msg = "sql parser error: Expected: a list of columns in parentheses, found: INDEX at Line: 5, Column: 59";
-        assert_eq!(parse_location(msg), Some((5, 59)));
+    fn test_parse_byte_position() {
+        let msg = "syntax error at or near \"INVALID\" at position 42";
+        assert_eq!(parse_byte_position(msg), Some(41)); // 1-based → 0-based
     }
 
     #[test]
-    fn test_parse_location_no_location() {
-        let msg = "some error without location info";
-        assert_eq!(parse_location(msg), None);
+    fn test_parse_byte_position_no_position() {
+        let msg = "some error without position info";
+        assert_eq!(parse_byte_position(msg), None);
     }
 
     #[test]
-    fn test_parse_location_single_digit() {
-        let msg = "error at Line: 1, Column: 1";
-        assert_eq!(parse_location(msg), Some((1, 1)));
+    fn test_parse_byte_position_single_digit() {
+        let msg = "error at position 1";
+        assert_eq!(parse_byte_position(msg), Some(0)); // 1-based → 0-based
     }
 }
