@@ -3,6 +3,7 @@ use crate::checks::Registry;
 use crate::config::Config;
 use crate::error::Result;
 use crate::parser;
+use crate::scripting;
 use crate::violation::Violation;
 use camino::Utf8Path;
 use std::fs;
@@ -25,10 +26,22 @@ impl SafetyChecker {
 
     /// Create with specific configuration (useful for testing)
     pub fn with_config(config: Config) -> Self {
-        Self {
-            registry: Registry::with_config(&config),
-            config,
+        let mut registry = Registry::with_config(&config);
+
+        if let Some(ref dir) = config.custom_checks_dir {
+            let dir = Utf8Path::new(dir);
+            if dir.exists() {
+                let (checks, errors) = scripting::load_custom_checks(dir, &config);
+                for err in errors {
+                    eprintln!("Warning: {err}");
+                }
+                for check in checks {
+                    registry.add_check(check);
+                }
+            }
         }
+
+        Self { registry, config }
     }
 
     /// Check SQL string for violations

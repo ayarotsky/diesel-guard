@@ -103,6 +103,10 @@ pub struct Config {
     /// List of check struct names to disable
     #[serde(default)]
     pub disable_checks: Vec<String>,
+
+    /// Directory containing custom Rhai check scripts (.rhai files)
+    #[serde(default)]
+    pub custom_checks_dir: Option<String>,
 }
 
 impl Config {
@@ -148,12 +152,13 @@ impl Config {
         // Timestamp validation is framework-specific and done by adapters
         // during migration file collection
 
-        // Validate check names against the central registry
+        // Warn about unknown check names (may be custom Rhai checks)
         for check_name in &self.disable_checks {
             if !crate::checks::Registry::all_check_names().contains(&check_name.as_str()) {
-                return Err(ConfigError::InvalidCheckName {
-                    invalid_name: check_name.clone(),
-                });
+                eprintln!(
+                    "Warning: Unknown check name '{}' in disable_checks (may be a custom check)",
+                    check_name
+                );
             }
         }
 
@@ -195,6 +200,7 @@ impl Default for Config {
             start_after: None,
             check_down: false,
             disable_checks: Vec::new(),
+            custom_checks_dir: None,
         }
     }
 }
@@ -304,14 +310,15 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_check_name() {
+    fn test_unknown_check_name_warns_but_does_not_error() {
         let config_str = r#"
             framework = "diesel"
             disable_checks = ["InvalidCheckName"]
         "#;
 
         let config: Config = toml::from_str(config_str).unwrap();
-        assert!(config.validate().is_err());
+        // Unknown check names now warn instead of error (to support custom checks)
+        assert!(config.validate().is_ok());
     }
 
     #[test]

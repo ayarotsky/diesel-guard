@@ -38,3 +38,8 @@ framework = "diesel"
 #
 # Default: [] (all checks enabled)
 # disable_checks = []
+
+# Directory containing custom Rhai check scripts (.rhai files)
+# Each script receives a pg_query AST node and can return violations.
+# Use `diesel-guard dump-ast --sql "..."` to inspect the AST structure.
+# custom_checks_dir = "checks"
