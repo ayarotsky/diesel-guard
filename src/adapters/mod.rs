@@ -7,26 +7,8 @@
 //! The framework is explicitly configured via the `framework` field in `diesel-guard.toml`.
 
 use camino::{Utf8Path, Utf8PathBuf};
-use regex::Regex;
 use std::error::Error;
-use std::sync::LazyLock;
 use walkdir::{DirEntry, WalkDir};
-
-/// Regex pattern for detecting CONCURRENTLY operations.
-/// Matches CREATE INDEX CONCURRENTLY, DROP INDEX CONCURRENTLY, REINDEX CONCURRENTLY
-/// Case-insensitive, only matches actual SQL statements (not in comments/strings).
-static CONCURRENTLY_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)\b(CREATE|DROP|REINDEX)\s+INDEX\s+CONCURRENTLY\b")
-        .expect("valid regex pattern")
-});
-
-/// Check if SQL contains CONCURRENTLY operations.
-///
-/// Uses regex to match actual CONCURRENTLY operations (CREATE/DROP/REINDEX INDEX CONCURRENTLY).
-/// This is more accurate than simple string matching which could match comments or strings.
-pub(crate) fn detect_concurrently_operations(sql: &str) -> bool {
-    CONCURRENTLY_REGEX.is_match(sql)
-}
 
 mod diesel;
 mod sqlx;
@@ -142,8 +124,16 @@ pub(crate) fn should_check_migration(start_after: Option<&str>, migration_timest
     let start_normalized = start_after.replace(['_', '-'], "");
     let migration_normalized = migration_timestamp.replace(['_', '-'], "");
 
-    // String comparison works because YYYYMMDDHHMMSS is lexicographically ordered
-    migration_normalized > start_normalized
+    // If both are purely numeric, compare as integers to handle variable-width
+    // version numbers (e.g. "2" vs "10"). Otherwise fall back to string comparison
+    // which works for fixed-width timestamps like YYYYMMDDHHMMSS.
+    match (
+        migration_normalized.parse::<i64>(),
+        start_normalized.parse::<i64>(),
+    ) {
+        (Ok(mig), Ok(start)) => mig > start,
+        _ => migration_normalized > start_normalized,
+    }
 }
 
 /// Check if a directory is a single migration directory (contains up.sql directly).

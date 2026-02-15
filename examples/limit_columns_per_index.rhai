@@ -5,10 +5,9 @@
 let stmt = node.IndexStmt;
 if stmt == () { return; }
 
-let max_cols = 3;
 let col_count = stmt.index_params.len();
 
-if col_count > max_cols {
+if col_count > 3 {
     let idx_name = if stmt.idxname != "" { stmt.idxname } else { "(unnamed)" };
     #{
         operation: "Wide index: " + idx_name + " (" + col_count + " columns)",

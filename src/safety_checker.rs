@@ -1,4 +1,5 @@
-use crate::adapters::{DieselAdapter, MigrationAdapter, SqlxAdapter};
+use crate::adapters::{DieselAdapter, MigrationAdapter, MigrationFile, SqlxAdapter};
+use crate::checks::pg_helpers::{extract_node, NodeEnum};
 use crate::checks::Registry;
 use crate::config::Config;
 use crate::error::Result;
@@ -6,7 +7,49 @@ use crate::parser;
 use crate::scripting;
 use crate::violation::Violation;
 use camino::Utf8Path;
+use pg_query::protobuf::{ObjectType, RawStmt};
 use std::fs;
+
+/// Check if any parsed statements use CONCURRENTLY operations.
+///
+/// Detects:
+/// - `CREATE INDEX CONCURRENTLY` (IndexStmt with concurrent=true)
+/// - `DROP INDEX CONCURRENTLY` (DropStmt with concurrent=true and ObjectIndex)
+/// - `REINDEX ... CONCURRENTLY` (ReindexStmt with DefElem "concurrently" in params)
+fn has_concurrently_operations(stmts: &[RawStmt]) -> bool {
+    stmts.iter().any(|raw_stmt| {
+        let Some(node) = extract_node(raw_stmt) else {
+            return false;
+        };
+        match node {
+            NodeEnum::IndexStmt(stmt) => stmt.concurrent,
+            NodeEnum::DropStmt(stmt) => {
+                stmt.remove_type == ObjectType::ObjectIndex as i32 && stmt.concurrent
+            }
+            NodeEnum::ReindexStmt(stmt) => stmt.params.iter().any(|p| {
+                matches!(&p.node, Some(NodeEnum::DefElem(elem)) if elem.defname == "concurrently")
+            }),
+            _ => false,
+        }
+    })
+}
+
+/// Emit a warning if a migration uses CONCURRENTLY but runs in a transaction.
+fn warn_concurrently_in_transaction(mig_file: &MigrationFile, framework: &str) {
+    if mig_file.requires_no_transaction {
+        return;
+    }
+    let hint = if framework == "diesel" {
+        "Create metadata.toml with `run_in_transaction = false`"
+    } else {
+        "Add `-- no-transaction` directive at the start of the file"
+    };
+    eprintln!(
+        "Warning: {} uses CONCURRENTLY but migration runs in a transaction",
+        mig_file.path
+    );
+    eprintln!("         {hint}");
+}
 
 pub struct SafetyChecker {
     registry: Registry,
@@ -56,9 +99,22 @@ impl SafetyChecker {
 
     /// Check a single migration file
     pub fn check_file(&self, path: &Utf8Path) -> Result<Vec<Violation>> {
+        use crate::adapters::MigrationDirection;
+
         let sql = fs::read_to_string(path)?;
 
-        match parser::parse_with_metadata(&sql) {
+        // If the file contains marker-based sections, only check the "up" section
+        let sql_lower = sql.to_lowercase();
+        let has_markers =
+            sql_lower.contains("-- migrate:up") && sql_lower.contains("-- migrate:down");
+
+        let parse_result = if has_markers {
+            parser::parse_sql_with_direction(&sql, MigrationDirection::Up)
+        } else {
+            parser::parse_with_metadata(&sql)
+        };
+
+        match parse_result {
             Ok(parsed) => Ok(self.registry.check_stmts_with_context(
                 &parsed.stmts,
                 &parsed.sql,
@@ -94,9 +150,10 @@ impl SafetyChecker {
         for mig_file in migration_files {
             let sql = fs::read_to_string(&mig_file.path)?;
 
+            let sql_lower = sql.to_lowercase();
             let use_direction_parsing = self.config.framework == "sqlx"
-                && sql.contains("-- migrate:up")
-                && sql.contains("-- migrate:down");
+                && sql_lower.contains("-- migrate:up")
+                && sql_lower.contains("-- migrate:down");
 
             let parse_result = if use_direction_parsing {
                 parser::parse_sql_with_direction(&sql, mig_file.direction)
@@ -106,6 +163,9 @@ impl SafetyChecker {
 
             match parse_result {
                 Ok(parsed) => {
+                    if has_concurrently_operations(&parsed.stmts) {
+                        warn_concurrently_in_transaction(&mig_file, &self.config.framework);
+                    }
                     let violations = self.registry.check_stmts_with_context(
                         &parsed.stmts,
                         &parsed.sql,

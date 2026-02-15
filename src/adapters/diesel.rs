@@ -10,8 +10,8 @@
 //! ```
 
 use super::{
-    collect_and_sort_entries, detect_concurrently_operations, is_single_migration_dir,
-    should_check_migration, MigrationAdapter, MigrationDirection, MigrationFile, Result,
+    collect_and_sort_entries, is_single_migration_dir, should_check_migration, MigrationAdapter,
+    MigrationDirection, MigrationFile, Result,
 };
 use camino::Utf8Path;
 use regex::Regex;
@@ -173,21 +173,6 @@ impl DieselAdapter {
         // Always check up.sql if it exists
         let up_sql = path.join("up.sql");
         if up_sql.exists() {
-            // Warn if CONCURRENTLY is used but migration runs in a transaction
-            if metadata.run_in_transaction {
-                if let Ok(sql_content) = std::fs::read_to_string(&up_sql) {
-                    if detect_concurrently_operations(&sql_content) {
-                        eprintln!(
-                            "Warning: {} uses CONCURRENTLY but migration runs in a transaction",
-                            up_sql
-                        );
-                        eprintln!(
-                            "         Create metadata.toml with `run_in_transaction = false`"
-                        );
-                    }
-                }
-            }
-
             files.push(
                 MigrationFile::new(up_sql, timestamp.clone()).with_no_transaction(no_transaction),
             );
@@ -398,33 +383,4 @@ mod tests {
         assert!(metadata.run_in_transaction);
     }
 
-    #[test]
-    fn test_concurrently_sets_requires_no_transaction() {
-        use std::fs;
-        use tempfile::TempDir;
-
-        let temp_dir = TempDir::new().unwrap();
-        let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
-        fs::create_dir(&migration_dir).unwrap();
-        fs::write(
-            migration_dir.join("up.sql"),
-            "CREATE INDEX CONCURRENTLY idx ON t(id);",
-        )
-        .unwrap();
-        fs::write(
-            migration_dir.join("metadata.toml"),
-            "run_in_transaction = false\n",
-        )
-        .unwrap();
-
-        let adapter = DieselAdapter;
-        let migration_path =
-            Utf8Path::from_path(&migration_dir).expect("path should be valid UTF-8");
-        let files = adapter
-            .collect_migration_files(migration_path, None, false)
-            .unwrap();
-
-        assert_eq!(files.len(), 1);
-        assert!(files[0].requires_no_transaction);
-    }
 }
