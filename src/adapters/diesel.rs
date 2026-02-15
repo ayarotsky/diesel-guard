@@ -382,5 +382,4 @@ mod tests {
         // Falls back to defaults
         assert!(metadata.run_in_transaction);
     }
-
 }

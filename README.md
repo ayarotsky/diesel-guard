@@ -1370,6 +1370,74 @@ violations
 
 Use `diesel-guard dump-ast --sql "<your SQL>"` to see the full AST for any statement.
 
+### `pg::` Constants
+
+Protobuf enum fields like `DropStmt.remove_type` and `AlterTableCmd.subtype` are integer values. Instead of hard-coding magic numbers, use the built-in `pg::` module:
+
+```rhai
+// Instead of: stmt.remove_type == 42
+if stmt.remove_type == pg::OBJECT_TABLE { ... }
+```
+
+#### ObjectType
+
+Used by `DropStmt.remove_type`, `RenameStmt.rename_type`, etc.
+
+| Constant | Description |
+|----------|-------------|
+| `pg::OBJECT_INDEX` | Index |
+| `pg::OBJECT_TABLE` | Table |
+| `pg::OBJECT_COLUMN` | Column |
+| `pg::OBJECT_DATABASE` | Database |
+| `pg::OBJECT_SCHEMA` | Schema |
+| `pg::OBJECT_SEQUENCE` | Sequence |
+| `pg::OBJECT_VIEW` | View |
+| `pg::OBJECT_FUNCTION` | Function |
+| `pg::OBJECT_EXTENSION` | Extension |
+| `pg::OBJECT_TRIGGER` | Trigger |
+| `pg::OBJECT_TYPE` | Type |
+
+#### AlterTableType
+
+Used by `AlterTableCmd.subtype`.
+
+| Constant | Description |
+|----------|-------------|
+| `pg::AT_ADD_COLUMN` | ADD COLUMN |
+| `pg::AT_COLUMN_DEFAULT` | SET DEFAULT / DROP DEFAULT |
+| `pg::AT_DROP_NOT_NULL` | DROP NOT NULL |
+| `pg::AT_SET_NOT_NULL` | SET NOT NULL |
+| `pg::AT_DROP_COLUMN` | DROP COLUMN |
+| `pg::AT_ALTER_COLUMN_TYPE` | ALTER COLUMN TYPE |
+| `pg::AT_ADD_CONSTRAINT` | ADD CONSTRAINT |
+| `pg::AT_DROP_CONSTRAINT` | DROP CONSTRAINT |
+| `pg::AT_VALIDATE_CONSTRAINT` | VALIDATE CONSTRAINT |
+
+#### ConstrType
+
+Used by `Constraint.contype`.
+
+| Constant | Description |
+|----------|-------------|
+| `pg::CONSTR_NOTNULL` | NOT NULL |
+| `pg::CONSTR_DEFAULT` | DEFAULT |
+| `pg::CONSTR_IDENTITY` | IDENTITY |
+| `pg::CONSTR_GENERATED` | GENERATED |
+| `pg::CONSTR_CHECK` | CHECK |
+| `pg::CONSTR_PRIMARY` | PRIMARY KEY |
+| `pg::CONSTR_UNIQUE` | UNIQUE |
+| `pg::CONSTR_EXCLUSION` | EXCLUSION |
+| `pg::CONSTR_FOREIGN` | FOREIGN KEY |
+
+#### DropBehavior
+
+Used by `DropStmt.behavior`.
+
+| Constant | Description |
+|----------|-------------|
+| `pg::DROP_RESTRICT` | RESTRICT (default) |
+| `pg::DROP_CASCADE` | CASCADE |
+
 ### Examples
 
 #### `require_concurrent_index.rhai` — Flag non-concurrent CREATE INDEX
@@ -1429,8 +1497,7 @@ Catches `DROP TABLE t;` (without IF EXISTS).
 let stmt = node.DropStmt;
 if stmt == () { return; }
 
-// remove_type 42 = TABLE (ObjectType::OBJECT_TABLE in pg_query v6 / PG17)
-if stmt.remove_type == 42 && !stmt.missing_ok {
+if stmt.remove_type == pg::OBJECT_TABLE && !stmt.missing_ok {
     #{
         operation: "DROP TABLE without IF EXISTS",
         problem: "DROP TABLE without IF EXISTS will error if the table doesn't exist, potentially breaking migrations.",
@@ -1439,7 +1506,7 @@ if stmt.remove_type == 42 && !stmt.missing_ok {
 }
 ```
 
-**Pattern:** Check an integer enum (`remove_type`) and a boolean field (`missing_ok`).
+**Pattern:** Check an integer enum via [`pg::` constants](#pg-constants) and a boolean field (`missing_ok`).
 
 #### `no_truncate_in_production.rhai` — Ban TRUNCATE statements
 

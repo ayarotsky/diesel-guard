@@ -310,10 +310,7 @@ mod tests {
             Some("20240101000000".to_string())
         );
         // SQLx accepts any positive i64 as version number
-        assert_eq!(
-            adapter.parse_timestamp("1_init.sql"),
-            Some("1".to_string())
-        );
+        assert_eq!(adapter.parse_timestamp("1_init.sql"), Some("1".to_string()));
         assert_eq!(
             adapter.parse_timestamp("001_create_users.sql"),
             Some("001".to_string())
