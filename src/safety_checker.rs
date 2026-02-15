@@ -94,8 +94,9 @@ impl SafetyChecker {
         for mig_file in migration_files {
             let sql = fs::read_to_string(&mig_file.path)?;
 
-            let use_direction_parsing =
-                sql.contains("-- migrate:up") && sql.contains("-- migrate:down");
+            let use_direction_parsing = self.config.framework == "sqlx"
+                && sql.contains("-- migrate:up")
+                && sql.contains("-- migrate:down");
 
             let parse_result = if use_direction_parsing {
                 parser::parse_sql_with_direction(&sql, mig_file.direction)

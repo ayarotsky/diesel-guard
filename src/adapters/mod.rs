@@ -7,8 +7,26 @@
 //! The framework is explicitly configured via the `framework` field in `diesel-guard.toml`.
 
 use camino::{Utf8Path, Utf8PathBuf};
+use regex::Regex;
 use std::error::Error;
+use std::sync::LazyLock;
 use walkdir::{DirEntry, WalkDir};
+
+/// Regex pattern for detecting CONCURRENTLY operations.
+/// Matches CREATE INDEX CONCURRENTLY, DROP INDEX CONCURRENTLY, REINDEX CONCURRENTLY
+/// Case-insensitive, only matches actual SQL statements (not in comments/strings).
+static CONCURRENTLY_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)\b(CREATE|DROP|REINDEX)\s+INDEX\s+CONCURRENTLY\b")
+        .expect("valid regex pattern")
+});
+
+/// Check if SQL contains CONCURRENTLY operations.
+///
+/// Uses regex to match actual CONCURRENTLY operations (CREATE/DROP/REINDEX INDEX CONCURRENTLY).
+/// This is more accurate than simple string matching which could match comments or strings.
+pub(crate) fn detect_concurrently_operations(sql: &str) -> bool {
+    CONCURRENTLY_REGEX.is_match(sql)
+}
 
 mod diesel;
 mod sqlx;
@@ -140,12 +158,15 @@ pub(crate) fn is_single_migration_dir(dir: &Utf8Path) -> bool {
 ///
 /// Returns entries sorted by path, with errors filtered out.
 pub(crate) fn collect_and_sort_entries(dir: &Utf8Path) -> Vec<DirEntry> {
-    let mut entries: Vec<_> = WalkDir::new(dir)
-        .max_depth(1)
-        .min_depth(1)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .collect();
+    let mut entries = Vec::new();
+    for result in WalkDir::new(dir).max_depth(1).min_depth(1) {
+        match result {
+            Ok(entry) => entries.push(entry),
+            Err(e) => {
+                eprintln!("Warning: Failed to read entry in {}: {}", dir, e);
+            }
+        }
+    }
 
     entries.sort_by(|a, b| a.path().cmp(b.path()));
     entries

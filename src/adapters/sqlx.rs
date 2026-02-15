@@ -9,8 +9,8 @@
 //! Also parses SQLx metadata directives like `-- no-transaction`.
 
 use super::{
-    collect_and_sort_entries, is_single_migration_dir, should_check_migration, MigrationAdapter,
-    MigrationDirection, MigrationFile, Result,
+    collect_and_sort_entries, detect_concurrently_operations, is_single_migration_dir,
+    should_check_migration, MigrationAdapter, MigrationDirection, MigrationFile, Result,
 };
 use camino::Utf8Path;
 use regex::Regex;
@@ -20,14 +20,6 @@ use std::sync::LazyLock;
 /// Regex pattern for SQLx timestamp format (14 digits, no separators).
 static SQLX_TIMESTAMP_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^(\d{14})(_|\.)?").expect("valid regex pattern"));
-
-/// Regex pattern for detecting CONCURRENTLY operations.
-/// Matches CREATE INDEX CONCURRENTLY, DROP INDEX CONCURRENTLY, REINDEX CONCURRENTLY
-/// Case-insensitive, only matches actual SQL statements (not in comments/strings).
-static CONCURRENTLY_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)\b(CREATE|DROP|REINDEX)\s+INDEX\s+CONCURRENTLY\b")
-        .expect("valid regex pattern")
-});
 
 /// Regex pattern for detecting SQLx migration markers.
 /// Matches -- migrate:up and -- migrate:down markers (case-insensitive).
@@ -285,14 +277,6 @@ fn parse_sqlx_directives(sql: &str) -> MigrationMetadata {
     }
 
     metadata
-}
-
-/// Check if SQL contains CONCURRENTLY operations.
-///
-/// Uses regex to match actual CONCURRENTLY operations (CREATE/DROP/REINDEX INDEX CONCURRENTLY).
-/// This is more accurate than simple string matching which could match comments or strings.
-fn detect_concurrently_operations(sql: &str) -> bool {
-    CONCURRENTLY_REGEX.is_match(sql)
 }
 
 /// Validate migration metadata and warn on misconfigurations.
