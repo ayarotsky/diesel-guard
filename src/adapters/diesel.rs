@@ -24,6 +24,42 @@ static DIESEL_TIMESTAMP_REGEX: LazyLock<Regex> = LazyLock::new(|| {
         .expect("valid regex pattern")
 });
 
+/// Diesel migration metadata parsed from `metadata.toml`.
+#[derive(Debug, serde::Deserialize)]
+struct DieselMigrationMetadata {
+    #[serde(default = "default_true")]
+    run_in_transaction: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl Default for DieselMigrationMetadata {
+    fn default() -> Self {
+        Self {
+            run_in_transaction: true,
+        }
+    }
+}
+
+/// Read Diesel migration metadata from `metadata.toml` in a migration directory.
+///
+/// Returns default values (run_in_transaction = true) if the file is missing or unparseable.
+fn read_diesel_metadata(migration_dir: &Utf8Path) -> DieselMigrationMetadata {
+    let metadata_path = migration_dir.join("metadata.toml");
+    match std::fs::read_to_string(&metadata_path) {
+        Ok(contents) => toml::from_str(&contents).unwrap_or_else(|e| {
+            eprintln!(
+                "Warning: Failed to parse {}: {}. Using defaults.",
+                metadata_path, e
+            );
+            DieselMigrationMetadata::default()
+        }),
+        Err(_) => DieselMigrationMetadata::default(),
+    }
+}
+
 /// Diesel migration adapter.
 pub struct DieselAdapter;
 
@@ -55,13 +91,18 @@ impl MigrationAdapter for DieselAdapter {
             if entry.file_type().is_dir() {
                 files.extend(self.process_migration_directory(path, start_after, check_down)?);
             } else if path.extension() == Some("sql") {
-                // Standalone SQL file - always check regardless of start_after
-                // (since they don't necessarily have timestamps)
                 let filename = path.file_name().unwrap_or("");
-                let timestamp = self
-                    .parse_timestamp(filename)
-                    .unwrap_or_else(|| filename.to_string());
+                let parsed_timestamp = self.parse_timestamp(filename);
 
+                // Apply start_after filter when the file has a valid timestamp.
+                // Files without timestamps (e.g., "migration.sql") are always checked.
+                if let Some(ref ts) = parsed_timestamp {
+                    if !should_check_migration(start_after, ts) {
+                        continue;
+                    }
+                }
+
+                let timestamp = parsed_timestamp.unwrap_or_else(|| filename.to_string());
                 files.push(MigrationFile::new(path.to_owned(), timestamp));
             }
         }
@@ -124,12 +165,17 @@ impl DieselAdapter {
             return Ok(vec![]);
         }
 
+        let metadata = read_diesel_metadata(path);
+        let no_transaction = !metadata.run_in_transaction;
+
         let mut files = vec![];
 
         // Always check up.sql if it exists
         let up_sql = path.join("up.sql");
         if up_sql.exists() {
-            files.push(MigrationFile::new(up_sql, timestamp.clone()));
+            files.push(
+                MigrationFile::new(up_sql, timestamp.clone()).with_no_transaction(no_transaction),
+            );
         }
 
         // Check down.sql only if enabled in config
@@ -138,7 +184,8 @@ impl DieselAdapter {
             if down_sql.exists() {
                 files.push(
                     MigrationFile::new(down_sql, timestamp)
-                        .with_direction(MigrationDirection::Down),
+                        .with_direction(MigrationDirection::Down)
+                        .with_no_transaction(no_transaction),
                 );
             }
         }
@@ -299,5 +346,40 @@ mod tests {
         let paths: Vec<String> = files.iter().map(|f| f.path.to_string()).collect();
         assert!(paths.iter().any(|p| p.contains("up.sql")));
         assert!(paths.iter().any(|p| p.contains("down.sql")));
+    }
+
+    #[test]
+    fn test_read_diesel_metadata_defaults() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let dir = Utf8Path::from_path(temp_dir.path()).unwrap();
+        let metadata = read_diesel_metadata(dir);
+        assert!(metadata.run_in_transaction);
+    }
+
+    #[test]
+    fn test_read_diesel_metadata_no_transaction() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let dir = Utf8Path::from_path(temp_dir.path()).unwrap();
+        fs::write(dir.join("metadata.toml"), "run_in_transaction = false\n").unwrap();
+        let metadata = read_diesel_metadata(dir);
+        assert!(!metadata.run_in_transaction);
+    }
+
+    #[test]
+    fn test_read_diesel_metadata_invalid_toml() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let dir = Utf8Path::from_path(temp_dir.path()).unwrap();
+        fs::write(dir.join("metadata.toml"), "not valid toml {{{}}}").unwrap();
+        let metadata = read_diesel_metadata(dir);
+        // Falls back to defaults
+        assert!(metadata.run_in_transaction);
     }
 }

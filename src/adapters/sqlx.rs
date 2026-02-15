@@ -1,10 +1,12 @@
 //! SQLx migration adapter.
 //!
-//! Supports all four SQLx migration formats:
-//! 1. Suffix-based: `20240101000000_init.up.sql` / `20240101000000_init.down.sql`
-//! 2. Single file (up-only): `20240101000000_init.sql`
-//! 3. Marker-based (up+down in one file): `-- migrate:up` / `-- migrate:down`
-//! 4. Directory-based: `20240101000000_init/{up.sql, down.sql}`
+//! Supports SQLx's native migration formats:
+//! 1. Suffix-based (reversible): `<VERSION>_<DESC>.up.sql` / `<VERSION>_<DESC>.down.sql`
+//! 2. Single file (up-only): `<VERSION>_<DESC>.sql`
+//!
+//! Also supports additional formats for compatibility with other tools:
+//! 3. Marker-based (dbmate-style): `-- migrate:up` / `-- migrate:down` in a single file
+//! 4. Directory-based (Diesel-style): `<VERSION>_<DESC>/{up.sql, down.sql}`
 //!
 //! Also parses SQLx metadata directives like `-- no-transaction`.
 
@@ -17,17 +19,12 @@ use regex::Regex;
 use std::fs;
 use std::sync::LazyLock;
 
-/// Regex pattern for SQLx timestamp format (14 digits, no separators).
-static SQLX_TIMESTAMP_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^(\d{14})(_|\.)?").expect("valid regex pattern"));
-
-/// Regex pattern for detecting CONCURRENTLY operations.
-/// Matches CREATE INDEX CONCURRENTLY, DROP INDEX CONCURRENTLY, REINDEX CONCURRENTLY
-/// Case-insensitive, only matches actual SQL statements (not in comments/strings).
-static CONCURRENTLY_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)\b(CREATE|DROP|REINDEX)\s+INDEX\s+CONCURRENTLY\b")
-        .expect("valid regex pattern")
-});
+/// Regex pattern for SQLx version format (one or more digits).
+///
+/// SQLx accepts any positive i64 as a migration version number, so this matches
+/// any leading digit sequence (e.g. `1`, `001`, `42`, `20240101000000`).
+static SQLX_VERSION_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^(\d+)(_|\.)?").expect("valid regex pattern"));
 
 /// Regex pattern for detecting SQLx migration markers.
 /// Matches -- migrate:up and -- migrate:down markers (case-insensitive).
@@ -79,18 +76,18 @@ impl MigrationAdapter for SqlxAdapter {
     }
 
     fn parse_timestamp(&self, name: &str) -> Option<String> {
-        SQLX_TIMESTAMP_REGEX
+        SQLX_VERSION_REGEX
             .captures(name)
             .and_then(|cap| cap.get(1))
             .map(|m| m.as_str().to_string())
     }
 
     fn validate_timestamp(&self, timestamp: &str) -> Result<()> {
-        if timestamp.len() == 14 && timestamp.chars().all(|c| c.is_ascii_digit()) {
+        if !timestamp.is_empty() && timestamp.chars().all(|c| c.is_ascii_digit()) {
             Ok(())
         } else {
             Err(format!(
-                "Invalid SQLx timestamp format: {}. Expected: YYYYMMDDHHMMSS (14 digits)",
+                "Invalid SQLx version format: {}. Expected: one or more digits",
                 timestamp
             )
             .into())
@@ -99,13 +96,12 @@ impl MigrationAdapter for SqlxAdapter {
 }
 
 impl SqlxAdapter {
-    /// Read SQL file, parse directives, and validate metadata.
+    /// Read SQL file and parse directives.
     ///
     /// Returns the file content and parsed metadata.
     fn read_and_validate_sqlx_file(&self, path: &Utf8Path) -> Result<(String, MigrationMetadata)> {
         let content = fs::read_to_string(path)?;
         let metadata = parse_sqlx_directives(&content);
-        validate_migration_metadata(&content, &metadata, path)?;
         Ok((content, metadata))
     }
 
@@ -199,7 +195,7 @@ impl SqlxAdapter {
 
         // Check if it's marker-based (contains both up and down markers)
         if contains_migrate_markers(&content) {
-            // Format 3: Marker-based
+            // Format 3: Marker-based (dbmate-style)
             let mut files = vec![MigrationFile::new(path.to_owned(), timestamp.clone())
                 .with_no_transaction(metadata.requires_no_transaction)];
 
@@ -219,7 +215,7 @@ impl SqlxAdapter {
         }
     }
 
-    /// Process a migration directory (format 4).
+    /// Process a migration directory (format 4: Diesel-style).
     fn process_migration_directory(
         &self,
         path: &Utf8Path,
@@ -270,49 +266,14 @@ impl SqlxAdapter {
     }
 }
 
-/// Parse SQLx directives from SQL comments.
-fn parse_sqlx_directives(sql: &str) -> MigrationMetadata {
-    let mut metadata = MigrationMetadata::default();
-
-    for line in sql.lines() {
-        let line = line.trim();
-        if let Some(comment) = line.strip_prefix("--") {
-            let comment = comment.trim();
-            if comment == "no-transaction" {
-                metadata.requires_no_transaction = true;
-            }
-        }
-    }
-
-    metadata
-}
-
-/// Check if SQL contains CONCURRENTLY operations.
+/// Parse SQLx directives from SQL content.
 ///
-/// Uses regex to match actual CONCURRENTLY operations (CREATE/DROP/REINDEX INDEX CONCURRENTLY).
-/// This is more accurate than simple string matching which could match comments or strings.
-fn detect_concurrently_operations(sql: &str) -> bool {
-    CONCURRENTLY_REGEX.is_match(sql)
-}
-
-/// Validate migration metadata and warn on misconfigurations.
-fn validate_migration_metadata(
-    sql: &str,
-    metadata: &MigrationMetadata,
-    path: &Utf8Path,
-) -> Result<()> {
-    // Check if CONCURRENTLY is used without no-transaction directive
-    if detect_concurrently_operations(sql) && !metadata.requires_no_transaction {
-        eprintln!(
-            "Warning: {} uses CONCURRENTLY but missing '-- no-transaction' directive",
-            path
-        );
-        eprintln!(
-            "         Add this directive before the SQL statement to run outside a transaction"
-        );
+/// SQLx requires `-- no-transaction` at the very start of the file
+/// (checked via `sql.starts_with("-- no-transaction")`).
+fn parse_sqlx_directives(sql: &str) -> MigrationMetadata {
+    MigrationMetadata {
+        requires_no_transaction: sql.starts_with("-- no-transaction"),
     }
-
-    Ok(())
 }
 
 /// Check if SQL contains SQLx migration markers.
@@ -348,14 +309,23 @@ mod tests {
             adapter.parse_timestamp("20240101000000"),
             Some("20240101000000".to_string())
         );
+        // SQLx accepts any positive i64 as version number
+        assert_eq!(adapter.parse_timestamp("1_init.sql"), Some("1".to_string()));
+        assert_eq!(
+            adapter.parse_timestamp("001_create_users.sql"),
+            Some("001".to_string())
+        );
+        assert_eq!(
+            adapter.parse_timestamp("42_add_columns.up.sql"),
+            Some("42".to_string())
+        );
     }
 
     #[test]
     fn test_parse_timestamp_invalid() {
         let adapter = SqlxAdapter;
         assert_eq!(adapter.parse_timestamp("invalid_name"), None);
-        assert_eq!(adapter.parse_timestamp("2024_01_01_000000"), None);
-        assert_eq!(adapter.parse_timestamp("2024010100000"), None); // Only 13 digits
+        assert_eq!(adapter.parse_timestamp("_no_leading_digits"), None);
     }
 
     #[test]
@@ -363,31 +333,29 @@ mod tests {
         let adapter = SqlxAdapter;
         assert!(adapter.validate_timestamp("20240101000000").is_ok());
         assert!(adapter.validate_timestamp("20231231235959").is_ok());
-        assert!(adapter.validate_timestamp("2024_01_01_000000").is_err()); // Has separators
-        assert!(adapter.validate_timestamp("2024010100000").is_err()); // Only 13 digits
+        assert!(adapter.validate_timestamp("1").is_ok());
+        assert!(adapter.validate_timestamp("001").is_ok());
+        assert!(adapter.validate_timestamp("42").is_ok());
+        assert!(adapter.validate_timestamp("").is_err());
         assert!(adapter.validate_timestamp("invalid").is_err());
     }
 
     #[test]
     fn test_parse_sqlx_directives() {
+        // Directive at start of file — recognized
         let sql = "-- no-transaction\nCREATE INDEX CONCURRENTLY idx;";
         let metadata = parse_sqlx_directives(sql);
         assert!(metadata.requires_no_transaction);
 
+        // No directive
         let sql_no_directive = "CREATE INDEX CONCURRENTLY idx;";
         let metadata = parse_sqlx_directives(sql_no_directive);
         assert!(!metadata.requires_no_transaction);
-    }
 
-    #[test]
-    fn test_detect_concurrently_operations() {
-        assert!(detect_concurrently_operations(
-            "CREATE INDEX CONCURRENTLY idx;"
-        ));
-        assert!(detect_concurrently_operations(
-            "drop index concurrently idx;"
-        ));
-        assert!(!detect_concurrently_operations("CREATE INDEX idx;"));
+        // Directive in the middle of the file — NOT recognized (matches SQLx behavior)
+        let sql_middle = "CREATE TABLE t();\n-- no-transaction\nCREATE INDEX CONCURRENTLY idx;";
+        let metadata = parse_sqlx_directives(sql_middle);
+        assert!(!metadata.requires_no_transaction);
     }
 
     #[test]
@@ -407,7 +375,7 @@ mod tests {
         // No filter
         assert!(should_check_migration(None, "20240101000000"));
 
-        // With filter
+        // With filter (14-digit timestamps)
         assert!(should_check_migration(
             Some("20240101000000"),
             "20240102000000"
@@ -420,6 +388,13 @@ mod tests {
             Some("20240101000000"),
             "20231231235959"
         ));
+
+        // Short numeric versions use numeric comparison
+        assert!(should_check_migration(Some("2"), "10"));
+        assert!(should_check_migration(Some("9"), "10"));
+        assert!(should_check_migration(Some("1"), "2"));
+        assert!(!should_check_migration(Some("10"), "2"));
+        assert!(!should_check_migration(Some("5"), "5"));
     }
 
     #[test]

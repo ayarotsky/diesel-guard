@@ -124,8 +124,16 @@ pub(crate) fn should_check_migration(start_after: Option<&str>, migration_timest
     let start_normalized = start_after.replace(['_', '-'], "");
     let migration_normalized = migration_timestamp.replace(['_', '-'], "");
 
-    // String comparison works because YYYYMMDDHHMMSS is lexicographically ordered
-    migration_normalized > start_normalized
+    // If both are purely numeric, compare as integers to handle variable-width
+    // version numbers (e.g. "2" vs "10"). Otherwise fall back to string comparison
+    // which works for fixed-width timestamps like YYYYMMDDHHMMSS.
+    match (
+        migration_normalized.parse::<i64>(),
+        start_normalized.parse::<i64>(),
+    ) {
+        (Ok(mig), Ok(start)) => mig > start,
+        _ => migration_normalized > start_normalized,
+    }
 }
 
 /// Check if a directory is a single migration directory (contains up.sql directly).
@@ -140,12 +148,15 @@ pub(crate) fn is_single_migration_dir(dir: &Utf8Path) -> bool {
 ///
 /// Returns entries sorted by path, with errors filtered out.
 pub(crate) fn collect_and_sort_entries(dir: &Utf8Path) -> Vec<DirEntry> {
-    let mut entries: Vec<_> = WalkDir::new(dir)
-        .max_depth(1)
-        .min_depth(1)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .collect();
+    let mut entries = Vec::new();
+    for result in WalkDir::new(dir).max_depth(1).min_depth(1) {
+        match result {
+            Ok(entry) => entries.push(entry),
+            Err(e) => {
+                eprintln!("Warning: Failed to read entry in {}: {}", dir, e);
+            }
+        }
+    }
 
     entries.sort_by(|a, b| a.path().cmp(b.path()));
     entries

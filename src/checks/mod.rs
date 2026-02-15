@@ -14,7 +14,7 @@ mod drop_index;
 mod drop_primary_key;
 mod drop_table;
 mod generated_column;
-mod pg_helpers;
+pub mod pg_helpers;
 mod reindex;
 mod rename_column;
 mod rename_table;
@@ -78,7 +78,7 @@ mod helpers {
 use crate::parser::IgnoreRange;
 use crate::violation::Violation;
 pub use helpers::*;
-use pg_helpers::NodeEnum;
+use pg_helpers::{extract_node, NodeEnum};
 use pg_query::protobuf::RawStmt;
 use std::sync::LazyLock;
 
@@ -148,6 +148,11 @@ impl Registry {
         self.register_check(config, WideIndexCheck);
     }
 
+    /// Add a pre-built check (used for custom Rhai checks).
+    pub fn add_check(&mut self, check: Box<dyn Check>) {
+        self.checks.push(check);
+    }
+
     /// Register a check if it's enabled in configuration
     fn register_check(&mut self, config: &Config, check: impl Check + 'static) {
         if config.is_check_enabled(check.name()) {
@@ -186,7 +191,7 @@ impl Registry {
         let mut violations = Vec::new();
 
         for raw_stmt in stmts {
-            let node = match raw_stmt.stmt.as_ref().and_then(|n| n.node.as_ref()) {
+            let node = match extract_node(raw_stmt) {
                 Some(node) => node,
                 None => continue,
             };

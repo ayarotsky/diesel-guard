@@ -1,5 +1,6 @@
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
+use diesel_guard::ast_dump;
 use diesel_guard::output::OutputFormatter;
 use diesel_guard::{Config, SafetyChecker};
 use miette::{IntoDiagnostic, Result};
@@ -33,6 +34,17 @@ enum Commands {
         /// Overwrite existing config file if it exists
         #[arg(long)]
         force: bool,
+    },
+
+    /// Dump the pg_query AST for SQL as JSON (useful for writing custom Rhai checks)
+    DumpAst {
+        /// SQL string to parse
+        #[arg(long)]
+        sql: Option<String>,
+
+        /// Path to a .sql file to parse
+        #[arg(long)]
+        file: Option<Utf8PathBuf>,
     },
 }
 
@@ -94,6 +106,22 @@ fn main() -> Result<()> {
             if total_violations > 0 {
                 exit(1);
             }
+        }
+
+        Commands::DumpAst { sql, file } => {
+            let sql_input = match (sql, file) {
+                (Some(s), _) => s,
+                (None, Some(path)) => fs::read_to_string(&path)
+                    .into_diagnostic()
+                    .map_err(|e| miette::miette!("Failed to read file '{}': {}", path, e))?,
+                (None, None) => {
+                    eprintln!("Error: provide either --sql or --file");
+                    exit(1);
+                }
+            };
+
+            let json = ast_dump::dump_ast(&sql_input)?;
+            println!("{json}");
         }
 
         Commands::Init { force } => {
