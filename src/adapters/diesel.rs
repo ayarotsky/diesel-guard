@@ -5,8 +5,7 @@
 //! migrations/
 //! └── 2024_01_01_000000_create_users/
 //!     ├── up.sql
-//!     ├── down.sql
-//!     └── metadata.toml (optional, not parsed by diesel-guard)
+//!     └── down.sql
 //! ```
 
 use super::{
@@ -55,13 +54,18 @@ impl MigrationAdapter for DieselAdapter {
             if entry.file_type().is_dir() {
                 files.extend(self.process_migration_directory(path, start_after, check_down)?);
             } else if path.extension() == Some("sql") {
-                // Standalone SQL file - always check regardless of start_after
-                // (since they don't necessarily have timestamps)
                 let filename = path.file_name().unwrap_or("");
-                let timestamp = self
-                    .parse_timestamp(filename)
-                    .unwrap_or_else(|| filename.to_string());
+                let parsed_timestamp = self.parse_timestamp(filename);
 
+                // Apply start_after filter when the file has a valid timestamp.
+                // Files without timestamps (e.g., "migration.sql") are always checked.
+                if let Some(ref ts) = parsed_timestamp {
+                    if !should_check_migration(start_after, ts) {
+                        continue;
+                    }
+                }
+
+                let timestamp = parsed_timestamp.unwrap_or_else(|| filename.to_string());
                 files.push(MigrationFile::new(path.to_owned(), timestamp));
             }
         }

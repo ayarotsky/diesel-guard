@@ -37,32 +37,23 @@ pub struct MigrationFile {
     pub timestamp: String,
     /// Migration direction (up or down).
     pub direction: MigrationDirection,
-    /// Whether migration requires running outside a transaction (SQLx metadata).
-    pub requires_no_transaction: bool,
 }
 
 impl MigrationFile {
     /// Create a new migration file with the most common defaults.
     ///
-    /// Sets direction to Up and requires_no_transaction to false.
+    /// Sets direction to Up.
     pub fn new(path: Utf8PathBuf, timestamp: String) -> Self {
         Self {
             path,
             timestamp,
             direction: MigrationDirection::Up,
-            requires_no_transaction: false,
         }
     }
 
     /// Builder method to set the direction.
     pub fn with_direction(mut self, direction: MigrationDirection) -> Self {
         self.direction = direction;
-        self
-    }
-
-    /// Builder method to set requires_no_transaction.
-    pub fn with_no_transaction(mut self, requires: bool) -> Self {
-        self.requires_no_transaction = requires;
         self
     }
 }
@@ -110,6 +101,18 @@ pub trait MigrationAdapter: Send + Sync {
     fn normalize_timestamp(&self, timestamp: &str) -> String {
         timestamp.replace(['_', '-'], "")
     }
+
+    /// Extract the SQL section relevant to the given migration direction.
+    ///
+    /// Adapters that use marker-based migrations (e.g., `-- migrate:up` / `-- migrate:down`)
+    /// override this to return only the relevant section. The default returns all SQL unchanged.
+    fn extract_sql_for_direction<'a>(
+        &self,
+        sql: &'a str,
+        _direction: MigrationDirection,
+    ) -> &'a str {
+        sql
+    }
 }
 
 /// Check if migration should be checked based on start_after filter.
@@ -124,8 +127,16 @@ pub(crate) fn should_check_migration(start_after: Option<&str>, migration_timest
     let start_normalized = start_after.replace(['_', '-'], "");
     let migration_normalized = migration_timestamp.replace(['_', '-'], "");
 
-    // String comparison works because YYYYMMDDHHMMSS is lexicographically ordered
-    migration_normalized > start_normalized
+    // If both are purely numeric, compare as integers to handle variable-width
+    // version numbers (e.g. "2" vs "10"). Otherwise fall back to string comparison
+    // which works for fixed-width timestamps like YYYYMMDDHHMMSS.
+    match (
+        migration_normalized.parse::<i64>(),
+        start_normalized.parse::<i64>(),
+    ) {
+        (Ok(mig), Ok(start)) => mig > start,
+        _ => migration_normalized > start_normalized,
+    }
 }
 
 /// Check if a directory is a single migration directory (contains up.sql directly).
@@ -140,12 +151,15 @@ pub(crate) fn is_single_migration_dir(dir: &Utf8Path) -> bool {
 ///
 /// Returns entries sorted by path, with errors filtered out.
 pub(crate) fn collect_and_sort_entries(dir: &Utf8Path) -> Vec<DirEntry> {
-    let mut entries: Vec<_> = WalkDir::new(dir)
-        .max_depth(1)
-        .min_depth(1)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .collect();
+    let mut entries = Vec::new();
+    for result in WalkDir::new(dir).max_depth(1).min_depth(1) {
+        match result {
+            Ok(entry) => entries.push(entry),
+            Err(e) => {
+                eprintln!("Warning: Failed to read entry in {}: {}", dir, e);
+            }
+        }
+    }
 
     entries.sort_by(|a, b| a.path().cmp(b.path()));
     entries
