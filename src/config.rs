@@ -21,7 +21,7 @@ static MIGRATION_TIMESTAMP_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 fn valid_check_names_help() -> String {
     format!(
         "Valid check names: {}",
-        crate::checks::Registry::all_check_names().join(", ")
+        crate::checks::Registry::builtin_check_names().join(", ")
     )
 }
 
@@ -103,6 +103,10 @@ pub struct Config {
     /// List of check struct names to disable
     #[serde(default)]
     pub disable_checks: Vec<String>,
+
+    /// Directory containing custom Rhai check scripts (.rhai files)
+    #[serde(default)]
+    pub custom_checks_dir: Option<String>,
 }
 
 impl Config {
@@ -148,15 +152,6 @@ impl Config {
         // Timestamp validation is framework-specific and done by adapters
         // during migration file collection
 
-        // Validate check names against the central registry
-        for check_name in &self.disable_checks {
-            if !crate::checks::Registry::all_check_names().contains(&check_name.as_str()) {
-                return Err(ConfigError::InvalidCheckName {
-                    invalid_name: check_name.clone(),
-                });
-            }
-        }
-
         Ok(())
     }
 
@@ -195,6 +190,7 @@ impl Default for Config {
             start_after: None,
             check_down: false,
             disable_checks: Vec::new(),
+            custom_checks_dir: None,
         }
     }
 }
@@ -304,17 +300,6 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_check_name() {
-        let config_str = r#"
-            framework = "diesel"
-            disable_checks = ["InvalidCheckName"]
-        "#;
-
-        let config: Config = toml::from_str(config_str).unwrap();
-        assert!(config.validate().is_err());
-    }
-
-    #[test]
     fn test_valid_check_names() {
         let config_str = r#"
             framework = "diesel"
@@ -336,7 +321,7 @@ mod tests {
         let help = error.help().unwrap().to_string();
 
         // Verify help text includes all check names from the registry
-        for &check_name in crate::checks::Registry::all_check_names() {
+        for &check_name in crate::checks::Registry::builtin_check_names() {
             assert!(
                 help.contains(check_name),
                 "Help text should include '{}', got: {}",

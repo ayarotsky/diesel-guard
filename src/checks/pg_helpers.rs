@@ -10,7 +10,17 @@ pub use pg_query::protobuf::{
 
 pub use pg_query::protobuf::Constraint;
 
-use pg_query::protobuf::{AlterTableCmd, RangeVar, TypeName};
+use pg_query::protobuf::{AlterTableCmd, RangeVar, RawStmt, TypeName};
+
+// ---------------------------------------------------------------------------
+// Statement-level extractors
+// ---------------------------------------------------------------------------
+
+/// Extract the inner `NodeEnum` from a `RawStmt`, unwrapping the two layers
+/// of `Option` (`RawStmt.stmt -> Node.node`).
+pub fn extract_node(raw_stmt: &RawStmt) -> Option<&NodeEnum> {
+    raw_stmt.stmt.as_ref().and_then(|n| n.node.as_ref())
+}
 
 // ---------------------------------------------------------------------------
 // Primitive extractors

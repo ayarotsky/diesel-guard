@@ -14,7 +14,7 @@ mod drop_index;
 mod drop_primary_key;
 mod drop_table;
 mod generated_column;
-mod pg_helpers;
+pub mod pg_helpers;
 mod reindex;
 mod rename_column;
 mod rename_table;
@@ -78,13 +78,13 @@ mod helpers {
 use crate::parser::IgnoreRange;
 use crate::violation::Violation;
 pub use helpers::*;
-use pg_helpers::NodeEnum;
+use pg_helpers::{extract_node, NodeEnum};
 use pg_query::protobuf::RawStmt;
 use std::sync::LazyLock;
 
-/// Lazily-derived list of all check names from an unfiltered registry.
+/// Lazily-derived list of all built-in check names from an unfiltered registry.
 /// This avoids maintaining a manual list that can drift from the actual checks.
-static ALL_CHECK_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
+static BUILTIN_CHECK_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
     let registry = Registry::new();
     registry.checks.iter().map(|c| c.name()).collect()
 });
@@ -148,6 +148,16 @@ impl Registry {
         self.register_check(config, WideIndexCheck);
     }
 
+    /// Add a check to the registry.
+    pub fn add_check(&mut self, check: Box<dyn Check>) {
+        self.checks.push(check);
+    }
+
+    /// Return the names of all currently active checks (built-in + custom, minus disabled).
+    pub fn active_check_names(&self) -> Vec<&str> {
+        self.checks.iter().map(|c| c.name()).collect()
+    }
+
     /// Register a check if it's enabled in configuration
     fn register_check(&mut self, config: &Config, check: impl Check + 'static) {
         if config.is_check_enabled(check.name()) {
@@ -186,7 +196,7 @@ impl Registry {
         let mut violations = Vec::new();
 
         for raw_stmt in stmts {
-            let node = match raw_stmt.stmt.as_ref().and_then(|n| n.node.as_ref()) {
+            let node = match extract_node(raw_stmt) {
                 Some(node) => node,
                 None => continue,
             };
@@ -202,9 +212,9 @@ impl Registry {
         violations
     }
 
-    /// Get all available check names (derived from instantiated checks).
-    pub fn all_check_names() -> &'static [&'static str] {
-        &ALL_CHECK_NAMES
+    /// Get all built-in check names (regardless of which are enabled).
+    pub fn builtin_check_names() -> &'static [&'static str] {
+        &BUILTIN_CHECK_NAMES
     }
 }
 
@@ -252,7 +262,7 @@ mod tests {
     #[test]
     fn test_registry_creation() {
         let registry = Registry::new();
-        assert_eq!(registry.checks.len(), Registry::all_check_names().len());
+        assert_eq!(registry.checks.len(), Registry::builtin_check_names().len());
     }
 
     #[test]
@@ -263,7 +273,10 @@ mod tests {
         };
 
         let registry = Registry::with_config(&config);
-        assert_eq!(registry.checks.len(), Registry::all_check_names().len() - 1);
+        assert_eq!(
+            registry.checks.len(),
+            Registry::builtin_check_names().len() - 1
+        );
     }
 
     #[test]
@@ -274,13 +287,16 @@ mod tests {
         };
 
         let registry = Registry::with_config(&config);
-        assert_eq!(registry.checks.len(), Registry::all_check_names().len() - 2);
+        assert_eq!(
+            registry.checks.len(),
+            Registry::builtin_check_names().len() - 2
+        );
     }
 
     #[test]
     fn test_registry_with_all_checks_disabled() {
         let config = Config {
-            disable_checks: Registry::all_check_names()
+            disable_checks: Registry::builtin_check_names()
                 .iter()
                 .map(|s| s.to_string())
                 .collect(),

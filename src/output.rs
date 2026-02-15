@@ -19,7 +19,7 @@ impl OutputFormatter {
             output.push_str(&format!(
                 "{} {}\n\n",
                 "❌",
-                violation.operation.red().bold()
+                violation.operation.as_str().red().bold()
             ));
 
             output.push_str(&format!("{}\n", "Problem:".white().bold()));

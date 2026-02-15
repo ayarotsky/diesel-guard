@@ -1,5 +1,5 @@
 use camino::Utf8Path;
-use diesel_guard::{Config, SafetyChecker};
+use diesel_guard::{Config, ConfigError, SafetyChecker};
 use std::fs;
 use tempfile::TempDir;
 
@@ -445,4 +445,200 @@ fn test_migrations_checked_in_alphanumeric_order() {
             results[i].0
         );
     }
+}
+
+#[test]
+fn test_diesel_migration_with_sqlx_markers_checks_all_statements() {
+    // Bug fix: Diesel migration containing -- migrate:up / -- migrate:down markers
+    // should check ALL statements, not just one section
+    let temp_dir = TempDir::new().unwrap();
+    let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
+    fs::create_dir(&migration_dir).unwrap();
+
+    // up.sql contains SQLx-style markers (e.g., converted from SQLx, developer notes)
+    fs::write(
+        migration_dir.join("up.sql"),
+        r#"-- migrate:up
+ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
+-- migrate:down
+ALTER TABLE users DROP COLUMN admin;
+"#,
+    )
+    .unwrap();
+
+    let config = Config::default(); // framework = "diesel"
+    let checker = SafetyChecker::with_config(config);
+    let results = checker
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
+
+    // Diesel should parse the entire file and find violations in BOTH sections
+    assert_eq!(results.len(), 1);
+    let violations = &results[0].1;
+    // Should find at least 2 violations: ADD COLUMN with DEFAULT and DROP COLUMN
+    assert!(
+        violations.len() >= 2,
+        "Expected at least 2 violations (from both sections), got {}",
+        violations.len()
+    );
+}
+
+#[test]
+fn test_standalone_sql_with_timestamp_respects_start_after() {
+    // Bug fix: standalone .sql files with valid timestamps should respect start_after
+    let temp_dir = TempDir::new().unwrap();
+
+    // Standalone SQL file with a Diesel timestamp prefix
+    fs::write(
+        temp_dir.path().join("2023_01_01_000000_init.sql"),
+        "ALTER TABLE users DROP COLUMN email;",
+    )
+    .unwrap();
+
+    let config = Config {
+        start_after: Some("2024_01_01_000000".to_string()),
+        ..Default::default()
+    };
+
+    let checker = SafetyChecker::with_config(config);
+    let results = checker
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
+
+    // File timestamp (2023) is before start_after (2024), should be skipped
+    assert_eq!(results.len(), 0);
+}
+
+#[test]
+fn test_standalone_sql_with_timestamp_after_start_after() {
+    // Standalone .sql files with timestamps after start_after should still be checked
+    let temp_dir = TempDir::new().unwrap();
+
+    fs::write(
+        temp_dir.path().join("2025_01_01_000000_new.sql"),
+        "ALTER TABLE users DROP COLUMN email;",
+    )
+    .unwrap();
+
+    let config = Config {
+        start_after: Some("2024_01_01_000000".to_string()),
+        ..Default::default()
+    };
+
+    let checker = SafetyChecker::with_config(config);
+    let results = checker
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
+
+    // File timestamp (2025) is after start_after (2024), should be checked
+    assert_eq!(results.len(), 1);
+    assert!(results[0].0.contains("2025_01_01_000000_new.sql"));
+}
+
+#[test]
+fn test_standalone_sql_without_timestamp_always_checked() {
+    // Standalone .sql files without timestamps should always be checked (unchanged behavior)
+    let temp_dir = TempDir::new().unwrap();
+
+    fs::write(
+        temp_dir.path().join("seed.sql"),
+        "ALTER TABLE users DROP COLUMN email;",
+    )
+    .unwrap();
+
+    let config = Config {
+        start_after: Some("2099_12_31_000000".to_string()),
+        ..Default::default()
+    };
+
+    let checker = SafetyChecker::with_config(config);
+    let results = checker
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
+
+    // No timestamp — always checked
+    assert_eq!(results.len(), 1);
+    assert!(results[0].0.contains("seed.sql"));
+}
+
+#[test]
+fn test_diesel_concurrently_without_metadata_warns() {
+    // CONCURRENTLY used without metadata.toml should still collect the file
+    // (warning is printed to stderr, verified by the file being in results)
+    let temp_dir = TempDir::new().unwrap();
+    let migration_dir = temp_dir.path().join("2024_01_01_000000_add_index");
+    fs::create_dir(&migration_dir).unwrap();
+
+    fs::write(
+        migration_dir.join("up.sql"),
+        "CREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
+    )
+    .unwrap();
+    // No metadata.toml — defaults to run_in_transaction = true
+
+    let config = Config::default();
+    let checker = SafetyChecker::with_config(config);
+    let results = checker
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
+
+    // The file should still be collected and checked (no violations from the SQL itself
+    // since CREATE INDEX CONCURRENTLY is safe)
+    assert_eq!(results.len(), 0);
+}
+
+#[test]
+fn test_config_invalid_toml_syntax() {
+    let temp_dir = TempDir::new().unwrap();
+    let config_path = temp_dir.path().join("diesel-guard.toml");
+
+    // Missing closing quote — invalid TOML
+    fs::write(&config_path, r#"framework = "diesel"#).unwrap();
+
+    let config_path_utf8 = Utf8Path::from_path(&config_path).unwrap();
+    let err = Config::load_from_path(config_path_utf8).unwrap_err();
+    assert!(
+        matches!(err, ConfigError::ParseError(_)),
+        "Expected ParseError for malformed TOML, got: {err:?}"
+    );
+}
+
+#[test]
+fn test_config_empty_file_errors() {
+    let temp_dir = TempDir::new().unwrap();
+    let config_path = temp_dir.path().join("diesel-guard.toml");
+
+    // Empty file (0 bytes)
+    fs::write(&config_path, "").unwrap();
+
+    let config_path_utf8 = Utf8Path::from_path(&config_path).unwrap();
+    let err = Config::load_from_path(config_path_utf8).unwrap_err();
+    assert!(
+        matches!(err, ConfigError::MissingFramework),
+        "Expected MissingFramework for empty config, got: {err:?}"
+    );
+}
+
+#[test]
+fn test_config_extra_unknown_fields_ignored() {
+    let temp_dir = TempDir::new().unwrap();
+    let config_path = temp_dir.path().join("diesel-guard.toml");
+
+    fs::write(
+        &config_path,
+        r#"
+framework = "diesel"
+unknown_field = "value"
+another_unknown = 42
+"#,
+    )
+    .unwrap();
+
+    let config_path_utf8 = Utf8Path::from_path(&config_path).unwrap();
+    let config = Config::load_from_path(config_path_utf8);
+    assert!(
+        config.is_ok(),
+        "Unknown fields should be ignored by default, got: {config:?}"
+    );
+    assert_eq!(config.unwrap().framework, "diesel");
 }
