@@ -324,7 +324,7 @@ dependencies = [
 
 [[package]]
 name = "diesel-guard"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "camino",
  "clap",
