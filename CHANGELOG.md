@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.6.0 - 2026-02-16
+
+### Added
+
+- **Custom checks via Rhai scripting** — Enforce team-specific migration conventions beyond the built-in checks. Scripts operate on the full pg_query AST, so any pattern expressible in SQL is detectable. They integrate with existing features: can be disabled via `disable_checks`, skipped inside safety-assured blocks, and included in both human-readable and JSON output.
+- `dump-ast` CLI subcommand — Print the pg_query AST for a SQL statement as JSON (`diesel-guard dump-ast --sql "..."`)
+- 6 example Rhai scripts: `no_unlogged_tables`, `require_concurrent_index`, `require_if_exists_on_drop`, `require_index_name_prefix`, `limit_columns_per_index`, `no_truncate_in_production`
+
+### Changed
+
+- **Breaking:** Switched SQL parser from `sqlparser` to `pg_query` (PostgreSQL's actual parser via libpg_query)
+- Dependency updates (clap, toml, tempfile)
+
 ## 0.5.1 - 2026-02-11
 
 ### Fixed
