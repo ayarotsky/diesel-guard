@@ -66,10 +66,29 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Extract changelog
+        id: changelog
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          BODY=$(awk -v ver="$VERSION" '
+            /^## / { if (found) exit; if ($2 == ver) found=1; next }
+            found { print }
+          ' CHANGELOG.md)
+          if [ -z "$(echo "$BODY" | tr -d '[:space:]')" ]; then
+            echo "Error: No changelog entry found for version $VERSION in CHANGELOG.md"
+            echo "Expected a heading like: ## $VERSION"
+            exit 1
+          fi
+          {
+            echo "content<<EOF"
+            echo "$BODY"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          body: ${{ steps.changelog.outputs.content }}
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
