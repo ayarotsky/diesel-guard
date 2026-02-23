@@ -52,7 +52,7 @@ pub use truncate_table::TruncateTableCheck;
 pub use unnamed_constraint::UnnamedConstraintCheck;
 pub use wide_index::WideIndexCheck;
 
-use crate::config::Config;
+pub use crate::config::Config;
 
 /// Helper functions for check implementations
 mod helpers {
@@ -99,7 +99,7 @@ pub trait Check: Send + Sync {
     }
 
     /// Run the check on a pg_query AST node and return any violations found
-    fn check(&self, node: &NodeEnum) -> Vec<Violation>;
+    fn check(&self, node: &NodeEnum, config: &Config) -> Vec<Violation>;
 }
 
 /// Registry of all available checks
@@ -160,16 +160,17 @@ impl Registry {
 
     /// Register a check if it's enabled in configuration
     fn register_check(&mut self, config: &Config, check: impl Check + 'static) {
-        if config.is_check_enabled(check.name()) {
-            self.checks.push(Box::new(check));
+        if !config.is_check_enabled(check.name()) {
+            return;
         }
+        self.checks.push(Box::new(check));
     }
 
     /// Check a single AST node against all registered checks
-    pub fn check_node(&self, node: &NodeEnum) -> Vec<Violation> {
+    pub fn check_node(&self, node: &NodeEnum, config: &Config) -> Vec<Violation> {
         self.checks
             .iter()
-            .flat_map(|check| check.check(node))
+            .flat_map(|check| check.check(node, config))
             .collect()
     }
 
@@ -182,6 +183,7 @@ impl Registry {
         stmts: &[RawStmt],
         sql: &str,
         ignore_ranges: &[IgnoreRange],
+        config: &Config,
     ) -> Vec<Violation> {
         // Build set of all ignored line numbers for fast lookup
         let ignored_lines: std::collections::HashSet<usize> = ignore_ranges
@@ -205,7 +207,7 @@ impl Registry {
             let stmt_line = byte_offset_to_line(sql, offset);
 
             if !ignored_lines.contains(&stmt_line) {
-                violations.extend(self.check_node(node));
+                violations.extend(self.check_node(node, config));
             }
         }
 
@@ -266,6 +268,13 @@ mod tests {
     }
 
     #[test]
+    fn test_registry_includes_all_checks_when_no_version_set() {
+        let registry = Registry::new();
+        assert!(registry.active_check_names().contains(&"AddColumnCheck"));
+        assert_eq!(registry.checks.len(), Registry::builtin_check_names().len());
+    }
+
+    #[test]
     fn test_registry_with_disabled_checks() {
         let config = Config {
             disable_checks: vec!["AddColumnCheck".to_string()],
@@ -322,8 +331,12 @@ ALTER TABLE users DROP COLUMN email;
             end_line: 4,
         }];
 
-        let violations =
-            registry.check_stmts_with_context(&result.protobuf.stmts, sql, &ignore_ranges);
+        let violations = registry.check_stmts_with_context(
+            &result.protobuf.stmts,
+            sql,
+            &ignore_ranges,
+            &Config::default(),
+        );
         assert_eq!(violations.len(), 0);
     }
 
@@ -335,8 +348,12 @@ ALTER TABLE users DROP COLUMN email;
         let result = pg_query::parse(sql).unwrap();
         let ignore_ranges = vec![];
 
-        let violations =
-            registry.check_stmts_with_context(&result.protobuf.stmts, sql, &ignore_ranges);
+        let violations = registry.check_stmts_with_context(
+            &result.protobuf.stmts,
+            sql,
+            &ignore_ranges,
+            &Config::default(),
+        );
         assert_eq!(violations.len(), 1);
     }
 

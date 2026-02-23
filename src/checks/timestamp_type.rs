@@ -24,13 +24,13 @@ use crate::checks::pg_helpers::{
     alter_table_cmds, cmd_def_as_column_def, column_type_name, for_each_column_def,
     is_timestamp_without_tz, NodeEnum,
 };
-use crate::checks::Check;
+use crate::checks::{Check, Config};
 use crate::violation::Violation;
 
 pub struct TimestampTypeCheck;
 
 impl Check for TimestampTypeCheck {
-    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
         let is_create = matches!(node, NodeEnum::CreateStmt(_));
 
         // Handle CREATE TABLE via for_each_column_def
@@ -137,7 +137,9 @@ on the session's timezone setting, providing consistent behavior across timezone
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assert_allows, assert_detects_violation};
+    use crate::{
+        assert_allows, assert_detects_n_violations_any_containing, assert_detects_violation,
+    };
 
     // === Detection tests ===
 
@@ -179,17 +181,13 @@ mod tests {
 
     #[test]
     fn test_detects_multiple_timestamp_columns() {
-        use crate::checks::test_utils::parse_sql;
-
-        let check = TimestampTypeCheck;
-        let stmt = parse_sql(
+        assert_detects_n_violations_any_containing!(
+            TimestampTypeCheck,
             "CREATE TABLE events (id SERIAL PRIMARY KEY, created_at TIMESTAMP, updated_at TIMESTAMP);",
+            2,
+            "created_at",
+            "updated_at"
         );
-        let violations = check.check(&stmt);
-
-        assert_eq!(violations.len(), 2);
-        assert!(violations.iter().any(|v| v.problem.contains("created_at")));
-        assert!(violations.iter().any(|v| v.problem.contains("updated_at")));
     }
 
     // === Safe variant tests ===

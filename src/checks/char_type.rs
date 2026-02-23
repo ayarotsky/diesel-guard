@@ -22,13 +22,13 @@ use crate::checks::pg_helpers::{
     alter_table_cmds, cmd_def_as_column_def, column_type_name, for_each_column_def, is_char_type,
     ColumnDef, NodeEnum,
 };
-use crate::checks::Check;
+use crate::checks::{Check, Config};
 use crate::violation::Violation;
 
 pub struct CharTypeCheck;
 
 impl Check for CharTypeCheck {
-    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
         // Handle CREATE TABLE via for_each_column_def
         if let NodeEnum::CreateStmt(_) = node {
             return for_each_column_def(node)
@@ -168,7 +168,10 @@ If this is intentional, use a safety-assured block:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assert_allows, assert_detects_violation};
+    use crate::{
+        assert_allows, assert_detects_n_violations_any_containing, assert_detects_violation,
+        assert_detects_violation_containing,
+    };
 
     // === Detection tests ===
 
@@ -201,42 +204,34 @@ mod tests {
 
     #[test]
     fn test_detects_char_with_explicit_length() {
-        use crate::checks::test_utils::parse_sql;
-
-        let check = CharTypeCheck;
-        let stmt = parse_sql("ALTER TABLE products ADD COLUMN sku CHAR(10);");
-        let violations = check.check(&stmt);
-
-        assert_eq!(violations.len(), 1);
-        assert!(violations[0].problem.contains("CHAR(10)"));
+        assert_detects_violation_containing!(
+            CharTypeCheck,
+            "ALTER TABLE products ADD COLUMN sku CHAR(10);",
+            "ADD COLUMN with CHAR type",
+            "CHAR(10)"
+        );
     }
 
     #[test]
     fn test_detects_char_without_explicit_length() {
-        use crate::checks::test_utils::parse_sql;
-
-        let check = CharTypeCheck;
-        let stmt = parse_sql("ALTER TABLE flags ADD COLUMN flag CHAR;");
-        let violations = check.check(&stmt);
-
-        assert_eq!(violations.len(), 1);
         // CHAR without length defaults to CHAR(1)
-        assert!(violations[0].problem.contains("CHAR(1)"));
+        assert_detects_violation_containing!(
+            CharTypeCheck,
+            "ALTER TABLE flags ADD COLUMN flag CHAR;",
+            "ADD COLUMN with CHAR type",
+            "CHAR(1)"
+        );
     }
 
     #[test]
     fn test_detects_multiple_char_columns() {
-        use crate::checks::test_utils::parse_sql;
-
-        let check = CharTypeCheck;
-        let stmt = parse_sql(
+        assert_detects_n_violations_any_containing!(
+            CharTypeCheck,
             "CREATE TABLE locations (id SERIAL PRIMARY KEY, country CHAR(2), region CHAR(3));",
+            2,
+            "country",
+            "region"
         );
-        let violations = check.check(&stmt);
-
-        assert_eq!(violations.len(), 2);
-        assert!(violations.iter().any(|v| v.problem.contains("country")));
-        assert!(violations.iter().any(|v| v.problem.contains("region")));
     }
 
     // === Safe variant tests ===

@@ -1218,6 +1218,12 @@ disable_checks = ["AddColumnCheck"]
 
 # Directory containing custom Rhai check scripts
 custom_checks_dir = "checks"
+
+# Target PostgreSQL major version.
+# When set, version-aware checks adjust their behavior accordingly.
+# Example: setting 11 allows ADD COLUMN with constant DEFAULT (safe on PG 11+),
+# but still warns for volatile defaults like DEFAULT now() on all versions.
+postgres_version = 16
 ```
 
 #### Available check names
@@ -1293,10 +1299,28 @@ diesel-guard check migrations/
 
 - Each `.rhai` script is called **once per SQL statement** in the migration
 - The `node` variable contains the pg_query AST for that statement (a nested map)
+- The `config` variable exposes the current `diesel-guard.toml` settings (e.g., `config.postgres_version`)
 - Scripts match on a specific node type: `let stmt = node.IndexStmt;`
 - If the node doesn't match, `node.IndexStmt` returns `()` — early-return with `if stmt == () { return; }`
 - Return `()` for no violation, a map for one, or an array of maps for multiple
 - Map keys: `operation`, `problem`, `safe_alternative` (all required strings)
+
+#### The `config` variable
+
+`config` gives scripts access to the user's configuration. Use it to make version-aware checks:
+
+```rhai
+// Only flag this on PostgreSQL < 14
+if config.postgres_version != () && config.postgres_version >= 14 { return; }
+```
+
+Available fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `config.postgres_version` | integer or `()` | Target PG major version, or `()` if unset |
+| `config.check_down` | bool | Whether down migrations are checked |
+| `config.disable_checks` | array | Check names that are disabled |
 
 ### Using `dump-ast`
 
@@ -1440,152 +1464,7 @@ Used by `DropStmt.behavior`.
 
 ### Examples
 
-#### `require_concurrent_index.rhai` — Flag non-concurrent CREATE INDEX
-
-Catches `CREATE INDEX idx ON t(col);` (missing CONCURRENTLY).
-
-```rhai
-// Require CONCURRENTLY on CREATE INDEX.
-// Inspect: diesel-guard dump-ast --sql "CREATE INDEX idx ON t(id);"
-
-let stmt = node.IndexStmt;
-if stmt == () { return; }
-
-if !stmt.concurrent {
-    let idx_name = if stmt.idxname != "" { stmt.idxname } else { "(unnamed)" };
-    #{
-        operation: "INDEX without CONCURRENTLY: " + idx_name,
-        problem: "Creating index '" + idx_name + "' without CONCURRENTLY blocks writes on the table.",
-        safe_alternative: "Use CREATE INDEX CONCURRENTLY:\n  CREATE INDEX CONCURRENTLY " + idx_name + " ON ...;"
-    }
-}
-```
-
-**Pattern:** Match a node type, check a boolean field, build a descriptive message.
-
-#### `no_unlogged_tables.rhai` — Flag UNLOGGED tables
-
-Catches `CREATE UNLOGGED TABLE t (...)`.
-
-```rhai
-// Prevent UNLOGGED tables in migrations.
-// Inspect: diesel-guard dump-ast --sql "CREATE UNLOGGED TABLE t (id INT);"
-
-let stmt = node.CreateStmt;
-if stmt == () { return; }
-
-if stmt.relation != () && stmt.relation.relpersistence == "u" {
-    let table_name = stmt.relation.relname;
-    #{
-        operation: "UNLOGGED TABLE: " + table_name,
-        problem: "UNLOGGED tables are not crash-safe and are not replicated to standby servers.",
-        safe_alternative: "Use a regular (logged) table instead:\n  CREATE TABLE " + table_name + " (...);"
-    }
-}
-```
-
-**Pattern:** Check a string enum field (`relpersistence`).
-
-#### `require_if_exists_on_drop.rhai` — Require IF EXISTS on DROP TABLE
-
-Catches `DROP TABLE t;` (without IF EXISTS).
-
-```rhai
-// Require IF EXISTS on DROP TABLE.
-// Inspect: diesel-guard dump-ast --sql "DROP TABLE t;"
-
-let stmt = node.DropStmt;
-if stmt == () { return; }
-
-if stmt.remove_type == pg::OBJECT_TABLE && !stmt.missing_ok {
-    #{
-        operation: "DROP TABLE without IF EXISTS",
-        problem: "DROP TABLE without IF EXISTS will error if the table doesn't exist, potentially breaking migrations.",
-        safe_alternative: "Use IF EXISTS:\n  DROP TABLE IF EXISTS <table_name>;"
-    }
-}
-```
-
-**Pattern:** Check an integer enum via [`pg::` constants](#pg-constants) and a boolean field (`missing_ok`).
-
-#### `no_truncate_in_production.rhai` — Ban TRUNCATE statements
-
-Catches `TRUNCATE users, orders;` and produces a violation per table.
-
-```rhai
-// Ban TRUNCATE statements (too dangerous for production).
-// Inspect: diesel-guard dump-ast --sql "TRUNCATE users, orders;"
-
-let stmt = node.TruncateStmt;
-if stmt == () { return; }
-
-let violations = [];
-for rel in stmt.relations {
-    let rv = rel.node.RangeVar;
-    if rv != () {
-        let name = rv.relname;
-        violations.push(#{
-            operation: "TRUNCATE: " + name,
-            problem: "TRUNCATE acquires ACCESS EXCLUSIVE lock on '" + name + "' and cannot be rolled back easily.",
-            safe_alternative: "Use batched DELETE instead:\n  DELETE FROM " + name + " WHERE id IN (SELECT id FROM " + name + " LIMIT 1000);"
-        });
-    }
-}
-violations
-```
-
-**Pattern:** Iterate an array of Node-wrapped relations, return multiple violations.
-
-#### `require_index_name_prefix.rhai` — Enforce naming convention
-
-Catches `CREATE INDEX users_email ON users(email);` (name doesn't start with `idx_`).
-
-```rhai
-// Enforce naming convention: index names must start with "idx_".
-// Inspect: diesel-guard dump-ast --sql "CREATE INDEX users_email ON t(id);"
-
-let stmt = node.IndexStmt;
-if stmt == () { return; }
-
-let name = stmt.idxname;
-if name == "" { return; }  // Skip unnamed indexes
-
-if name.starts_with("idx_") { return; }
-
-#{
-    operation: "Index naming violation: " + name,
-    problem: "Index '" + name + "' does not follow naming convention. Index names should start with 'idx_'.",
-    safe_alternative: "Rename the index:\n  CREATE INDEX idx_" + name + " ON ...;"
-}
-```
-
-**Pattern:** String inspection with `starts_with()` for naming convention enforcement.
-
-#### `limit_columns_per_index.rhai` — Limit index width
-
-Catches `CREATE INDEX idx ON t(a, b, c, d);` (more than 3 columns).
-
-```rhai
-// Limit indexes to at most 3 columns.
-// Inspect: diesel-guard dump-ast --sql "CREATE INDEX idx ON t(a, b, c, d);"
-
-let stmt = node.IndexStmt;
-if stmt == () { return; }
-
-let max_cols = 3;
-let col_count = stmt.index_params.len();
-
-if col_count > max_cols {
-    let idx_name = if stmt.idxname != "" { stmt.idxname } else { "(unnamed)" };
-    #{
-        operation: "Wide index: " + idx_name + " (" + col_count + " columns)",
-        problem: "Index '" + idx_name + "' has " + col_count + " columns (limit: " + max_cols + "). Wide indexes are rarely effective and slow down writes.",
-        safe_alternative: "Use narrower indexes targeting specific query patterns, or partial/covering indexes."
-    }
-}
-```
-
-**Pattern:** Array length check with a configurable threshold.
+The `examples/` directory contains ready-to-use scripts covering common patterns — naming conventions, banned operations, version-aware checks, and more. Browse them to get started or use as templates for your own checks.
 
 ### Disabling Custom Checks
 

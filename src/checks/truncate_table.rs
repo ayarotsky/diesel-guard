@@ -11,13 +11,13 @@
 //! allowing concurrent access to the table.
 
 use crate::checks::pg_helpers::{range_var_name, NodeEnum};
-use crate::checks::Check;
+use crate::checks::{Check, Config};
 use crate::violation::Violation;
 
 pub struct TruncateTableCheck;
 
 impl Check for TruncateTableCheck {
-    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
         let NodeEnum::TruncateStmt(truncate) = node else {
             return vec![];
         };
@@ -66,7 +66,7 @@ Note: If you absolutely must use TRUNCATE (e.g., in a test environment), use a s
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assert_allows, assert_detects_violation};
+    use crate::{assert_allows, assert_detects_n_violations, assert_detects_violation};
 
     #[test]
     fn test_detects_truncate_table() {
@@ -79,15 +79,12 @@ mod tests {
 
     #[test]
     fn test_detects_truncate_multiple_tables() {
-        use crate::checks::test_utils::parse_sql;
-
-        let sql = "TRUNCATE TABLE users, orders;";
-        let stmt = parse_sql(sql);
-        let violations = TruncateTableCheck.check(&stmt);
-
-        assert_eq!(violations.len(), 2, "Expected 2 violations (one per table)");
-        assert_eq!(violations[0].operation, "TRUNCATE TABLE");
-        assert_eq!(violations[1].operation, "TRUNCATE TABLE");
+        assert_detects_n_violations!(
+            TruncateTableCheck,
+            "TRUNCATE TABLE users, orders;",
+            2,
+            "TRUNCATE TABLE"
+        );
     }
 
     #[test]

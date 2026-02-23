@@ -12,13 +12,13 @@
 //! in application code, deploy without references, and drop in a later migration.
 
 use crate::checks::pg_helpers::{alter_table_cmds, AlterTableType, NodeEnum};
-use crate::checks::{if_exists_clause, Check};
+use crate::checks::{if_exists_clause, Check, Config};
 use crate::violation::Violation;
 
 pub struct DropColumnCheck;
 
 impl Check for DropColumnCheck {
-    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
@@ -64,8 +64,7 @@ Note: PostgreSQL doesn't support DROP COLUMN CONCURRENTLY. The rewrite is unavoi
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::checks::test_utils::parse_sql;
-    use crate::{assert_allows, assert_detects_violation};
+    use crate::{assert_allows, assert_detects_n_violations, assert_detects_violation};
 
     #[test]
     fn test_detects_drop_column() {
@@ -87,16 +86,12 @@ mod tests {
 
     #[test]
     fn test_detects_drop_multiple_columns() {
-        let check = DropColumnCheck;
-        let stmt = parse_sql("ALTER TABLE users DROP COLUMN a, DROP COLUMN b;");
-
-        let violations = check.check(&stmt);
-        assert_eq!(
-            violations.len(),
+        assert_detects_n_violations!(
+            DropColumnCheck,
+            "ALTER TABLE users DROP COLUMN a, DROP COLUMN b;",
             2,
-            "Should detect both columns being dropped"
+            "DROP COLUMN"
         );
-        assert!(violations.iter().all(|v| v.operation == "DROP COLUMN"));
     }
 
     #[test]

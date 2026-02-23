@@ -18,13 +18,13 @@
 //! automation or DBA operations, not application migrations.
 
 use crate::checks::pg_helpers::NodeEnum;
-use crate::checks::{if_exists_clause, Check};
+use crate::checks::{if_exists_clause, Check, Config};
 use crate::violation::Violation;
 
 pub struct DropDatabaseCheck;
 
 impl Check for DropDatabaseCheck {
-    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
         let NodeEnum::DropdbStmt(drop_db) = node else {
             return vec![];
         };

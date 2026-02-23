@@ -11,13 +11,13 @@
 //! though it takes longer and cannot be run inside a transaction block.
 
 use crate::checks::pg_helpers::{range_var_name, NodeEnum};
-use crate::checks::{unique_prefix, Check};
+use crate::checks::{unique_prefix, Check, Config};
 use crate::violation::Violation;
 
 pub struct AddIndexCheck;
 
 impl Check for AddIndexCheck {
-    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
         let NodeEnum::IndexStmt(index_stmt) = node else {
             return vec![];
         };
@@ -78,8 +78,7 @@ Considerations:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::checks::test_utils::parse_sql;
-    use crate::{assert_allows, assert_detects_violation};
+    use crate::{assert_allows, assert_detects_violation, assert_detects_violation_containing};
 
     #[test]
     fn test_detects_create_index_without_concurrently() {
@@ -92,13 +91,12 @@ mod tests {
 
     #[test]
     fn test_detects_create_unique_index_without_concurrently() {
-        let check = AddIndexCheck;
-        let stmt = parse_sql("CREATE UNIQUE INDEX idx_users_email ON users(email);");
-
-        let violations = check.check(&stmt);
-        assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].operation, "ADD INDEX without CONCURRENTLY");
-        assert!(violations[0].problem.contains("UNIQUE"));
+        assert_detects_violation_containing!(
+            AddIndexCheck,
+            "CREATE UNIQUE INDEX idx_users_email ON users(email);",
+            "ADD INDEX without CONCURRENTLY",
+            "UNIQUE"
+        );
     }
 
     #[test]

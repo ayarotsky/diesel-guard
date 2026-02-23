@@ -43,3 +43,8 @@ framework = "diesel"
 # Each script receives a pg_query AST node and can return violations.
 # Use `diesel-guard dump-ast --sql "..."` to inspect the AST structure.
 # custom_checks_dir = "checks"
+
+# Target PostgreSQL major version
+# When set, checks that are safe for your Postgres version are automatically skipped.
+# Example: setting 11 silences the ADD COLUMN with DEFAULT warning (fixed in PG 11)
+# postgres_version = 16

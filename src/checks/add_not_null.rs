@@ -11,13 +11,13 @@
 //! separately, then add the NOT NULL constraint.
 
 use crate::checks::pg_helpers::{alter_table_cmds, AlterTableType, NodeEnum};
-use crate::checks::Check;
+use crate::checks::{Check, Config};
 use crate::violation::Violation;
 
 pub struct AddNotNullCheck;
 
 impl Check for AddNotNullCheck {
-    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };

@@ -107,6 +107,11 @@ pub struct Config {
     /// Directory containing custom Rhai check scripts (.rhai files)
     #[serde(default)]
     pub custom_checks_dir: Option<String>,
+
+    /// Target PostgreSQL major version (e.g., 11, 14, 16).
+    /// When set, checks that are safe from that version onward are skipped.
+    #[serde(default)]
+    pub postgres_version: Option<u32>,
 }
 
 impl Config {
@@ -191,6 +196,7 @@ impl Default for Config {
             check_down: false,
             disable_checks: Vec::new(),
             custom_checks_dir: None,
+            postgres_version: None,
         }
     }
 }
@@ -421,5 +427,23 @@ check_down = true
         let config = Config::default();
         assert_eq!(config.framework, "diesel");
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_postgres_version_loads_from_toml() {
+        let config: Config = toml::from_str(
+            r#"
+framework = "diesel"
+postgres_version = 14
+            "#,
+        )
+        .unwrap();
+        assert_eq!(config.postgres_version, Some(14));
+    }
+
+    #[test]
+    fn test_postgres_version_defaults_to_none() {
+        let config: Config = toml::from_str(r#"framework = "diesel""#).unwrap();
+        assert_eq!(config.postgres_version, None);
     }
 }

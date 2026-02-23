@@ -11,13 +11,13 @@
 //! concurrent queries, though it takes longer and cannot be run inside a transaction block.
 
 use crate::checks::pg_helpers::{drop_object_names, NodeEnum, ObjectType};
-use crate::checks::{if_exists_clause, Check};
+use crate::checks::{if_exists_clause, Check, Config};
 use crate::violation::Violation;
 
 pub struct DropIndexCheck;
 
 impl Check for DropIndexCheck {
-    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
         let NodeEnum::DropStmt(drop_stmt) = node else {
             return vec![];
         };
@@ -80,7 +80,7 @@ Considerations:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assert_allows, assert_detects_violation};
+    use crate::{assert_allows, assert_detects_n_violations, assert_detects_violation};
 
     #[test]
     fn test_detects_drop_index() {
@@ -120,16 +120,12 @@ mod tests {
 
     #[test]
     fn test_detects_drop_multiple_indexes() {
-        use crate::checks::test_utils::parse_sql;
-
-        let check = DropIndexCheck;
-        let stmt = parse_sql("DROP INDEX idx1, idx2, idx3;");
-
-        let violations = check.check(&stmt);
-        assert_eq!(violations.len(), 3, "Should detect all 3 indexes");
-        assert!(violations
-            .iter()
-            .all(|v| v.operation == "DROP INDEX without CONCURRENTLY"));
+        assert_detects_n_violations!(
+            DropIndexCheck,
+            "DROP INDEX idx1, idx2, idx3;",
+            3,
+            "DROP INDEX without CONCURRENTLY"
+        );
     }
 
     #[test]
