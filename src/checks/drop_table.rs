@@ -12,13 +12,13 @@
 //! backups exist, and check for foreign key dependencies before dropping.
 
 use crate::checks::pg_helpers::{drop_object_names, DropBehavior, NodeEnum, ObjectType};
-use crate::checks::{if_exists_clause, Check};
+use crate::checks::{if_exists_clause, Check, Config};
 use crate::violation::Violation;
 
 pub struct DropTableCheck;
 
 impl Check for DropTableCheck {
-    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
         let NodeEnum::DropStmt(drop_stmt) = node else {
             return vec![];
         };
@@ -70,7 +70,7 @@ Note: DROP TABLE acquires ACCESS EXCLUSIVE lock, blocking all operations until c
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assert_allows, assert_detects_violation};
+    use crate::{assert_allows, assert_detects_n_violations, assert_detects_violation};
 
     #[test]
     fn test_detects_drop_table() {
@@ -94,14 +94,12 @@ mod tests {
 
     #[test]
     fn test_detects_drop_multiple_tables() {
-        use crate::checks::test_utils::parse_sql;
-
-        let check = DropTableCheck;
-        let stmt = parse_sql("DROP TABLE users, orders, products;");
-
-        let violations = check.check(&stmt);
-        assert_eq!(violations.len(), 3, "Should detect all 3 tables");
-        assert!(violations.iter().all(|v| v.operation == "DROP TABLE"));
+        assert_detects_n_violations!(
+            DropTableCheck,
+            "DROP TABLE users, orders, products;",
+            3,
+            "DROP TABLE"
+        );
     }
 
     #[test]

@@ -1,4 +1,5 @@
 use crate::checks::Check;
+use crate::config::Config;
 use crate::violation::Violation;
 use camino::Utf8Path;
 use pg_query::protobuf::node::Node as NodeEnum;
@@ -31,7 +32,7 @@ impl Check for CustomCheck {
         self.name
     }
 
-    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, config: &Config) -> Vec<Violation> {
         // Serialize the pg_query node to a Rhai Dynamic value via serde
         let dynamic_node = match rhai::serde::to_dynamic(node) {
             Ok(d) => d,
@@ -44,8 +45,20 @@ impl Check for CustomCheck {
             }
         };
 
+        let dynamic_config = match rhai::serde::to_dynamic(config) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!(
+                    "Warning: custom check '{}': failed to serialize config: {e}",
+                    self.name
+                );
+                return vec![];
+            }
+        };
+
         let mut scope = rhai::Scope::new();
         scope.push("node", dynamic_node);
+        scope.push("config", dynamic_config);
 
         match self
             .engine
@@ -290,6 +303,15 @@ mod tests {
 
     /// Helper: run a script against a node and return violations.
     fn run_script(script: &str, sql: &str) -> Vec<Violation> {
+        run_script_with_config(script, sql, &crate::config::Config::default())
+    }
+
+    /// Helper: run a script against a node with explicit config and return violations.
+    fn run_script_with_config(
+        script: &str,
+        sql: &str,
+        config: &crate::config::Config,
+    ) -> Vec<Violation> {
         let engine = Arc::new(create_engine());
         let ast = engine.compile(script).expect("script should compile");
         let name: &'static str = Box::leak("test_check".to_string().into_boxed_str());
@@ -299,7 +321,7 @@ mod tests {
         let mut all_violations = Vec::new();
         for raw_stmt in &stmts {
             if let Some(node) = extract_node(raw_stmt) {
-                all_violations.extend(check.check(node));
+                all_violations.extend(check.check(node, config));
             }
         }
         all_violations
@@ -487,6 +509,43 @@ mod tests {
         );
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].operation, "DROP INDEX");
+    }
+
+    #[test]
+    fn test_config_postgres_version_accessible_in_scripts() {
+        let config = crate::config::Config {
+            postgres_version: Some(14),
+            ..Default::default()
+        };
+        // Script skips violation when postgres_version >= 14
+        let violations = run_script_with_config(
+            r#"
+            let stmt = node.IndexStmt;
+            if stmt == () { return; }
+            if config.postgres_version != () && config.postgres_version >= 14 { return; }
+            #{ operation: "INDEX without CONCURRENTLY", problem: "locks table", safe_alternative: "use CONCURRENTLY" }
+            "#,
+            "CREATE INDEX idx ON users(email);",
+            &config,
+        );
+        assert!(violations.is_empty());
+
+        // Same script with pg 10 should produce a violation
+        let config_old = crate::config::Config {
+            postgres_version: Some(10),
+            ..Default::default()
+        };
+        let violations = run_script_with_config(
+            r#"
+            let stmt = node.IndexStmt;
+            if stmt == () { return; }
+            if config.postgres_version != () && config.postgres_version >= 14 { return; }
+            #{ operation: "INDEX without CONCURRENTLY", problem: "locks table", safe_alternative: "use CONCURRENTLY" }
+            "#,
+            "CREATE INDEX idx ON users(email);",
+            &config_old,
+        );
+        assert_eq!(violations.len(), 1);
     }
 
     #[test]

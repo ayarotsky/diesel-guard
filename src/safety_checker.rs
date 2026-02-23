@@ -103,6 +103,7 @@ impl SafetyChecker {
             &parsed.stmts,
             &parsed.sql,
             &parsed.ignore_ranges,
+            &self.config,
         ))
     }
 
@@ -117,6 +118,7 @@ impl SafetyChecker {
                 &parsed.stmts,
                 &parsed.sql,
                 &parsed.ignore_ranges,
+                &self.config,
             )),
             Err(e) => Err(e.with_file_context(path.as_str(), sql)),
         }
@@ -146,6 +148,7 @@ impl SafetyChecker {
                         &parsed.stmts,
                         &parsed.sql,
                         &parsed.ignore_ranges,
+                        &self.config,
                     );
                     if !violations.is_empty() {
                         results.push((mig_file.path.to_string(), violations));

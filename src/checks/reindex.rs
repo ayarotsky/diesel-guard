@@ -12,7 +12,7 @@
 //! inside a transaction block.
 
 use crate::checks::pg_helpers::{Node, NodeEnum};
-use crate::checks::Check;
+use crate::checks::{Check, Config};
 use crate::violation::Violation;
 
 pub struct ReindexCheck;
@@ -38,7 +38,7 @@ fn has_concurrently(params: &[Node]) -> bool {
 }
 
 impl Check for ReindexCheck {
-    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
         let NodeEnum::ReindexStmt(reindex) = node else {
             return vec![];
         };
@@ -115,8 +115,7 @@ Considerations:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::checks::test_utils::parse_sql;
-    use crate::{assert_allows, assert_detects_violation};
+    use crate::{assert_allows, assert_detects_violation, assert_detects_violation_containing};
 
     #[test]
     fn test_detects_reindex_index() {
@@ -166,20 +165,24 @@ mod tests {
 
     #[test]
     fn test_reindex_violation_contains_target_name() {
-        let stmt = parse_sql("REINDEX INDEX idx_users_email;");
-        let violations = ReindexCheck.check(&stmt);
-        assert_eq!(violations.len(), 1);
-        assert!(violations[0].problem.contains("idx_users_email"));
-        assert!(violations[0].problem.contains("INDEX"));
+        assert_detects_violation_containing!(
+            ReindexCheck,
+            "REINDEX INDEX idx_users_email;",
+            "REINDEX without CONCURRENTLY",
+            "idx_users_email",
+            "INDEX"
+        );
     }
 
     #[test]
     fn test_reindex_table_violation_contains_table_name() {
-        let stmt = parse_sql("REINDEX TABLE users;");
-        let violations = ReindexCheck.check(&stmt);
-        assert_eq!(violations.len(), 1);
-        assert!(violations[0].problem.contains("users"));
-        assert!(violations[0].problem.contains("TABLE"));
+        assert_detects_violation_containing!(
+            ReindexCheck,
+            "REINDEX TABLE users;",
+            "REINDEX without CONCURRENTLY",
+            "users",
+            "TABLE"
+        );
     }
 
     #[test]

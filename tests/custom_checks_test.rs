@@ -732,6 +732,79 @@ fn test_example_limit_columns_per_index_allows() {
     );
 }
 
+// -- config variable in custom checks --
+
+#[test]
+fn test_custom_check_can_read_postgres_version() {
+    let dir = TempDir::new().unwrap();
+
+    // Script that skips the violation when postgres_version >= 14
+    fs::write(
+        dir.path().join("version_aware.rhai"),
+        r#"
+        let stmt = node.IndexStmt;
+        if stmt == () { return; }
+        if config.postgres_version != () && config.postgres_version >= 14 { return; }
+        #{
+            operation: "CUSTOM: needs pg14",
+            problem: "only needed below pg14",
+            safe_alternative: "upgrade postgres"
+        }
+        "#,
+    )
+    .unwrap();
+
+    let dir_path = dir.path().to_str().unwrap().to_string();
+
+    // With postgres_version = 14: no violation
+    let config_pg14 = Config {
+        custom_checks_dir: Some(dir_path.clone()),
+        postgres_version: Some(14),
+        ..Default::default()
+    };
+    let violations = SafetyChecker::with_config(config_pg14)
+        .check_sql("CREATE INDEX CONCURRENTLY idx ON users(email);")
+        .unwrap();
+    assert!(
+        !violations
+            .iter()
+            .any(|v| v.operation == "CUSTOM: needs pg14"),
+        "Version-aware custom check should not fire on pg14"
+    );
+
+    // With postgres_version = 13: violation
+    let config_pg13 = Config {
+        custom_checks_dir: Some(dir_path.clone()),
+        postgres_version: Some(13),
+        ..Default::default()
+    };
+    let violations = SafetyChecker::with_config(config_pg13)
+        .check_sql("CREATE INDEX CONCURRENTLY idx ON users(email);")
+        .unwrap();
+    assert!(
+        violations
+            .iter()
+            .any(|v| v.operation == "CUSTOM: needs pg14"),
+        "Version-aware custom check should fire on pg13"
+    );
+
+    // With no postgres_version set: violation (None → () in Rhai, condition is skipped)
+    let config_no_ver = Config {
+        custom_checks_dir: Some(dir_path),
+        postgres_version: None,
+        ..Default::default()
+    };
+    let violations = SafetyChecker::with_config(config_no_ver)
+        .check_sql("CREATE INDEX CONCURRENTLY idx ON users(email);")
+        .unwrap();
+    assert!(
+        violations
+            .iter()
+            .any(|v| v.operation == "CUSTOM: needs pg14"),
+        "Version-aware custom check should fire when no version is set"
+    );
+}
+
 // -- no_unlogged_tables.rhai --
 
 #[test]

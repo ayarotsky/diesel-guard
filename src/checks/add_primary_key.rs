@@ -14,13 +14,13 @@
 use crate::checks::pg_helpers::{
     alter_table_cmds, cmd_def_as_constraint, constraint_columns_str, ConstrType, NodeEnum,
 };
-use crate::checks::Check;
+use crate::checks::{Check, Config};
 use crate::violation::Violation;
 
 pub struct AddPrimaryKeyCheck;
 
 impl Check for AddPrimaryKeyCheck {
-    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };

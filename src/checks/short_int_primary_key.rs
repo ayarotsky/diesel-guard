@@ -17,7 +17,7 @@ use crate::checks::pg_helpers::{
     column_type_name, for_each_column_def, is_short_integer, range_var_name, ColumnDef, ConstrType,
     Constraint, NodeEnum,
 };
-use crate::checks::Check;
+use crate::checks::{Check, Config};
 use crate::violation::Violation;
 
 const CONSTR_PRIMARY: i32 = ConstrType::ConstrPrimary as i32;
@@ -25,7 +25,7 @@ const CONSTR_PRIMARY: i32 = ConstrType::ConstrPrimary as i32;
 pub struct ShortIntegerPrimaryKeyCheck;
 
 impl Check for ShortIntegerPrimaryKeyCheck {
-    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
         let mut violations = vec![];
 
         // Inline PRIMARY KEY on column definitions
@@ -183,7 +183,10 @@ use 'safety-assured' to bypass this check."#,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assert_allows, assert_detects_violation};
+    use crate::{
+        assert_allows, assert_detects_n_violations_any_containing, assert_detects_violation,
+        assert_detects_violation_containing,
+    };
 
     // === CREATE TABLE with inline PRIMARY KEY ===
 
@@ -245,36 +248,24 @@ mod tests {
 
     #[test]
     fn test_detects_composite_primary_key_with_int() {
-        use crate::checks::test_utils::parse_sql;
-
-        let check = ShortIntegerPrimaryKeyCheck;
-        let stmt = parse_sql(
+        assert_detects_violation_containing!(
+            ShortIntegerPrimaryKeyCheck,
             "CREATE TABLE events (tenant_id BIGINT, id INT, PRIMARY KEY (tenant_id, id));",
+            "PRIMARY KEY with short integer type",
+            "id",
+            "INT"
         );
-
-        let violations = check.check(&stmt);
-        assert_eq!(violations.len(), 1);
-        assert_eq!(
-            violations[0].operation,
-            "PRIMARY KEY with short integer type"
-        );
-        assert!(violations[0].problem.contains("id"));
-        assert!(violations[0].problem.contains("INT"));
     }
 
     #[test]
     fn test_detects_multiple_short_int_columns_in_composite_pk() {
-        use crate::checks::test_utils::parse_sql;
-
-        let check = ShortIntegerPrimaryKeyCheck;
-        let stmt = parse_sql(
+        assert_detects_n_violations_any_containing!(
+            ShortIntegerPrimaryKeyCheck,
             "CREATE TABLE data (tenant_id INT, user_id SMALLINT, PRIMARY KEY (tenant_id, user_id));",
+            2,
+            "tenant_id",
+            "user_id"
         );
-
-        let violations = check.check(&stmt);
-        assert_eq!(violations.len(), 2); // Both columns flagged
-        assert!(violations.iter().any(|v| v.problem.contains("tenant_id")));
-        assert!(violations.iter().any(|v| v.problem.contains("user_id")));
     }
 
     // === ALTER TABLE ADD COLUMN ===
@@ -402,21 +393,13 @@ mod tests {
 
     #[test]
     fn test_detects_alter_add_constraint_composite_pk_with_int() {
-        use crate::checks::test_utils::parse_sql;
-
-        let check = ShortIntegerPrimaryKeyCheck;
-        let stmt = parse_sql(
+        assert_detects_violation_containing!(
+            ShortIntegerPrimaryKeyCheck,
             "ALTER TABLE events ADD COLUMN tenant_id BIGINT, ADD COLUMN id INT, ADD CONSTRAINT pk_events PRIMARY KEY (tenant_id, id);",
+            "PRIMARY KEY with short integer type",
+            "id",
+            "INT"
         );
-
-        let violations = check.check(&stmt);
-        assert_eq!(violations.len(), 1);
-        assert_eq!(
-            violations[0].operation,
-            "PRIMARY KEY with short integer type"
-        );
-        assert!(violations[0].problem.contains("id"));
-        assert!(violations[0].problem.contains("INT"));
     }
 
     #[test]
@@ -440,25 +423,21 @@ mod tests {
 
     #[test]
     fn test_smallint_shows_correct_limit() {
-        use crate::checks::test_utils::parse_sql;
-
-        let check = ShortIntegerPrimaryKeyCheck;
-        let stmt = parse_sql("CREATE TABLE users (id SMALLINT PRIMARY KEY);");
-        let violations = check.check(&stmt);
-
-        assert_eq!(violations.len(), 1);
-        assert!(violations[0].problem.contains("~32,767"));
+        assert_detects_violation_containing!(
+            ShortIntegerPrimaryKeyCheck,
+            "CREATE TABLE users (id SMALLINT PRIMARY KEY);",
+            "PRIMARY KEY with short integer type",
+            "~32,767"
+        );
     }
 
     #[test]
     fn test_int_shows_correct_limit() {
-        use crate::checks::test_utils::parse_sql;
-
-        let check = ShortIntegerPrimaryKeyCheck;
-        let stmt = parse_sql("CREATE TABLE users (id INT PRIMARY KEY);");
-        let violations = check.check(&stmt);
-
-        assert_eq!(violations.len(), 1);
-        assert!(violations[0].problem.contains("~2.1 billion"));
+        assert_detects_violation_containing!(
+            ShortIntegerPrimaryKeyCheck,
+            "CREATE TABLE users (id INT PRIMARY KEY);",
+            "PRIMARY KEY with short integer type",
+            "~2.1 billion"
+        );
     }
 }

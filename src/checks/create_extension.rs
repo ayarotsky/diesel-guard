@@ -11,13 +11,13 @@
 //! (Ansible, Terraform, etc.) with appropriate privileges before running migrations.
 
 use crate::checks::pg_helpers::NodeEnum;
-use crate::checks::Check;
+use crate::checks::{Check, Config};
 use crate::violation::Violation;
 
 pub struct CreateExtensionCheck;
 
 impl Check for CreateExtensionCheck {
-    fn check(&self, node: &NodeEnum) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
         let NodeEnum::CreateExtensionStmt(ext) = node else {
             return vec![];
         };
