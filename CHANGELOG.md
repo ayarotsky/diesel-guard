@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.7.0 - 2026-02-23
+
+### Added
+
+- **`postgres_version` config option** — Set `postgres_version` in `diesel-guard.toml` to your target PostgreSQL major version. Checks that are safe from that version onward are skipped automatically. On PostgreSQL 11+, `AddColumnCheck` no longer flags constant defaults (boolean, integer, string literal, or NULL) since they are metadata-only changes. Custom Rhai scripts receive the config as a `config` variable and can branch on `config.postgres_version`.
+
 ## 0.6.0 - 2026-02-16
 
 ### Added
