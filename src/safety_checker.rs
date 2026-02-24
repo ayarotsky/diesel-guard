@@ -1,4 +1,4 @@
-use crate::adapters::{DieselAdapter, MigrationAdapter, MigrationDirection, SqlxAdapter};
+use crate::adapters::{DieselAdapter, MigrationAdapter, SqlxAdapter};
 use crate::checks::Registry;
 use crate::config::Config;
 use crate::error::Result;
@@ -89,10 +89,10 @@ impl SafetyChecker {
         match self.config.framework.as_str() {
             "diesel" => Ok(Box::new(DieselAdapter)),
             "sqlx" => Ok(Box::new(SqlxAdapter)),
-            _ => Err(crate::error::DieselGuardError::parse_error(format!(
-                "Invalid framework: {}",
-                self.config.framework
-            ))),
+            _ => Err(crate::config::ConfigError::InvalidFramework {
+                framework: self.config.framework.clone(),
+            }
+            .into()),
         }
     }
 
@@ -109,11 +109,9 @@ impl SafetyChecker {
 
     /// Check a single migration file
     pub fn check_file(&self, path: &Utf8Path) -> Result<Vec<Violation>> {
-        let adapter = self.adapter()?;
         let sql = fs::read_to_string(path)?;
-        let sql_section = adapter.extract_sql_for_direction(&sql, MigrationDirection::Up);
 
-        match parser::parse_with_metadata(sql_section) {
+        match parser::parse_with_metadata(&sql) {
             Ok(parsed) => Ok(self.registry.check_stmts_with_context(
                 &parsed.stmts,
                 &parsed.sql,
@@ -140,9 +138,8 @@ impl SafetyChecker {
 
         for mig_file in migration_files {
             let sql = fs::read_to_string(&mig_file.path)?;
-            let sql_section = adapter.extract_sql_for_direction(&sql, mig_file.direction);
 
-            match parser::parse_with_metadata(sql_section) {
+            match parser::parse_with_metadata(&sql) {
                 Ok(parsed) => {
                     let violations = self.registry.check_stmts_with_context(
                         &parsed.stmts,
@@ -265,5 +262,19 @@ mod tests {
         "#;
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 2);
+    }
+
+    #[test]
+    fn test_unknown_framework_returns_error() {
+        let config = Config {
+            framework: "unknown".to_string(),
+            ..Default::default()
+        };
+        let checker = SafetyChecker::with_config(config);
+        let result = checker.check_directory(camino::Utf8Path::new("."));
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Invalid framework \"unknown\". Expected \"diesel\" or \"sqlx\"."
+        );
     }
 }

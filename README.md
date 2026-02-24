@@ -85,32 +85,6 @@ migrations/
 └── 20240101000000_create_users.sql
 ```
 
-#### Format 3: Marker-based
-Single file with both up and down sections:
-
-```sql
--- migrations/20240101000000_create_users.sql
-
--- migrate:up
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    email VARCHAR(255) NOT NULL
-);
-
--- migrate:down
-DROP TABLE users;
-```
-
-#### Format 4: Directory-based
-Similar to Diesel but with SQLx timestamp format:
-
-```
-migrations/
-└── 20240101000000_create_users/
-    ├── up.sql
-    └── down.sql
-```
-
 ### Framework Configuration
 
 diesel-guard requires explicit framework configuration in `diesel-guard.toml`:

@@ -9,7 +9,7 @@ pub mod safety_checker;
 pub mod scripting;
 pub mod violation;
 
-pub use adapters::{MigrationAdapter, MigrationDirection, MigrationFile};
+pub use adapters::{MigrationAdapter, MigrationFile};
 pub use config::{Config, ConfigError};
 pub use safety_checker::SafetyChecker;
 pub use violation::Violation;

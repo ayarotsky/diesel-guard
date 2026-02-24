@@ -10,7 +10,7 @@
 
 use super::{
     collect_and_sort_entries, is_single_migration_dir, should_check_migration, MigrationAdapter,
-    MigrationDirection, MigrationFile, Result,
+    MigrationFile, Result,
 };
 use camino::Utf8Path;
 use regex::Regex;
@@ -140,10 +140,7 @@ impl DieselAdapter {
         if check_down {
             let down_sql = path.join("down.sql");
             if down_sql.exists() {
-                files.push(
-                    MigrationFile::new(down_sql, timestamp)
-                        .with_direction(MigrationDirection::Down),
-                );
+                files.push(MigrationFile::new(down_sql, timestamp));
             }
         }
 

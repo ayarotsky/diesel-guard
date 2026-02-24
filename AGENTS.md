@@ -41,11 +41,9 @@ ALTER TABLE users DROP COLUMN legacy_field;
 ## Framework Adapters
 
 - **Diesel**: `migrations/<TIMESTAMP>_<name>/{up.sql, down.sql}`. Timestamp formats: `YYYY_MM_DD_HHMMSS`, `YYYY-MM-DD-HHMMSS`, or `YYYYMMDDHHMMSS`.
-- **SQLx**: 4 formats supported:
+- **SQLx**: 2 formats supported:
   1. **Suffix-based** (reversible): `<VERSION>_<DESC>.up.sql` / `<VERSION>_<DESC>.down.sql`
   2. **Single file** (up-only): `<VERSION>_<DESC>.sql`
-  3. **Marker-based** (dbmate-style): single file with `-- migrate:up` / `-- migrate:down` markers
-  4. **Directory-based** (Diesel-style): `<VERSION>_<DESC>/{up.sql, down.sql}`
 
   SQLx versions are any positive integer (e.g., `1`, `001`, `42`, `20240101000000`). Short numeric versions use numeric comparison for `start_after` filtering; 14-digit timestamps use string comparison.
 
