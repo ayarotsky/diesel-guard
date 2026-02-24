@@ -31,11 +31,8 @@ pub enum DieselGuardError {
     )]
     WalkDirError(#[from] walkdir::Error),
 
-    #[error("Configuration error")]
-    #[diagnostic(
-        code(diesel_guard::config_error),
-        help("Run 'diesel-guard init' to create a valid configuration file")
-    )]
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     ConfigError(#[from] crate::config::ConfigError),
 }
 

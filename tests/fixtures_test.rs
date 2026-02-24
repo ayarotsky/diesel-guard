@@ -516,52 +516,6 @@ fn test_sqlx_suffix_format_detected() {
 }
 
 #[test]
-fn test_sqlx_marker_format_up_direction() {
-    use diesel_guard::Config;
-
-    let config = Config {
-        check_down: false, // Only check up
-        ..Default::default()
-    };
-    let checker = SafetyChecker::with_config(config);
-
-    let results = checker
-        .check_directory(Utf8Path::new("tests/fixtures_sqlx/sqlx_marker_drop_column"))
-        .unwrap();
-
-    assert_eq!(results.len(), 1, "Expected 1 file with violations");
-    let (_, violations) = &results[0];
-    assert_eq!(violations.len(), 1, "Expected 1 violation in UP section");
-    assert_eq!(violations[0].operation, "DROP COLUMN");
-}
-
-#[test]
-fn test_sqlx_marker_format_down_direction() {
-    use diesel_guard::Config;
-
-    let config = Config {
-        check_down: true, // Check both up and down
-        ..Default::default()
-    };
-    let checker = SafetyChecker::with_config(config);
-
-    let results = checker
-        .check_directory(Utf8Path::new("tests/fixtures_sqlx/sqlx_marker_drop_column"))
-        .unwrap();
-
-    // Should check both up and down sections from the marker-based file
-    assert_eq!(results.len(), 1, "Expected 1 file with violations");
-    let (_, violations) = &results[0];
-    // Up section has DROP COLUMN (1 violation)
-    // Down section has ADD COLUMN without DEFAULT (0 violations)
-    assert_eq!(
-        violations.len(),
-        1,
-        "Expected 1 violation (DROP COLUMN in up section)"
-    );
-}
-
-#[test]
 fn test_safe_sqlx_fixtures_pass() {
     let checker = SafetyChecker::new();
 
@@ -586,22 +540,6 @@ fn test_safe_sqlx_fixtures_pass() {
 }
 
 #[test]
-fn test_sqlx_directory_format() {
-    let checker = SafetyChecker::new();
-
-    let results = checker
-        .check_directory(Utf8Path::new(
-            "tests/fixtures_sqlx/sqlx_directory_rename_column",
-        ))
-        .unwrap();
-
-    assert_eq!(results.len(), 1, "Expected 1 file with violations");
-    let (_, violations) = &results[0];
-    assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "RENAME COLUMN");
-}
-
-#[test]
 fn test_check_all_sqlx_fixtures() {
     use diesel_guard::Config;
 
@@ -615,10 +553,8 @@ fn test_check_all_sqlx_fixtures() {
     // Check each fixture directory individually and collect results
     let fixture_dirs = vec![
         "tests/fixtures_sqlx/sqlx_suffix_add_column_unsafe",
-        "tests/fixtures_sqlx/sqlx_marker_drop_column",
         "tests/fixtures_sqlx/sqlx_concurrently_missing_directive",
         "tests/fixtures_sqlx/sqlx_concurrently_with_directive",
-        "tests/fixtures_sqlx/sqlx_directory_rename_column",
         "tests/fixtures_sqlx/sqlx_reindex_unsafe",
         "tests/fixtures_sqlx/sqlx_reindex_safe",
     ];
@@ -638,18 +574,16 @@ fn test_check_all_sqlx_fixtures() {
 
     // Expected violations (with check_down = false):
     // 1. sqlx_suffix_add_column_unsafe/.up.sql - 1 violation (ADD COLUMN with DEFAULT)
-    // 2. sqlx_marker_drop_column - 1 violation (DROP COLUMN in up section)
-    // 3. sqlx_directory_rename_column/up.sql - 1 violation (RENAME COLUMN)
-    // 4. sqlx_reindex_unsafe - 1 violation (REINDEX without CONCURRENTLY)
+    // 2. sqlx_reindex_unsafe - 1 violation (REINDEX without CONCURRENTLY)
     // Note: .down.sql correctly skipped, CONCURRENTLY and safe fixtures have 0 violations
     assert_eq!(
-        files_with_violations, 4,
-        "Expected 4 files with violations, got {}",
+        files_with_violations, 2,
+        "Expected 2 files with violations, got {}",
         files_with_violations
     );
     assert_eq!(
-        all_violations, 4,
-        "Expected 4 total violations, got {}",
+        all_violations, 2,
+        "Expected 2 total violations, got {}",
         all_violations
     );
 }

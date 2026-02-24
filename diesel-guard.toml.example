@@ -19,7 +19,7 @@ framework = "diesel"
 # Works with any format - diesel-guard normalizes timestamps for comparison
 # start_after = "20240101000000"
 
-# Check rollback migrations (down.sql files or -- migrate:down sections)
+# Check rollback migrations
 # Default: false (only checks forward migrations)
 #
 # Set to true if you want to ensure rollback migrations are also safe

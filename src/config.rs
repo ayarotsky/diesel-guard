@@ -4,18 +4,8 @@
 
 use camino::{Utf8Path, Utf8PathBuf};
 use miette::Diagnostic;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::sync::LazyLock;
 use thiserror::Error;
-
-/// Regex pattern for validating timestamp format
-/// Accepts: YYYY_MM_DD_HHMMSS, YYYY-MM-DD-HHMMSS, or YYYYMMDDHHMMSS
-/// All separators must be the same (all underscores, all dashes, or none)
-static MIGRATION_TIMESTAMP_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^(\d{4}_\d{2}_\d{2}_\d{6}|\d{4}-\d{2}-\d{2}-\d{6}|\d{14})")
-        .expect("valid regex pattern")
-});
 
 /// Generate help text for invalid check names from the registry
 fn valid_check_names_help() -> String {
@@ -42,7 +32,7 @@ pub enum ConfigError {
     #[error("Missing required field 'framework' in diesel-guard.toml")]
     MissingFramework,
 
-    #[error("Invalid framework: {framework}")]
+    #[error("Invalid framework \"{framework}\". Expected \"diesel\" or \"sqlx\".")]
     InvalidFramework { framework: String },
 }
 
@@ -164,28 +154,6 @@ impl Config {
     pub fn is_check_enabled(&self, check_name: &str) -> bool {
         !self.disable_checks.iter().any(|c| c == check_name)
     }
-
-    /// Check if migration should be checked based on start_after
-    /// Returns true if migration timestamp is AFTER start_after (or if no filter set)
-    pub fn should_check_migration(&self, migration_dir_name: &str) -> bool {
-        let Some(ref start_after) = self.start_after else {
-            return true; // Check by default if no filter set
-        };
-
-        // Extract timestamp from migration directory name using regex
-        let Some(captures) = MIGRATION_TIMESTAMP_REGEX.captures(migration_dir_name) else {
-            return true; // If can't extract timestamp, default to checking it
-        };
-
-        let migration_timestamp = &captures[1];
-
-        // Normalize both timestamps by removing separators for comparison
-        let start_normalized = start_after.replace(['_', '-'], "");
-        let migration_normalized = migration_timestamp.replace(['_', '-'], "");
-
-        // String comparison works because all formats are lexicographically ordered
-        migration_normalized > start_normalized
-    }
 }
 
 impl Default for Config {
@@ -213,83 +181,6 @@ mod tests {
         assert_eq!(config.start_after, None);
         assert!(!config.check_down);
         assert_eq!(config.disable_checks.len(), 0);
-    }
-
-    #[test]
-    fn test_should_check_migration_no_filter() {
-        let config = Config::default();
-        assert!(config.should_check_migration("2024_01_01_000000_create_users"));
-        assert!(config.should_check_migration("2020_01_01_000000_old_migration"));
-    }
-
-    #[test]
-    fn test_should_check_migration_with_filter() {
-        let config = Config {
-            start_after: Some("2024_01_01_000000".to_string()),
-            ..Default::default()
-        };
-
-        // Should check (strictly after threshold)
-        assert!(config.should_check_migration("2024_01_02_000000_new_migration"));
-        assert!(config.should_check_migration("2024_06_15_120000_another_migration"));
-
-        // Should NOT check (before or equal to threshold)
-        assert!(!config.should_check_migration("2024_01_01_000000_exact_match"));
-        assert!(!config.should_check_migration("2023_12_31_235959_old_migration"));
-        assert!(!config.should_check_migration("2020_01_01_000000_very_old"));
-    }
-
-    #[test]
-    fn test_should_check_migration_mixed_formats() {
-        // Test start_after with underscores against folders with different formats
-        let config_underscores = Config {
-            start_after: Some("2024_01_01_000000".to_string()),
-            ..Default::default()
-        };
-
-        // Folder with dashes - should check (after threshold)
-        assert!(config_underscores.should_check_migration("2024-01-02-000000_new_migration"));
-        assert!(config_underscores.should_check_migration("2024-06-15-120000_another_migration"));
-
-        // Folder with dashes - should NOT check (before or equal)
-        assert!(!config_underscores.should_check_migration("2024-01-01-000000_exact_match"));
-        assert!(!config_underscores.should_check_migration("2023-12-31-235959_old_migration"));
-
-        // Folder without separators - should check (after threshold)
-        assert!(config_underscores.should_check_migration("20240102000000_new_migration"));
-        assert!(config_underscores.should_check_migration("20240615120000_another_migration"));
-
-        // Folder without separators - should NOT check (before or equal)
-        assert!(!config_underscores.should_check_migration("20240101000000_exact_match"));
-        assert!(!config_underscores.should_check_migration("20231231235959_old_migration"));
-
-        // Test start_after with dashes against folders with different formats
-        let config_dashes = Config {
-            start_after: Some("2024-01-01-000000".to_string()),
-            ..Default::default()
-        };
-
-        // Folder with underscores - should check (after threshold)
-        assert!(config_dashes.should_check_migration("2024_01_02_000000_new_migration"));
-        assert!(!config_dashes.should_check_migration("2024_01_01_000000_exact_match"));
-
-        // Folder without separators - should check (after threshold)
-        assert!(config_dashes.should_check_migration("20240102000000_new_migration"));
-        assert!(!config_dashes.should_check_migration("20240101000000_exact_match"));
-
-        // Test start_after without separators against folders with different formats
-        let config_no_sep = Config {
-            start_after: Some("20240101000000".to_string()),
-            ..Default::default()
-        };
-
-        // Folder with underscores - should check (after threshold)
-        assert!(config_no_sep.should_check_migration("2024_01_02_000000_new_migration"));
-        assert!(!config_no_sep.should_check_migration("2024_01_01_000000_exact_match"));
-
-        // Folder with dashes - should check (after threshold)
-        assert!(config_no_sep.should_check_migration("2024-01-02-000000_new_migration"));
-        assert!(!config_no_sep.should_check_migration("2024-01-01-000000_exact_match"));
     }
 
     #[test]

@@ -32,36 +32,6 @@ fn test_check_down_single_migration_dir() {
 }
 
 #[test]
-fn test_check_down_single_migration_dir_sqlx() {
-    let temp_dir = TempDir::new().unwrap();
-    // SQLx requires 14-digit timestamp prefix
-    let migration_dir = temp_dir.path().join("20240101000000_test");
-    fs::create_dir(&migration_dir).unwrap();
-    fs::write(
-        migration_dir.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;",
-    )
-    .unwrap();
-    fs::write(
-        migration_dir.join("down.sql"),
-        "ALTER TABLE users DROP COLUMN admin;",
-    )
-    .unwrap();
-
-    let config = Config {
-        framework: "sqlx".to_string(),
-        ..Default::default() // check_down = false
-    };
-    let checker = SafetyChecker::with_config(config);
-    let results = checker
-        .check_path(Utf8Path::from_path(&migration_dir).unwrap())
-        .unwrap();
-
-    assert_eq!(results.len(), 1);
-    assert!(results[0].0.contains("up.sql"));
-}
-
-#[test]
 fn test_config_disables_checks() {
     let temp_dir = TempDir::new().unwrap();
     let config_path = temp_dir.path().join("diesel-guard.toml");
@@ -445,42 +415,6 @@ fn test_migrations_checked_in_alphanumeric_order() {
             results[i].0
         );
     }
-}
-
-#[test]
-fn test_diesel_migration_with_sqlx_markers_checks_all_statements() {
-    // Bug fix: Diesel migration containing -- migrate:up / -- migrate:down markers
-    // should check ALL statements, not just one section
-    let temp_dir = TempDir::new().unwrap();
-    let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
-    fs::create_dir(&migration_dir).unwrap();
-
-    // up.sql contains SQLx-style markers (e.g., converted from SQLx, developer notes)
-    fs::write(
-        migration_dir.join("up.sql"),
-        r#"-- migrate:up
-ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
--- migrate:down
-ALTER TABLE users DROP COLUMN admin;
-"#,
-    )
-    .unwrap();
-
-    let config = Config::default(); // framework = "diesel"
-    let checker = SafetyChecker::with_config(config);
-    let results = checker
-        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
-        .unwrap();
-
-    // Diesel should parse the entire file and find violations in BOTH sections
-    assert_eq!(results.len(), 1);
-    let violations = &results[0].1;
-    // Should find at least 2 violations: ADD COLUMN with DEFAULT and DROP COLUMN
-    assert!(
-        violations.len() >= 2,
-        "Expected at least 2 violations (from both sections), got {}",
-        violations.len()
-    );
 }
 
 #[test]

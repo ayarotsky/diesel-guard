@@ -19,15 +19,6 @@ pub use sqlx::SqlxAdapter;
 /// Result type for adapter operations.
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
-/// Migration direction (forward or rollback).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MigrationDirection {
-    /// Forward migration (apply changes).
-    Up,
-    /// Rollback migration (revert changes).
-    Down,
-}
-
 /// Represents a single migration file to check.
 #[derive(Debug, Clone)]
 pub struct MigrationFile {
@@ -35,26 +26,11 @@ pub struct MigrationFile {
     pub path: Utf8PathBuf,
     /// Timestamp extracted from migration name.
     pub timestamp: String,
-    /// Migration direction (up or down).
-    pub direction: MigrationDirection,
 }
 
 impl MigrationFile {
-    /// Create a new migration file with the most common defaults.
-    ///
-    /// Sets direction to Up.
     pub fn new(path: Utf8PathBuf, timestamp: String) -> Self {
-        Self {
-            path,
-            timestamp,
-            direction: MigrationDirection::Up,
-        }
-    }
-
-    /// Builder method to set the direction.
-    pub fn with_direction(mut self, direction: MigrationDirection) -> Self {
-        self.direction = direction;
-        self
+        Self { path, timestamp }
     }
 }
 
@@ -93,26 +69,6 @@ pub trait MigrationAdapter: Send + Sync {
     /// Returns an error if the timestamp doesn't match the framework's
     /// expected format.
     fn validate_timestamp(&self, timestamp: &str) -> Result<()>;
-
-    /// Normalize a timestamp by removing separators (underscores and dashes).
-    ///
-    /// Default implementation removes `_` and `-` characters.
-    /// Frameworks can override if they need different normalization logic.
-    fn normalize_timestamp(&self, timestamp: &str) -> String {
-        timestamp.replace(['_', '-'], "")
-    }
-
-    /// Extract the SQL section relevant to the given migration direction.
-    ///
-    /// Adapters that use marker-based migrations (e.g., `-- migrate:up` / `-- migrate:down`)
-    /// override this to return only the relevant section. The default returns all SQL unchanged.
-    fn extract_sql_for_direction<'a>(
-        &self,
-        sql: &'a str,
-        _direction: MigrationDirection,
-    ) -> &'a str {
-        sql
-    }
 }
 
 /// Check if migration should be checked based on start_after filter.
