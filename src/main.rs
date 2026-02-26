@@ -21,7 +21,7 @@ struct Cli {
 enum Commands {
     /// Check migrations for unsafe operations
     Check {
-        /// Path to migration file or directory
+        /// Path to migration file or directory or "-" for stdin input
         path: Utf8PathBuf,
 
         /// Output format (text or json)

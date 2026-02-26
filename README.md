@@ -48,6 +48,12 @@ Safe alternative:
   Note: For Postgres 11+, this is safe if the default is a constant value.
 ```
 
+You can also pipe the SQL migration directly, to get the same effect:
+
+```sh
+cat migrations/2024_01_01_create_users/up.sql | diesel-guard check -
+```
+
 ## Supported Frameworks
 
 diesel-guard supports both **Diesel** and **SQLx** Postgres migrations. The framework is configured via `diesel-guard.toml` (see [Configuration](#configuration)).
