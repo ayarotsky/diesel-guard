@@ -4,19 +4,19 @@
 //! `GENERATED ALWAYS AS ... STORED` columns, which requires an ACCESS EXCLUSIVE
 //! lock and triggers a full table rewrite.
 //!
-//! Adding a stored generated column requires PostgreSQL to compute and store the
+//! Adding a stored generated column requires Postgres to compute and store the
 //! expression value for every existing row. This acquires an ACCESS EXCLUSIVE lock,
 //! blocking all operations for the duration of the rewrite.
 //!
-//! Stored generated columns were introduced in PostgreSQL 12. PostgreSQL does not
+//! Stored generated columns were introduced in Postgres 12. Postgres does not
 //! support VIRTUAL generated columns (only STORED), so there is no safe GENERATED
 //! column option for existing tables.
 //!
 //! CREATE TABLE with GENERATED STORED is safe because the table is empty.
 
 use crate::checks::pg_helpers::{
-    alter_table_cmds, cmd_def_as_column_def, column_has_constraint, column_type_name, ConstrType,
-    NodeEnum,
+    ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_has_constraint,
+    column_type_name,
 };
 use crate::checks::{Check, Config};
 use crate::violation::Violation;
@@ -44,7 +44,7 @@ impl Check for GeneratedColumnCheck {
                     "ADD COLUMN with GENERATED STORED",
                     format!(
                         "Adding column '{column}' with GENERATED ALWAYS AS ... STORED on table '{table}' \
-                        triggers a full table rewrite because PostgreSQL must compute and store the expression \
+                        triggers a full table rewrite because Postgres must compute and store the expression \
                         value for every existing row. This acquires an ACCESS EXCLUSIVE lock and blocks all operations. \
                         Duration depends on table size.",
                         column = column_name, table = table_name
@@ -76,7 +76,7 @@ impl Check for GeneratedColumnCheck {
    ALTER TABLE {table} ADD COLUMN {column} {data_type} GENERATED ALWAYS AS (<expression>) STORED;
    -- safety-assured:end
 
-Note: PostgreSQL does not support VIRTUAL generated columns (only STORED).
+Note: Postgres does not support VIRTUAL generated columns (only STORED).
 For new empty tables, GENERATED STORED columns are acceptable."#,
                         table = table_name,
                         column = column_name,

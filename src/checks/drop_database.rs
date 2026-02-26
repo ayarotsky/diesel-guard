@@ -5,20 +5,20 @@
 //! is one of the most destructive operations possible and should almost never
 //! appear in application migrations.
 //!
-//! DROP DATABASE requires exclusive access to the target database. PostgreSQL will
+//! DROP DATABASE requires exclusive access to the target database. Postgres will
 //! refuse to execute the command if any active connections exist. Unlike table
 //! operations, DROP DATABASE cannot be executed inside a transaction block.
 //! There is no table rewrite involved; the entire database is removed at the
 //! filesystem level.
 //!
-//! PostgreSQL 13+ supports `DROP DATABASE ... WITH (FORCE)` to automatically
+//! Postgres 13+ supports `DROP DATABASE ... WITH (FORCE)` to automatically
 //! terminate active connections, making the operation even more dangerous.
 //!
 //! The recommended approach is to handle database lifecycle through infrastructure
 //! automation or DBA operations, not application migrations.
 
 use crate::checks::pg_helpers::NodeEnum;
-use crate::checks::{if_exists_clause, Check, Config};
+use crate::checks::{Check, Config, if_exists_clause};
 use crate::violation::Violation;
 
 pub struct DropDatabaseCheck;
@@ -65,7 +65,7 @@ If this is intentional (e.g., test cleanup), use a safety-assured block:
    DROP DATABASE{if_exists} {db};
    -- safety-assured:end
 
-Note: PostgreSQL 13+ supports WITH (FORCE) to auto-terminate connections, but this is even more dangerous."#,
+Note: Postgres 13+ supports WITH (FORCE) to auto-terminate connections, but this is even more dangerous."#,
                 if_exists = if_exists_str,
                 db = db_name
             ),

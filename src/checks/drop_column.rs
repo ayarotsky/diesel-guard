@@ -4,15 +4,15 @@
 //! an ACCESS EXCLUSIVE lock and typically rewrites the table.
 //!
 //! Dropping a column acquires an ACCESS EXCLUSIVE lock, blocking all operations.
-//! On many PostgreSQL versions, this triggers a table rewrite to physically remove the
+//! On many Postgres versions, this triggers a table rewrite to physically remove the
 //! column data, with duration depending on table size.
 //!
-//! PostgreSQL does not support a CONCURRENTLY option for dropping columns.
+//! Postgres does not support a CONCURRENTLY option for dropping columns.
 //! The recommended approach is to stage the removal: mark the column as unused
 //! in application code, deploy without references, and drop in a later migration.
 
-use crate::checks::pg_helpers::{alter_table_cmds, AlterTableType, NodeEnum};
-use crate::checks::{if_exists_clause, Check, Config};
+use crate::checks::pg_helpers::{AlterTableType, NodeEnum, alter_table_cmds};
+use crate::checks::{Check, Config, if_exists_clause};
 use crate::violation::Violation;
 
 pub struct DropColumnCheck;
@@ -50,7 +50,7 @@ impl Check for DropColumnCheck {
 4. Drop the column in a later migration after confirming it's unused:
    ALTER TABLE {table} DROP COLUMN {column}{if_exists};
 
-Note: PostgreSQL doesn't support DROP COLUMN CONCURRENTLY. The rewrite is unavoidable but staging the removal reduces risk."#,
+Note: Postgres doesn't support DROP COLUMN CONCURRENTLY. The rewrite is unavoidable but staging the removal reduces risk."#,
                         table = table_name,
                         column = column_name,
                         if_exists = if_exists_clause(if_exists)

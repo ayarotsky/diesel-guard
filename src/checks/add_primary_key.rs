@@ -9,10 +9,10 @@
 //! take a long time on large tables.
 //!
 //! The safe alternative is to create a UNIQUE INDEX CONCURRENTLY first, then add the
-//! PRIMARY KEY constraint using that existing index (PostgreSQL 11+).
+//! PRIMARY KEY constraint using that existing index (Postgres 11+).
 
 use crate::checks::pg_helpers::{
-    alter_table_cmds, cmd_def_as_constraint, constraint_columns_str, ConstrType, NodeEnum,
+    ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_constraint, constraint_columns_str,
 };
 use crate::checks::{Check, Config};
 use crate::violation::Violation;
@@ -73,7 +73,7 @@ Benefits:
 - Safe for production deployments on large tables
 
 Considerations:
-- Requires PostgreSQL 11+ for PRIMARY KEY USING INDEX
+- Requires Postgres 11+ for PRIMARY KEY USING INDEX
 - Cannot run CONCURRENTLY inside a transaction block
   For Diesel migrations: Create metadata.toml with run_in_transaction = false
   For SQLx migrations: Add -- no-transaction directive at the top of the file

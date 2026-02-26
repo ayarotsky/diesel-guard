@@ -12,7 +12,7 @@
 //! add a new column, backfill data, update application code to use the new column,
 //! and finally remove the old column in a subsequent migration.
 
-use crate::checks::pg_helpers::{range_var_name, NodeEnum, ObjectType};
+use crate::checks::pg_helpers::{NodeEnum, ObjectType, range_var_name};
 use crate::checks::{Check, Config};
 use crate::violation::Violation;
 

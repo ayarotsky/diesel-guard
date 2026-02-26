@@ -17,12 +17,12 @@
 //! ## Rewrite behavior
 //! None - no table rewrite is involved.
 //!
-//! ## PostgreSQL version specifics
-//! Applies to all PostgreSQL versions.
+//! ## Postgres version specifics
+//! Applies to all Postgres versions.
 
 use crate::checks::pg_helpers::{
-    alter_table_cmds, cmd_def_as_column_def, column_type_name, for_each_column_def,
-    is_timestamp_without_tz, NodeEnum,
+    NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_type_name, for_each_column_def,
+    is_timestamp_without_tz,
 };
 use crate::checks::{Check, Config};
 use crate::violation::Violation;

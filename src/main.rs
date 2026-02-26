@@ -11,7 +11,7 @@ const CONFIG_TEMPLATE: &str = include_str!("../diesel-guard.toml.example");
 
 #[derive(Parser)]
 #[command(name = "diesel-guard")]
-#[command(version, about = "Catch unsafe PostgreSQL migrations in Diesel before they take down production", long_about = None)]
+#[command(version, about = "Catch unsafe Postgres migrations in Diesel and SQLx before they take down production", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,

@@ -9,8 +9,8 @@
 //! ```
 
 use super::{
-    collect_and_sort_entries, is_single_migration_dir, should_check_migration, MigrationAdapter,
-    MigrationFile, Result,
+    MigrationAdapter, MigrationFile, Result, collect_and_sort_entries, is_single_migration_dir,
+    should_check_migration,
 };
 use camino::Utf8Path;
 use regex::Regex;
@@ -59,10 +59,10 @@ impl MigrationAdapter for DieselAdapter {
 
                 // Apply start_after filter when the file has a valid timestamp.
                 // Files without timestamps (e.g., "migration.sql") are always checked.
-                if let Some(ref ts) = parsed_timestamp {
-                    if !should_check_migration(start_after, ts) {
-                        continue;
-                    }
+                if let Some(ref ts) = parsed_timestamp
+                    && !should_check_migration(start_after, ts)
+                {
+                    continue;
                 }
 
                 let timestamp = parsed_timestamp.unwrap_or_else(|| filename.to_string());

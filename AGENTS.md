@@ -1,8 +1,8 @@
 # AGENTS.md - diesel-guard
 
-Detects unsafe PostgreSQL migration patterns before they cause production incidents. Parses SQL using `pg_query` (PostgreSQL's actual parser via libpg_query) and identifies operations that acquire dangerous locks or trigger table rewrites. Supports both built-in Rust checks and user-defined Rhai script checks.
+Detects unsafe Postgres migration patterns before they cause production incidents. Parses SQL using `pg_query` (Postgres's actual parser via libpg_query) and identifies operations that acquire dangerous locks or trigger table rewrites. Supports both built-in Rust checks and user-defined Rhai script checks.
 
-**Core Tech:** Rust, `pg_query`, Rhai scripting, Diesel/SQLx migrations, PostgreSQL 9.6+
+**Core Tech:** Rust, `pg_query`, Rhai scripting, Diesel/SQLx migrations, Postgres 9.6+
 
 ## Architecture
 

@@ -2,7 +2,7 @@
 
 ![Build Status](https://github.com/ayarotsky/diesel-guard/actions/workflows/ci.yml/badge.svg?branch=main)
 
-Catch dangerous PostgreSQL migrations before they take down production.
+Catch dangerous Postgres migrations before they take down production.
 
 ✓ Detects operations that lock tables or cause downtime<br>
 ✓ Provides safe alternatives for each blocking operation<br>
@@ -32,7 +32,7 @@ When it finds an unsafe operation, you'll see:
 ❌ ADD COLUMN with DEFAULT
 
 Problem:
-  Adding column 'admin' with DEFAULT on table 'users' requires a full table rewrite on PostgreSQL < 11,
+  Adding column 'admin' with DEFAULT on table 'users' requires a full table rewrite on Postgres < 11,
   which acquires an ACCESS EXCLUSIVE lock. On large tables, this can take significant time and block all operations.
 
 Safe alternative:
@@ -45,12 +45,12 @@ Safe alternative:
   3. Add default for new rows only:
      ALTER TABLE users ALTER COLUMN admin SET DEFAULT <value>;
 
-  Note: For PostgreSQL 11+, this is safe if the default is a constant value.
+  Note: For Postgres 11+, this is safe if the default is a constant value.
 ```
 
 ## Supported Frameworks
 
-diesel-guard supports both **Diesel** and **SQLx** PostgreSQL migrations. The framework is configured via `diesel-guard.toml` (see [Configuration](#configuration)).
+diesel-guard supports both **Diesel** and **SQLx** Postgres migrations. The framework is configured via `diesel-guard.toml` (see [Configuration](#configuration)).
 
 ### Diesel
 
@@ -146,7 +146,7 @@ Need project-specific rules beyond these? See [Custom Checks](#custom-checks).
 
 #### Bad
 
-In PostgreSQL versions before 11, adding a column with a default value requires a full table rewrite. This acquires an ACCESS EXCLUSIVE lock and can take hours on large tables, blocking all reads and writes.
+In Postgres versions before 11, adding a column with a default value requires a full table rewrite. This acquires an ACCESS EXCLUSIVE lock and can take hours on large tables, blocking all reads and writes.
 
 ```sql
 ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
@@ -167,7 +167,7 @@ UPDATE users SET admin = FALSE WHERE admin IS NULL;
 ALTER TABLE users ALTER COLUMN admin SET DEFAULT FALSE;
 ```
 
-**Note:** For PostgreSQL 11+, adding a column with a constant default value is instant and safe.
+**Note:** For Postgres 11+, adding a column with a constant default value is instant and safe.
 
 ### Dropping a column
 
@@ -195,7 +195,7 @@ UPDATE users SET email = NULL;
 ALTER TABLE users DROP COLUMN email;
 ```
 
-PostgreSQL doesn't support `DROP COLUMN CONCURRENTLY`, so the table rewrite is unavoidable. Staging the removal minimizes risk.
+Postgres doesn't support `DROP COLUMN CONCURRENTLY`, so the table rewrite is unavoidable. Staging the removal minimizes risk.
 
 ### Dropping a primary key
 
@@ -243,7 +243,7 @@ ALTER TABLE posts DROP COLUMN user_id;
 - Update application code to use the new key before dropping the old one
 - Test thoroughly in a staging environment first
 
-**Limitation:** This check relies on PostgreSQL naming conventions (e.g., `users_pkey`). It may not detect primary keys with custom names. Future versions will support database connections for accurate verification.
+**Limitation:** This check relies on Postgres naming conventions (e.g., `users_pkey`). It may not detect primary keys with custom names. Future versions will support database connections for accurate verification.
 
 ### Dropping a table
 
@@ -295,7 +295,7 @@ DROP TABLE users;
 
 #### Bad
 
-Dropping a database permanently deletes the entire database including all tables, data, and objects. This operation is irreversible. PostgreSQL requires exclusive access to the target database—all active connections must be terminated before the drop can proceed. The command cannot be executed inside a transaction block.
+Dropping a database permanently deletes the entire database including all tables, data, and objects. This operation is irreversible. Postgres requires exclusive access to the target database—all active connections must be terminated before the drop can proceed. The command cannot be executed inside a transaction block.
 
 ```sql
 DROP DATABASE mydb;
@@ -323,7 +323,7 @@ DROP DATABASE test_db;
 - Verify all connections to the database are terminated
 - Consider using infrastructure tools (Terraform, Ansible) instead of migrations
 
-**Note:** PostgreSQL 13+ supports `DROP DATABASE ... WITH (FORCE)` to terminate active connections automatically, but this makes the operation even more dangerous and should be used with extreme caution.
+**Note:** Postgres 13+ supports `DROP DATABASE ... WITH (FORCE)` to terminate active connections automatically, but this makes the operation even more dangerous and should be used with extreme caution.
 
 ### Dropping an index non-concurrently
 
@@ -345,7 +345,7 @@ DROP INDEX CONCURRENTLY idx_users_email;
 DROP INDEX CONCURRENTLY IF EXISTS idx_users_username;
 ```
 
-**Important:** CONCURRENTLY requires PostgreSQL 9.2+ and cannot run inside a transaction block.
+**Important:** CONCURRENTLY requires Postgres 9.2+ and cannot run inside a transaction block.
 
 **For Diesel migrations:** Add a `metadata.toml` file to your migration directory:
 
@@ -383,7 +383,7 @@ REINDEX INDEX CONCURRENTLY idx_users_email;
 REINDEX TABLE CONCURRENTLY users;
 ```
 
-**Important:** CONCURRENTLY requires PostgreSQL 12+ and cannot run inside a transaction block.
+**Important:** CONCURRENTLY requires Postgres 12+ and cannot run inside a transaction block.
 
 **For Diesel migrations:** Add a `metadata.toml` file to your migration directory:
 
@@ -490,7 +490,7 @@ ALTER TABLE users DROP COLUMN age;
 ALTER TABLE users RENAME COLUMN age_new TO age;
 ```
 
-**Safe type changes** (no rewrite on PostgreSQL 9.2+):
+**Safe type changes** (no rewrite on Postgres 9.2+):
 - Increasing VARCHAR length: `VARCHAR(50)` → `VARCHAR(100)`
 - Converting to TEXT: `VARCHAR(255)` → `TEXT`
 - Increasing numeric precision
@@ -523,7 +523,7 @@ ALTER TABLE users ALTER COLUMN email SET NOT NULL;
 ALTER TABLE users DROP CONSTRAINT users_email_not_null_check;
 ```
 
-The VALIDATE step allows concurrent reads and writes, only blocking other schema changes. On PostgreSQL 12+, NOT NULL constraints are more efficient, but this approach still provides better control.
+The VALIDATE step allows concurrent reads and writes, only blocking other schema changes. On Postgres 12+, NOT NULL constraints are more efficient, but this approach still provides better control.
 
 ### Adding a primary key to an existing table
 
@@ -560,7 +560,7 @@ run_in_transaction = false
 - Step 1: Creates the index without blocking operations (only prevents concurrent schema changes)
 - Step 2: Adding the constraint is nearly instant since the index already exists
 
-**Note:** This approach requires PostgreSQL 11+. For earlier versions, you must use the unsafe `ALTER TABLE ADD PRIMARY KEY` during a maintenance window.
+**Note:** This approach requires Postgres 11+. For earlier versions, you must use the unsafe `ALTER TABLE ADD PRIMARY KEY` during a maintenance window.
 
 ### Creating extensions
 
@@ -595,7 +595,7 @@ Common extensions that require this approach: `pg_trgm`, `uuid-ossp`, `hstore`, 
 
 ### Adding a stored GENERATED column
 
-Adding a `GENERATED ALWAYS AS ... STORED` column acquires an ACCESS EXCLUSIVE lock and triggers a full table rewrite because PostgreSQL must compute and store the expression value for every existing row.
+Adding a `GENERATED ALWAYS AS ... STORED` column acquires an ACCESS EXCLUSIVE lock and triggers a full table rewrite because Postgres must compute and store the expression value for every existing row.
 
 #### Bad
 
@@ -628,13 +628,13 @@ BEFORE INSERT OR UPDATE ON products
 FOR EACH ROW EXECUTE FUNCTION compute_total_price();
 ```
 
-**Note:** PostgreSQL does not support VIRTUAL generated columns (only STORED). For new empty tables, GENERATED STORED columns are acceptable.
+**Note:** Postgres does not support VIRTUAL generated columns (only STORED). For new empty tables, GENERATED STORED columns are acceptable.
 
 ### Unnamed constraints
 
 #### Bad
 
-Adding constraints without explicit names results in auto-generated names from PostgreSQL. These names vary between databases and make future migrations difficult.
+Adding constraints without explicit names results in auto-generated names from Postgres. These names vary between databases and make future migrations difficult.
 
 ```sql
 -- Unnamed UNIQUE constraint
@@ -794,7 +794,7 @@ CREATE TABLE tenant_events (
 
 #### Bad
 
-Adding a SERIAL column to an existing table triggers a full table rewrite because PostgreSQL must populate sequence values for all existing rows. This acquires an ACCESS EXCLUSIVE lock and blocks all operations.
+Adding a SERIAL column to an existing table triggers a full table rewrite because Postgres must populate sequence values for all existing rows. This acquires an ACCESS EXCLUSIVE lock and blocks all operations.
 
 ```sql
 ALTER TABLE users ADD COLUMN id SERIAL;
@@ -818,7 +818,7 @@ UPDATE users SET id = nextval('users_id_seq') WHERE id IS NULL;
 -- Step 3: Set default for future inserts only
 ALTER TABLE users ALTER COLUMN id SET DEFAULT nextval('users_id_seq');
 
--- Step 4: Set NOT NULL if needed (PostgreSQL 11+: safe if all values present)
+-- Step 4: Set NOT NULL if needed (Postgres 11+: safe if all values present)
 ALTER TABLE users ALTER COLUMN id SET NOT NULL;
 
 -- Step 5: Set sequence ownership
@@ -831,7 +831,7 @@ ALTER SEQUENCE users_id_seq OWNED BY users.id;
 
 #### Bad
 
-In PostgreSQL, the `json` type has no equality operator, which breaks existing `SELECT DISTINCT` queries and other operations that require comparing values.
+In Postgres, the `json` type has no equality operator, which breaks existing `SELECT DISTINCT` queries and other operations that require comparing values.
 
 ```sql
 ALTER TABLE users ADD COLUMN properties JSON;
@@ -888,7 +888,7 @@ CREATE TABLE products (sku TEXT CHECK (length(sku) <= 10));
 - Fixed-length padding wastes storage
 - Trailing spaces affect equality comparisons (`'US' != 'US  '`)
 - DISTINCT, GROUP BY, and joins may behave unexpectedly
-- No performance benefit over VARCHAR or TEXT in PostgreSQL
+- No performance benefit over VARCHAR or TEXT in Postgres
 
 ### Using TIMESTAMP without time zone
 
@@ -983,7 +983,7 @@ TRUNCATE TABLE users;
 
 #### Bad
 
-Indexes with 4 or more columns are rarely effective. PostgreSQL can only use multi-column indexes efficiently when filtering on the leftmost columns in order. Wide indexes also increase storage costs and slow down write operations (INSERT, UPDATE, DELETE).
+Indexes with 4 or more columns are rarely effective. Postgres can only use multi-column indexes efficiently when filtering on the leftmost columns in order. Wide indexes also increase storage costs and slow down write operations (INSERT, UPDATE, DELETE).
 
 ```sql
 -- 4+ columns: rarely useful
@@ -1004,7 +1004,7 @@ WHERE status = 'active';
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_status ON users(status);
 
--- Option 3: Covering index with INCLUDE (PostgreSQL 11+)
+-- Option 3: Covering index with INCLUDE (Postgres 11+)
 -- Includes extra columns for SELECT without adding them to index keys
 CREATE INDEX idx_users_email_covering ON users(email)
 INCLUDE (name, status);
@@ -1018,7 +1018,7 @@ CREATE INDEX idx_users_tenant_email ON users(tenant_id, email);
 - Specific, verified query patterns that need all columns in order
 - Use `safety-assured` if you've confirmed the index is necessary
 
-**Performance tip:** PostgreSQL can combine multiple indexes using bitmap scans. Two separate indexes often outperform one wide index.
+**Performance tip:** Postgres can combine multiple indexes using bitmap scans. Two separate indexes often outperform one wide index.
 
 ## Usage
 
@@ -1193,7 +1193,7 @@ disable_checks = ["AddColumnCheck"]
 # Directory containing custom Rhai check scripts
 custom_checks_dir = "checks"
 
-# Target PostgreSQL major version.
+# Target Postgres major version.
 # When set, version-aware checks adjust their behavior accordingly.
 # Example: setting 11 allows ADD COLUMN with constant DEFAULT (safe on PG 11+),
 # but still warns for volatile defaults like DEFAULT now() on all versions.
@@ -1229,7 +1229,7 @@ postgres_version = 16
 
 ## Custom Checks
 
-Built-in checks cover common PostgreSQL migration hazards, but every project has unique rules — naming conventions, banned operations, team policies. Custom checks let you enforce these with simple [Rhai](https://rhai.rs) scripts.
+Built-in checks cover common Postgres migration hazards, but every project has unique rules — naming conventions, banned operations, team policies. Custom checks let you enforce these with simple [Rhai](https://rhai.rs) scripts.
 
 Write your checks as `.rhai` files, point `custom_checks_dir` at the directory in `diesel-guard.toml`, and diesel-guard will run them alongside the built-in checks.
 
@@ -1284,7 +1284,7 @@ diesel-guard check migrations/
 `config` gives scripts access to the user's configuration. Use it to make version-aware checks:
 
 ```rhai
-// Only flag this on PostgreSQL < 14
+// Only flag this on Postgres < 14
 if config.postgres_version != () && config.postgres_version >= 14 { return; }
 ```
 

@@ -11,8 +11,8 @@
 //! The recommended approach is to verify the table is no longer in use, ensure
 //! backups exist, and check for foreign key dependencies before dropping.
 
-use crate::checks::pg_helpers::{drop_object_names, DropBehavior, NodeEnum, ObjectType};
-use crate::checks::{if_exists_clause, Check, Config};
+use crate::checks::pg_helpers::{DropBehavior, NodeEnum, ObjectType, drop_object_names};
+use crate::checks::{Check, Config, if_exists_clause};
 use crate::violation::Violation;
 
 pub struct DropTableCheck;

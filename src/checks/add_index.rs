@@ -10,8 +10,8 @@
 //! Using CONCURRENTLY allows the index to be built while permitting concurrent writes,
 //! though it takes longer and cannot be run inside a transaction block.
 
-use crate::checks::pg_helpers::{range_var_name, NodeEnum};
-use crate::checks::{unique_prefix, Check, Config};
+use crate::checks::pg_helpers::{NodeEnum, range_var_name};
+use crate::checks::{Check, Config, unique_prefix};
 use crate::violation::Violation;
 
 pub struct AddIndexCheck;
@@ -43,9 +43,12 @@ impl Check for AddIndexCheck {
             format!(
                 "Creating {unique}index '{index}' on table '{table}' without CONCURRENTLY acquires a SHARE lock, blocking writes \
                 (INSERT, UPDATE, DELETE). Duration depends on table size. Reads are still allowed.",
-                unique = unique_str, index = index_name, table = table_name
+                unique = unique_str,
+                index = index_name,
+                table = table_name
             ),
-            format!(r#"Use CONCURRENTLY to build the index without blocking writes:
+            format!(
+                r#"Use CONCURRENTLY to build the index without blocking writes:
    CREATE {unique}INDEX CONCURRENTLY {index} ON {table};
 
 Note: CONCURRENTLY takes longer and uses more resources, but allows concurrent INSERT, UPDATE, and DELETE operations. The index build may fail if there are deadlocks or unique constraint violations.

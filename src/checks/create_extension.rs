@@ -2,7 +2,7 @@
 //!
 //! This check identifies `CREATE EXTENSION` statements in migration files.
 //!
-//! CREATE EXTENSION often requires superuser privileges in PostgreSQL, which
+//! CREATE EXTENSION often requires superuser privileges in Postgres, which
 //! application database users typically don't have in production environments.
 //! Additionally, extensions are typically infrastructure concerns that should
 //! be managed outside of application migrations.

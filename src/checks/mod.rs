@@ -58,27 +58,19 @@ pub use crate::config::Config;
 mod helpers {
     /// Get prefix string for unique indexes
     pub fn unique_prefix(is_unique: bool) -> &'static str {
-        if is_unique {
-            "UNIQUE "
-        } else {
-            ""
-        }
+        if is_unique { "UNIQUE " } else { "" }
     }
 
     /// Get SQL clause for IF EXISTS modifier
     pub fn if_exists_clause(if_exists: bool) -> &'static str {
-        if if_exists {
-            " IF EXISTS"
-        } else {
-            ""
-        }
+        if if_exists { " IF EXISTS" } else { "" }
     }
 }
 
 use crate::parser::IgnoreRange;
 use crate::violation::Violation;
 pub use helpers::*;
-use pg_helpers::{extract_node, NodeEnum};
+use pg_helpers::{NodeEnum, extract_node};
 use pg_query::protobuf::RawStmt;
 use std::sync::LazyLock;
 

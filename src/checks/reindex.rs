@@ -7,7 +7,7 @@
 //! blocking all operations (SELECT, INSERT, UPDATE, DELETE) until the reindex
 //! completes. Duration depends on index size.
 //!
-//! Using CONCURRENTLY (PostgreSQL 12+) allows the index to be rebuilt while
+//! Using CONCURRENTLY (Postgres 12+) allows the index to be rebuilt while
 //! permitting concurrent queries, though it takes longer and cannot be run
 //! inside a transaction block.
 
@@ -75,11 +75,12 @@ impl Check for ReindexCheck {
                 "REINDEX {object} '{target}' without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock, \
                 blocking all operations on the {object} '{target}' until complete. Duration depends on index size.",
             ),
-            format!(r#"Use REINDEX CONCURRENTLY for lock-free reindexing (PostgreSQL 12+):
+            format!(
+                r#"Use REINDEX CONCURRENTLY for lock-free reindexing (Postgres 12+):
 
    REINDEX {object} CONCURRENTLY {target};
 
-Note: CONCURRENTLY requires PostgreSQL 12+ and cannot be run inside a transaction block.
+Note: CONCURRENTLY requires Postgres 12+ and cannot be run inside a transaction block.
 
 For Diesel migrations:
 1. Create metadata.toml in your migration directory:

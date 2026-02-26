@@ -13,9 +13,9 @@
 //! flagged by this check. Use BIGSERIAL PRIMARY KEY instead.
 
 use crate::checks::pg_helpers::{
-    alter_table_cmds, cmd_def_as_column_def, cmd_def_as_constraint, column_has_constraint,
-    column_type_name, for_each_column_def, is_short_integer, range_var_name, ColumnDef, ConstrType,
-    Constraint, NodeEnum,
+    ColumnDef, ConstrType, Constraint, NodeEnum, alter_table_cmds, cmd_def_as_column_def,
+    cmd_def_as_constraint, column_has_constraint, column_type_name, for_each_column_def,
+    is_short_integer, range_var_name,
 };
 use crate::checks::{Check, Config};
 use crate::violation::Violation;
@@ -56,10 +56,10 @@ impl Check for ShortIntegerPrimaryKeyCheck {
                     .collect();
 
                 for elt in &create.table_elts {
-                    if let Some(NodeEnum::Constraint(c)) = &elt.node {
-                        if c.contype == CONSTR_PRIMARY {
-                            violations.extend(check_pk_key_columns(&table_name, c, &col_defs));
-                        }
+                    if let Some(NodeEnum::Constraint(c)) = &elt.node
+                        && c.contype == CONSTR_PRIMARY
+                    {
+                        violations.extend(check_pk_key_columns(&table_name, c, &col_defs));
                     }
                 }
             }
@@ -72,14 +72,10 @@ impl Check for ShortIntegerPrimaryKeyCheck {
 
                     if !col_defs.is_empty() {
                         for cmd in &cmds {
-                            if let Some(c) = cmd_def_as_constraint(cmd) {
-                                if c.contype == CONSTR_PRIMARY {
-                                    violations.extend(check_pk_key_columns(
-                                        &table_name,
-                                        c,
-                                        &col_defs,
-                                    ));
-                                }
+                            if let Some(c) = cmd_def_as_constraint(cmd)
+                                && c.contype == CONSTR_PRIMARY
+                            {
+                                violations.extend(check_pk_key_columns(&table_name, c, &col_defs));
                             }
                         }
                     }

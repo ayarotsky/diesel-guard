@@ -6,7 +6,7 @@
 //!
 
 use super::{
-    collect_and_sort_entries, should_check_migration, MigrationAdapter, MigrationFile, Result,
+    MigrationAdapter, MigrationFile, Result, collect_and_sort_entries, should_check_migration,
 };
 use camino::Utf8Path;
 use regex::Regex;

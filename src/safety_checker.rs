@@ -76,7 +76,9 @@ impl SafetyChecker {
                 if !builtin_names.contains(&name.as_str())
                     && !custom_names.iter().any(|c| c == name)
                 {
-                    eprintln!("Warning: Unknown check name '{name}' in disable_checks. Run --list-checks to see available checks.");
+                    eprintln!(
+                        "Warning: Unknown check name '{name}' in disable_checks. Run --list-checks to see available checks."
+                    );
                 }
             }
         }

@@ -4,15 +4,15 @@
 //! data type instead of `jsonb`. The `json` type lacks equality operators, which can
 //! cause runtime errors for existing SELECT DISTINCT queries.
 //!
-//! In PostgreSQL, the `json` type stores an exact copy of the input text and lacks
+//! In Postgres, the `json` type stores an exact copy of the input text and lacks
 //! proper equality operators. This means operations like SELECT DISTINCT, GROUP BY,
 //! and UNION will fail when applied to json columns.
 //!
 //! The `jsonb` type stores data in a decomposed binary format with proper indexing
-//! and equality operators, making it suitable for all PostgreSQL operations.
+//! and equality operators, making it suitable for all Postgres operations.
 
 use crate::checks::pg_helpers::{
-    alter_table_cmds, cmd_def_as_column_def, column_type_name, is_json_type, NodeEnum,
+    NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_type_name, is_json_type,
 };
 use crate::checks::{Check, Config};
 use crate::violation::Violation;

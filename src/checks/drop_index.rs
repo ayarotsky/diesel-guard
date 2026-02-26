@@ -7,11 +7,11 @@
 //! table, which blocks all queries (SELECT, INSERT, UPDATE, DELETE) until the drop
 //! operation completes. Duration depends on system load and concurrent transactions.
 //!
-//! Using CONCURRENTLY (PostgreSQL 9.2+) allows the index to be dropped while permitting
+//! Using CONCURRENTLY (Postgres 9.2+) allows the index to be dropped while permitting
 //! concurrent queries, though it takes longer and cannot be run inside a transaction block.
 
-use crate::checks::pg_helpers::{drop_object_names, NodeEnum, ObjectType};
-use crate::checks::{if_exists_clause, Check, Config};
+use crate::checks::pg_helpers::{NodeEnum, ObjectType, drop_object_names};
+use crate::checks::{Check, Config, if_exists_clause};
 use crate::violation::Violation;
 
 pub struct DropIndexCheck;
@@ -47,7 +47,7 @@ impl Check for DropIndexCheck {
                     format!(r#"Use CONCURRENTLY to drop the index without blocking queries:
    DROP INDEX CONCURRENTLY{if_exists} {index};
 
-Note: CONCURRENTLY requires PostgreSQL 9.2+ and cannot be run inside a transaction block.
+Note: CONCURRENTLY requires Postgres 9.2+ and cannot be run inside a transaction block.
 
 For Diesel migrations:
 1. Create metadata.toml in your migration directory:

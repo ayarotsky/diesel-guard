@@ -2,7 +2,7 @@
 //!
 //! This check identifies constraints added without explicit names (UNIQUE, FOREIGN KEY, CHECK).
 //!
-//! Unnamed constraints receive auto-generated names from PostgreSQL (like "users_email_key"
+//! Unnamed constraints receive auto-generated names from Postgres (like "users_email_key"
 //! or "posts_user_id_fkey"), which can vary between databases and make future migrations
 //! difficult. When you need to modify or drop the constraint later, you'll need to query
 //! the database to find the generated name, which is error-prone and environment-specific.
@@ -10,8 +10,8 @@
 //! Always name constraints explicitly for maintainable migrations.
 
 use crate::checks::pg_helpers::{
-    alter_table_cmds, cmd_def_as_constraint, constraint_columns_str, range_var_name, ConstrType,
-    NodeEnum,
+    ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_constraint, constraint_columns_str,
+    range_var_name,
 };
 use crate::checks::{Check, Config};
 use crate::violation::Violation;
@@ -79,7 +79,7 @@ impl Check for UnnamedConstraintCheck {
                 Some(Violation::new(
                     "CONSTRAINT without name",
                     format!(
-                        "Adding unnamed {constraint_type} constraint on table '{table}' will receive an auto-generated name from PostgreSQL. \
+                        "Adding unnamed {constraint_type} constraint on table '{table}' will receive an auto-generated name from Postgres. \
                         This makes future migrations difficult, as the generated name varies between databases and requires querying \
                         the database to find the constraint name before modifying or dropping it.",
                         constraint_type = constraint_type,

@@ -10,7 +10,7 @@
 //! The recommended approach is to use DELETE with batching to remove rows incrementally,
 //! allowing concurrent access to the table.
 
-use crate::checks::pg_helpers::{range_var_name, NodeEnum};
+use crate::checks::pg_helpers::{NodeEnum, range_var_name};
 use crate::checks::{Check, Config};
 use crate::violation::Violation;
 
