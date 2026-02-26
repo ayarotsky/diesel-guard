@@ -7,6 +7,7 @@ use crate::scripting;
 use crate::violation::Violation;
 use camino::Utf8Path;
 use std::fs;
+use std::io::{self, BufRead, BufReader};
 
 pub struct SafetyChecker {
     registry: Registry,
@@ -162,9 +163,24 @@ impl SafetyChecker {
         Ok(results)
     }
 
-    /// Check a path (file or directory)
+    // check a migration string from a buffer
+    pub fn check_buffer(&self, reader: &mut dyn BufRead) -> Result<Vec<Violation>> {
+        let mut buffer = String::new();
+        reader.read_to_string(&mut buffer)?;
+        self.check_sql(&buffer)
+    }
+
+    /// Check a path (file, directory or stdin)
     pub fn check_path(&self, path: &Utf8Path) -> Result<Vec<(String, Vec<Violation>)>> {
-        if path.is_dir() {
+        // "-" means we're using stdin as an input.
+        if path.as_str() == "-" {
+            let violations = self.check_buffer(&mut BufReader::new(io::stdin().lock()))?;
+            if violations.is_empty() {
+                Ok(vec![])
+            } else {
+                Ok(vec![(path.to_string(), violations)])
+            }
+        } else if path.is_dir() {
             self.check_directory(path)
         } else {
             let violations = self.check_file(path)?;
@@ -185,6 +201,8 @@ impl Default for SafetyChecker {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+
     use super::*;
 
     #[test]
@@ -278,5 +296,48 @@ mod tests {
             result.unwrap_err().to_string(),
             "Invalid framework \"unknown\". Expected \"diesel\" or \"sqlx\"."
         );
+    }
+
+    #[test]
+    fn test_buffer_input_safe_sql() {
+        let checker: SafetyChecker = SafetyChecker::new();
+        let input_data = "ALTER TABLE users ADD COLUMN foo TEXT;";
+        let violations = checker
+            .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
+            .unwrap();
+        assert_eq!(violations.len(), 0)
+    }
+
+    #[test]
+    fn test_buffer_input_unsafe_sql() {
+        let checker: SafetyChecker = SafetyChecker::new();
+        let input_data = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
+        let violations = checker
+            .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
+            .unwrap();
+        assert_eq!(violations.len(), 1)
+    }
+
+    #[test]
+    fn test_buffer_empty_string() {
+        let checker: SafetyChecker = SafetyChecker::new();
+        let input_data = "";
+        let violations = checker
+            .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
+            .unwrap();
+        assert_eq!(violations.len(), 0)
+    }
+
+    #[test]
+    fn test_buffer_input_multiple_lines() {
+        let checker: SafetyChecker = SafetyChecker::new();
+        let input_data = r#"
+            REINDEX INDEX idx_users_email;
+            REINDEX TABLE posts;
+        "#;
+        let violations = checker
+            .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
+            .unwrap();
+        assert_eq!(violations.len(), 2)
     }
 }
