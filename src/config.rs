@@ -98,7 +98,7 @@ pub struct Config {
     #[serde(default)]
     pub custom_checks_dir: Option<String>,
 
-    /// Target PostgreSQL major version (e.g., 11, 14, 16).
+    /// Target Postgres major version (e.g., 11, 14, 16).
     /// When set, checks that are safe from that version onward are skipped.
     #[serde(default)]
     pub postgres_version: Option<u32>,

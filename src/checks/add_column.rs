@@ -1,19 +1,19 @@
 //! Detection for ADD COLUMN with DEFAULT operations.
 //!
 //! This check identifies `ALTER TABLE` statements that add columns with DEFAULT
-//! values, which can cause table locks and performance issues on PostgreSQL < 11.
+//! values, which can cause table locks and performance issues on Postgres < 11.
 //!
-//! On PostgreSQL versions before 11, adding a column with a DEFAULT value requires
+//! On Postgres versions before 11, adding a column with a DEFAULT value requires
 //! a full table rewrite to backfill the default value for existing rows. This acquires
 //! an ACCESS EXCLUSIVE lock and blocks all operations. Duration depends on table size.
 //!
-//! On PostgreSQL 11+, constant defaults (literals like FALSE, 0, 'active') are safe
+//! On Postgres 11+, constant defaults (literals like FALSE, 0, 'active') are safe
 //! as they are stored as metadata without a table rewrite. Volatile defaults (function
 //! calls like now() or gen_random_uuid()) still require a table rewrite on all versions.
 
 use crate::checks::pg_helpers::{
-    alter_table_cmds, cmd_def_as_column_def, column_has_constraint, column_type_name, ConstrType,
-    NodeEnum,
+    ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_has_constraint,
+    column_type_name,
 };
 use crate::checks::{Check, Config};
 use crate::violation::Violation;
@@ -47,7 +47,7 @@ impl Check for AddColumnCheck {
                 Some(Violation::new(
                     "ADD COLUMN with DEFAULT",
                     format!(
-                        "Adding column '{column}' with DEFAULT on table '{table}' requires a full table rewrite on PostgreSQL < 11, \
+                        "Adding column '{column}' with DEFAULT on table '{table}' requires a full table rewrite on Postgres < 11, \
                         which acquires an ACCESS EXCLUSIVE lock and blocks all operations. Duration depends on table size.",
                         column = column_name, table = table_name
                     ),
@@ -60,7 +60,7 @@ impl Check for AddColumnCheck {
 3. Add default for new rows only:
    ALTER TABLE {table} ALTER COLUMN {column} SET DEFAULT <value>;
 
-Note: For PostgreSQL 11+, this is safe if the default is a constant value."#,
+Note: For Postgres 11+, this is safe if the default is a constant value."#,
                         table = table_name,
                         column = column_name,
                         data_type = data_type

@@ -1,5 +1,5 @@
 name: Diesel Guard
-description: Check PostgreSQL migrations for dangerous patterns
+description: Check Postgres migrations for dangerous patterns
 branding:
   icon: shield
   color: red

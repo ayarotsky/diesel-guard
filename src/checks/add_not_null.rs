@@ -3,14 +3,14 @@
 //! This check identifies `ALTER TABLE` statements that add NOT NULL constraints
 //! to existing columns, which requires a full table scan and ACCESS EXCLUSIVE lock.
 //!
-//! Adding NOT NULL to an existing column requires PostgreSQL to scan the entire table
+//! Adding NOT NULL to an existing column requires Postgres to scan the entire table
 //! to verify all existing values are non-null. This acquires an ACCESS EXCLUSIVE lock,
 //! blocking all operations for the duration of the scan.
 //!
 //! For large tables, a safer approach is to add a CHECK constraint first, validate it
 //! separately, then add the NOT NULL constraint.
 
-use crate::checks::pg_helpers::{alter_table_cmds, AlterTableType, NodeEnum};
+use crate::checks::pg_helpers::{AlterTableType, NodeEnum, alter_table_cmds};
 use crate::checks::{Check, Config};
 use crate::violation::Violation;
 
@@ -52,7 +52,7 @@ impl Check for AddNotNullCheck {
 4. Optionally drop the redundant CHECK constraint:
    ALTER TABLE {table} DROP CONSTRAINT {column}_not_null;
 
-Note: The VALIDATE step allows concurrent reads and writes, only blocking other schema changes. On PostgreSQL 12+, NOT NULL constraints are more efficient, but the CHECK approach still provides better control over large migrations."#,
+Note: The VALIDATE step allows concurrent reads and writes, only blocking other schema changes. On Postgres 12+, NOT NULL constraints are more efficient, but the CHECK approach still provides better control over large migrations."#,
                         table = table_name,
                         column = column_name
                     ),

@@ -179,10 +179,12 @@ ALTER TABLE posts DROP COLUMN body;
         // Nested blocks should be rejected with clear error
         let result = CommentParser::parse_ignore_ranges(sql);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Nested 'safety-assured:start'"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Nested 'safety-assured:start'")
+        );
     }
 
     #[test]

@@ -1,4 +1,4 @@
--- Unsafe: Unnamed constraints get auto-generated names from PostgreSQL
+-- Unsafe: Unnamed constraints get auto-generated names from Postgres
 
 -- Unnamed UNIQUE constraint
 ALTER TABLE users ADD UNIQUE (email);

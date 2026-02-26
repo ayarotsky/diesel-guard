@@ -1,5 +1,5 @@
-use diesel_guard::output::OutputFormatter;
 use diesel_guard::Violation;
+use diesel_guard::output::OutputFormatter;
 
 #[test]
 fn test_format_json_valid_structure() {

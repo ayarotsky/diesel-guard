@@ -3,7 +3,7 @@
 //! This check identifies `ALTER TABLE` statements that add columns with SERIAL,
 //! SMALLSERIAL, or BIGSERIAL data types, which trigger a full table rewrite.
 //!
-//! Adding a SERIAL column to an existing table requires PostgreSQL to:
+//! Adding a SERIAL column to an existing table requires Postgres to:
 //! 1. Create a new sequence
 //! 2. Rewrite the entire table to populate the sequence values for existing rows
 //! 3. Update all indexes
@@ -12,7 +12,7 @@
 //! Duration depends on table size and number of indexes.
 
 use crate::checks::pg_helpers::{
-    alter_table_cmds, cmd_def_as_column_def, column_type_name, is_serial_pattern, NodeEnum,
+    NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_type_name, is_serial_pattern,
 };
 use crate::checks::{Check, Config};
 use crate::violation::Violation;
@@ -55,7 +55,7 @@ impl Check for AddSerialColumnCheck {
 4. Set default for future inserts only:
    ALTER TABLE {table} ALTER COLUMN {column} SET DEFAULT nextval('{table}_{column}_seq');
 
-5. Set NOT NULL if needed (PostgreSQL 11+: safe if all values present):
+5. Set NOT NULL if needed (Postgres 11+: safe if all values present):
    ALTER TABLE {table} ALTER COLUMN {column} SET NOT NULL;
 
 6. Set sequence ownership:

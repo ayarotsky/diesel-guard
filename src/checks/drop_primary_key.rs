@@ -13,14 +13,14 @@
 //! **Future Enhancement:** Future versions of diesel-guard will support optional database
 //! connections to verify constraint types with certainty.
 
-use crate::checks::pg_helpers::{alter_table_cmds, AlterTableType, NodeEnum};
+use crate::checks::pg_helpers::{AlterTableType, NodeEnum, alter_table_cmds};
 use crate::checks::{Check, Config};
 use crate::violation::Violation;
 use regex::Regex;
 use std::sync::LazyLock;
 
-/// Uses common PostgreSQL naming conventions:
-/// - `*_pkey` (standard PostgreSQL convention)
+/// Uses common Postgres naming conventions:
+/// - `*_pkey` (standard Postgres convention)
 /// - `*_pk` suffix
 /// - `pk_*` prefix
 /// - `*_primary_key` variations

@@ -1,15 +1,16 @@
 [package]
 name = "diesel-guard"
 version = "0.7.0"
-edition = "2021"
+edition = "2024"
 authors = ["Alex Yarotsky <https://github.com/ayarotsky>"]
-description = "Catch dangerous PostgreSQL migrations in Diesel and SQLx before they take down production"
+description = "Linter for dangerous Postgres migration patterns in Diesel and SQLx"
+documentation = "https://github.com/ayarotsky/diesel-guard#readme"
 license = "MIT"
 repository = "https://github.com/ayarotsky/diesel-guard"
 homepage = "https://github.com/ayarotsky/diesel-guard"
 readme = "README.md"
-keywords = ["diesel", "migrations", "postgresql", "database", "safety"]
-categories = ["database", "development-tools"]
+keywords = ["linter", "postgres", "migrations", "sql", "postgresql"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 # SQL parsing

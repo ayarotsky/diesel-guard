@@ -2,14 +2,14 @@
 //!
 //! This check identifies `CREATE INDEX` statements with more than 3 columns.
 //!
-//! Wide indexes (with 4+ columns) are often ineffective because PostgreSQL can only use
+//! Wide indexes (with 4+ columns) are often ineffective because Postgres can only use
 //! the index efficiently when filtering on the leftmost columns in order. They also
 //! consume more storage and slow down write operations.
 //!
 //! Consider using partial indexes, separate narrower indexes, or rethinking your
 //! query patterns instead.
 
-use crate::checks::pg_helpers::{range_var_name, NodeEnum};
+use crate::checks::pg_helpers::{NodeEnum, range_var_name};
 use crate::checks::{Check, Config};
 use crate::violation::Violation;
 
@@ -60,14 +60,15 @@ impl Check for WideIndexCheck {
             "CREATE INDEX with too many columns",
             format!(
                 "Index '{index}' on table '{table}' has {count} columns ({columns}). \
-                Wide indexes (4+ columns) are rarely effective because PostgreSQL can only use them efficiently \
+                Wide indexes (4+ columns) are rarely effective because Postgres can only use them efficiently \
                 when filtering on leftmost columns in order. They also increase storage costs and slow down writes.",
                 index = index_name,
                 table = table_name,
                 count = column_count,
                 columns = columns_list
             ),
-            format!(r#"Consider these alternatives:
+            format!(
+                r#"Consider these alternatives:
 
 1. Use a partial index for specific query patterns:
    CREATE INDEX {index} ON {table}({first_col})
@@ -88,7 +89,12 @@ Note: Multi-column indexes are occasionally useful (e.g., for composite foreign 
                 table = table_name,
                 first_col = column_names.first().unwrap_or(&"column1".to_string()),
                 second_col = column_names.get(1).unwrap_or(&"column2".to_string()),
-                other_cols = column_names.iter().skip(1).cloned().collect::<Vec<_>>().join(", "),
+                other_cols = column_names
+                    .iter()
+                    .skip(1)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", "),
                 count = column_count,
             ),
         )]

@@ -29,7 +29,7 @@ When suggesting a new check, please include:
 - **The unsafe operation** - What migration pattern should be detected
 - **Why it's dangerous** - Lock type, blocking behavior, or data integrity issue
 - **Safe alternative** - How developers should do this safely
-- **PostgreSQL version specifics** - If behavior differs across versions
+- **Postgres version specifics** - If behavior differs across versions
 
 Create an issue with `[Check]` in the title, for example: `[Check] REFRESH MATERIALIZED VIEW without CONCURRENTLY`
 
@@ -176,14 +176,14 @@ If you're using an AI coding assistant (like Claude or GitHub Copilot), please r
 
 This helps maintain consistency across contributions.
 
-## PostgreSQL Version Testing
+## Postgres Version Testing
 
-When implementing checks that behave differently across PostgreSQL versions:
+When implementing checks that behave differently across Postgres versions:
 - Document version-specific behavior in check comments
 - Include version caveats in violation messages
-- Test against multiple PostgreSQL versions if possible
+- Test against multiple Postgres versions if possible
 
-Currently, we target PostgreSQL 9.6+ to match Diesel's requirements.
+Currently, we target Postgres 9.6+ to match Diesel's requirements.
 
 ## Questions?
 

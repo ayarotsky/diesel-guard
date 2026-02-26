@@ -6,7 +6,7 @@ pub enum DieselGuardError {
     #[error("Failed to parse SQL: {msg}")]
     #[diagnostic(
         code(diesel_guard::parse_error),
-        help("Check that your SQL syntax is valid PostgreSQL"),
+        help("Check that your SQL syntax is valid Postgres"),
         url("https://www.postgresql.org/docs/current/sql-syntax.html")
     )]
     ParseError {

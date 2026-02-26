@@ -10,7 +10,7 @@
 //! The safe alternative is to use CREATE UNIQUE INDEX CONCURRENTLY instead.
 
 use crate::checks::pg_helpers::{
-    alter_table_cmds, cmd_def_as_constraint, constraint_columns_str, ConstrType, NodeEnum,
+    ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_constraint, constraint_columns_str,
 };
 use crate::checks::{Check, Config};
 use crate::violation::Violation;

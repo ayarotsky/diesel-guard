@@ -5,12 +5,12 @@
 //!
 //! Most type changes acquire an ACCESS EXCLUSIVE lock and trigger a full table rewrite,
 //! blocking all operations for the duration. However, some type changes are safe and instant
-//! (e.g., increasing VARCHAR length on PostgreSQL 9.2+, VARCHAR to TEXT).
+//! (e.g., increasing VARCHAR length on Postgres 9.2+, VARCHAR to TEXT).
 //!
 //! The duration and impact depend heavily on the specific type change and table size.
 
 use crate::checks::pg_helpers::{
-    alter_table_cmds, cmd_def_as_column_def, column_type_name, AlterTableType, NodeEnum,
+    AlterTableType, NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_type_name,
 };
 use crate::checks::{Check, Config};
 use crate::violation::Violation;
@@ -60,7 +60,7 @@ impl Check for AlterColumnTypeCheck {
    ALTER TABLE {table} RENAME COLUMN {column}_new TO {column};
 
 Note: Some type changes are safe:
-- VARCHAR(n) to VARCHAR(m) where m > n (PostgreSQL 9.2+)
+- VARCHAR(n) to VARCHAR(m) where m > n (Postgres 9.2+)
 - VARCHAR to TEXT
 - Numeric precision increases
 

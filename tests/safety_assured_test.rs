@@ -58,9 +58,11 @@ ALTER TABLE comments DROP COLUMN author;
     );
 
     // Verify the operations detected are the ones outside the block
-    assert!(violations
-        .iter()
-        .all(|v| v.operation.contains("DROP COLUMN")));
+    assert!(
+        violations
+            .iter()
+            .all(|v| v.operation.contains("DROP COLUMN"))
+    );
 }
 
 #[test]
@@ -241,10 +243,12 @@ ALTER TABLE posts DROP COLUMN body;
     // Nested blocks should be rejected with a clear error
     let result = checker.check_sql(sql);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Nested 'safety-assured:start'"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Nested 'safety-assured:start'")
+    );
 }
 
 #[test]
@@ -314,9 +318,11 @@ ALTER TABLE users DROP COLUMN f;
         3,
         "should detect only violations outside blocks"
     );
-    assert!(violations
-        .iter()
-        .all(|v| v.operation.contains("DROP COLUMN")));
+    assert!(
+        violations
+            .iter()
+            .all(|v| v.operation.contains("DROP COLUMN"))
+    );
 }
 
 #[test]

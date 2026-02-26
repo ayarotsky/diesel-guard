@@ -10,7 +10,7 @@
 //! The recommended approach is a multi-step dual-write migration that maintains
 //! compatibility with running instances and avoids dangerous locks.
 
-use crate::checks::pg_helpers::{range_var_name, NodeEnum, ObjectType};
+use crate::checks::pg_helpers::{NodeEnum, ObjectType, range_var_name};
 use crate::checks::{Check, Config};
 use crate::violation::Violation;
 

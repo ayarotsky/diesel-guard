@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::violation::Violation;
 use camino::Utf8Path;
 use pg_query::protobuf::node::Node as NodeEnum;
-use rhai::{Dynamic, Engine, AST};
+use rhai::{AST, Dynamic, Engine};
 use std::fmt;
 use std::sync::Arc;
 
