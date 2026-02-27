@@ -1,6 +1,6 @@
 # Diesel Guard
 
-![Build Status](https://github.com/ayarotsky/diesel-guard/actions/workflows/ci.yml/badge.svg?branch=main)
+![Build Status](https://github.com/ayarotsky/diesel-guard/actions/workflows/ci.yml/badge.svg?branch=main) [![codecov](https://codecov.io/github/ayarotsky/diesel-guard/graph/badge.svg?token=YCBD10IGNU)](https://codecov.io/github/ayarotsky/diesel-guard)
 
 Catch dangerous Postgres migrations before they take down production.
 
