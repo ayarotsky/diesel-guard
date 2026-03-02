@@ -197,6 +197,19 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_timestamp_with_trailing_chars() {
+        // The regex matches a prefix but the full string has trailing characters,
+        // so the whole-string check (captures[0] == timestamp) fails → Err.
+        let adapter = DieselAdapter;
+        assert!(adapter.validate_timestamp("20240101000000_extra").is_err());
+        assert!(
+            adapter
+                .validate_timestamp("2024_01_01_000000_extra")
+                .is_err()
+        );
+    }
+
+    #[test]
     fn test_should_check_migration() {
         // No filter - check all
         assert!(should_check_migration(None, "20240101000000"));

@@ -44,8 +44,13 @@ fn test_init_creates_config() {
 
     // Verify output message
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("✓ Created diesel-guard.toml"));
-    assert!(stdout.contains("Next steps:"));
+    assert_eq!(
+        stdout,
+        "✓ Created diesel-guard.toml\n\nNext steps:\n\
+         1. Edit diesel-guard.toml and set the 'framework' field to \"diesel\" or \"sqlx\"\n\
+         2. Customize other configuration options as needed\n\
+         3. Run 'diesel-guard check <path>' to check your migrations\n"
+    );
 }
 
 #[test]
@@ -99,8 +104,11 @@ fn test_init_fails_when_config_exists() {
 
     // Verify error message
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("already exists"));
-    assert!(stderr.contains("--force"));
+    assert_eq!(
+        stderr,
+        "Error: diesel-guard.toml already exists in current directory\n\
+         Use --force to overwrite the existing file\n"
+    );
 
     // Verify original file was not modified
     let content = fs::read_to_string(&config_path).unwrap();
@@ -131,7 +139,13 @@ fn test_init_force_overwrites_existing() {
 
     // Verify output message indicates overwrite
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("✓ Overwrote diesel-guard.toml"));
+    assert_eq!(
+        stdout,
+        "✓ Overwrote diesel-guard.toml\n\nNext steps:\n\
+         1. Edit diesel-guard.toml and set the 'framework' field to \"diesel\" or \"sqlx\"\n\
+         2. Customize other configuration options as needed\n\
+         3. Run 'diesel-guard check <path>' to check your migrations\n"
+    );
 
     // Verify file was overwritten with template
     let created_content = fs::read_to_string(&config_path).unwrap();

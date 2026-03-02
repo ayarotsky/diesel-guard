@@ -141,4 +141,18 @@ mod tests {
         let dir = Utf8Path::from_path(temp_dir.path()).unwrap();
         assert!(!is_single_migration_dir(dir));
     }
+
+    #[test]
+    fn test_should_check_migration_non_timestamp_directory_name() {
+        // Diesel allows migration directories without a recognized timestamp — the raw
+        // directory name is used as the fallback (see diesel.rs `unwrap_or_else`).
+        // When start_after is a real numeric timestamp and the migration name is a plain
+        // word, both fail i64::parse and string comparison is used. Non-numeric strings
+        // (e.g. "create_users" → "createusers") sort after numeric strings, so the
+        // migration is always checked regardless of start_after.
+        assert!(should_check_migration(
+            Some("20240101000000"),
+            "create_users"
+        ));
+    }
 }

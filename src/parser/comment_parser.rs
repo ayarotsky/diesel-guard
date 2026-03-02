@@ -148,9 +148,11 @@ ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
         "#;
 
-        let result = CommentParser::parse_ignore_ranges(sql);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unmatched"));
+        let err = CommentParser::parse_ignore_ranges(sql).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Failed to parse SQL: Unmatched 'safety-assured:end' at line 3. Each 'safety-assured:end' must have a matching 'safety-assured:start' before it."
+        );
     }
 
     #[test]
@@ -160,9 +162,11 @@ ALTER TABLE users DROP COLUMN email;
 ALTER TABLE users DROP COLUMN email;
         "#;
 
-        let result = CommentParser::parse_ignore_ranges(sql);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unclosed"));
+        let err = CommentParser::parse_ignore_ranges(sql).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Failed to parse SQL: Unclosed 'safety-assured:start' at line 2. Did you forget to add 'safety-assured:end'?"
+        );
     }
 
     #[test]
@@ -177,13 +181,10 @@ ALTER TABLE posts DROP COLUMN body;
         "#;
 
         // Nested blocks should be rejected with clear error
-        let result = CommentParser::parse_ignore_ranges(sql);
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Nested 'safety-assured:start'")
+        let err = CommentParser::parse_ignore_ranges(sql).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Failed to parse SQL: Nested 'safety-assured:start' at line 4. Nested blocks are not supported. Close the previous block before starting a new one."
         );
     }
 
@@ -272,11 +273,11 @@ ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
         "#;
 
-        let result = CommentParser::parse_ignore_ranges(sql);
-        assert!(
-            result.is_err(),
-            "Invalid start directive should not be recognized"
+        let err = CommentParser::parse_ignore_ranges(sql)
+            .expect_err("Invalid start directive should not be recognized");
+        assert_eq!(
+            err.to_string(),
+            "Failed to parse SQL: Unmatched 'safety-assured:end' at line 4. Each 'safety-assured:end' must have a matching 'safety-assured:start' before it."
         );
-        assert!(result.unwrap_err().to_string().contains("Unmatched"));
     }
 }

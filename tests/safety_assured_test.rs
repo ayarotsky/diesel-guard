@@ -109,9 +109,13 @@ fn test_unclosed_block_error() {
 ALTER TABLE users DROP COLUMN email;
     "#;
 
-    let result = checker.check_sql(sql);
-    assert!(result.is_err(), "should error on unclosed block");
-    assert!(result.unwrap_err().to_string().contains("Unclosed"));
+    let err = checker
+        .check_sql(sql)
+        .expect_err("should error on unclosed block");
+    assert_eq!(
+        err.to_string(),
+        "Failed to parse SQL: Unclosed 'safety-assured:start' at line 2. Did you forget to add 'safety-assured:end'?"
+    );
 }
 
 #[test]
@@ -122,9 +126,13 @@ ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
     "#;
 
-    let result = checker.check_sql(sql);
-    assert!(result.is_err(), "should error on unmatched end");
-    assert!(result.unwrap_err().to_string().contains("Unmatched"));
+    let err = checker
+        .check_sql(sql)
+        .expect_err("should error on unmatched end");
+    assert_eq!(
+        err.to_string(),
+        "Failed to parse SQL: Unmatched 'safety-assured:end' at line 3. Each 'safety-assured:end' must have a matching 'safety-assured:start' before it."
+    );
 }
 
 #[test]
@@ -241,13 +249,10 @@ ALTER TABLE posts DROP COLUMN body;
     "#;
 
     // Nested blocks should be rejected with a clear error
-    let result = checker.check_sql(sql);
-    assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .to_string()
-            .contains("Nested 'safety-assured:start'")
+    let err = checker.check_sql(sql).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "Failed to parse SQL: Nested 'safety-assured:start' at line 4. Nested blocks are not supported. Close the previous block before starting a new one."
     );
 }
 

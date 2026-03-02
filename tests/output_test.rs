@@ -133,3 +133,17 @@ fn test_format_text_empty_violations() {
         "Output should not contain 'Problem:' section when there are no violations"
     );
 }
+
+#[test]
+fn test_format_summary_no_violations() {
+    colored::control::set_override(false);
+    let output = OutputFormatter::format_summary(0);
+    assert_eq!(output, "✅ No unsafe migrations detected!");
+}
+
+#[test]
+fn test_format_summary_with_violations() {
+    colored::control::set_override(false);
+    let output = OutputFormatter::format_summary(3);
+    assert_eq!(output, "\n❌ 3 unsafe migration(s) detected");
+}

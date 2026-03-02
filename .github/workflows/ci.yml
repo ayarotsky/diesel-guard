@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, closed]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -24,6 +25,7 @@ jobs:
     name: Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    if: github.event.action != 'closed'
 
     steps:
       - name: Checkout code
@@ -69,6 +71,7 @@ jobs:
     name: Coverage
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    if: github.event.action != 'closed'
     needs: tests
 
     steps:
@@ -102,7 +105,7 @@ jobs:
   commitlint:
     name: Commitlint
     runs-on: ubuntu-latest
-    if: github.ref != 'refs/heads/main'
+    if: github.event.action != 'closed' && github.ref != 'refs/heads/main'
 
     steps:
       - name: Checkout code

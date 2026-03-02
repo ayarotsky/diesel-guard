@@ -41,16 +41,16 @@ impl OutputFormatter {
         serde_json::to_string_pretty(results).unwrap_or_else(|_| "{}".into())
     }
 
-    /// Print summary
-    pub fn print_summary(total_violations: usize) {
+    /// Format summary
+    pub fn format_summary(total_violations: usize) -> String {
         if total_violations == 0 {
-            println!("{}", "✅ No unsafe migrations detected!".green().bold());
+            format!("{}", "✅ No unsafe migrations detected!".green().bold())
         } else {
-            println!(
+            format!(
                 "\n{} {} unsafe migration(s) detected",
                 "❌".red(),
                 total_violations.to_string().red().bold()
-            );
+            )
         }
     }
 }

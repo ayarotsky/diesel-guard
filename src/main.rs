@@ -84,7 +84,7 @@ fn main() -> Result<()> {
             let results = checker.check_path(&path)?;
 
             if results.is_empty() {
-                OutputFormatter::print_summary(0);
+                println!("{}", OutputFormatter::format_summary(0));
                 exit(0);
             }
 
@@ -99,7 +99,7 @@ fn main() -> Result<()> {
                     for (file_path, violations) in &results {
                         print!("{}", OutputFormatter::format_text(file_path, violations));
                     }
-                    OutputFormatter::print_summary(total_violations);
+                    println!("{}", OutputFormatter::format_summary(total_violations));
                 }
             }
 
