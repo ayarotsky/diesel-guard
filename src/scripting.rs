@@ -133,15 +133,23 @@ fn map_to_violation(check_name: &str, value: Dynamic) -> Option<Violation> {
     match (operation, problem, safe_alternative) {
         (Some(op), Some(prob), Some(alt)) => Some(Violation::new(op, prob, alt)),
         _ => {
-            let keys: Vec<_> = map.keys().map(|k| k.to_string()).collect();
+            let mut issues = Vec::new();
+            for key in &["operation", "problem", "safe_alternative"] {
+                match map.get(*key) {
+                    None => issues.push(format!("'{key}' is missing")),
+                    Some(v) if v.clone().into_string().is_err() => {
+                        issues.push(format!("'{key}' must be a string (got {})", v.type_name()))
+                    }
+                    _ => {}
+                }
+            }
             Some(Violation::new(
                 format!("SCRIPT ERROR: {check_name}"),
                 format!(
-                    "Custom check returned a map missing required keys \
-                     (need 'operation', 'problem', 'safe_alternative'), got keys: [{}]",
-                    keys.join(", ")
+                    "Custom check returned an invalid map: {}",
+                    issues.join(", ")
                 ),
-                "Fix the custom check script to return all three required keys.",
+                "Fix the custom check script to return all three required string keys.",
             ))
         }
     }
@@ -389,7 +397,7 @@ mod tests {
             "CREATE INDEX idx ON users(email);",
         );
         assert_eq!(violations.len(), 1);
-        assert!(violations[0].operation.contains("SCRIPT ERROR"));
+        assert_eq!(violations[0].operation, "SCRIPT ERROR: test_check");
     }
 
     #[test]
@@ -479,7 +487,11 @@ mod tests {
             "CREATE INDEX idx ON users(email);",
         );
         assert_eq!(violations.len(), 1);
-        assert!(violations[0].operation.contains("SCRIPT ERROR"));
+        assert_eq!(violations[0].operation, "SCRIPT ERROR: test_check");
+        assert_eq!(
+            violations[0].problem,
+            "Custom check returned an invalid map: 'safe_alternative' is missing"
+        );
     }
 
     #[test]
@@ -492,7 +504,11 @@ mod tests {
             "CREATE INDEX idx ON users(email);",
         );
         assert_eq!(violations.len(), 1);
-        assert!(violations[0].operation.contains("SCRIPT ERROR"));
+        assert_eq!(violations[0].operation, "SCRIPT ERROR: test_check");
+        assert_eq!(
+            violations[0].problem,
+            "Custom check returned an invalid map: 'safe_alternative' is missing"
+        );
     }
 
     #[test]
@@ -579,5 +595,53 @@ mod tests {
         let (checks, errors) = load_custom_checks(dir_path, &config);
         assert_eq!(checks.len(), 0);
         assert_eq!(errors.len(), 0);
+    }
+
+    #[test]
+    fn test_load_custom_checks_nonexistent_directory() {
+        let dir = TempDir::new().unwrap();
+        let missing = dir.path().join("does_not_exist");
+        let dir_path = Utf8Path::from_path(&missing).unwrap();
+        let config = crate::config::Config::default();
+        let (checks, errors) = load_custom_checks(dir_path, &config);
+        assert_eq!(checks.len(), 0);
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].message.contains("Failed to read directory"));
+    }
+
+    #[test]
+    fn test_load_custom_checks_unreadable_file() {
+        let dir = TempDir::new().unwrap();
+        let dir_path = Utf8Path::from_path(dir.path()).unwrap();
+
+        // A directory at the .rhai path always fails fs::read_to_string,
+        // even under root — unlike chmod 0o000 which root can bypass.
+        let script_path = dir.path().join("unreadable.rhai");
+        fs::create_dir(&script_path).unwrap();
+
+        let config = crate::config::Config::default();
+        let (checks, errors) = load_custom_checks(dir_path, &config);
+
+        assert_eq!(checks.len(), 0);
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].message.contains("Failed to read"));
+    }
+
+    #[test]
+    fn test_map_with_non_string_operation_field() {
+        // operation is an integer, not a string — into_string() returns None,
+        // so the match falls through to the error-violation arm in map_to_violation.
+        let violations = run_script(
+            r#"
+            #{ operation: 42, problem: "p", safe_alternative: "s" }
+            "#,
+            "CREATE INDEX idx ON users(email);",
+        );
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].operation, "SCRIPT ERROR: test_check");
+        assert_eq!(
+            violations[0].problem,
+            "Custom check returned an invalid map: 'operation' must be a string (got i64)"
+        );
     }
 }

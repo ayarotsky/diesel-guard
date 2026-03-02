@@ -337,4 +337,108 @@ postgres_version = 14
         let config: Config = toml::from_str(r#"framework = "diesel""#).unwrap();
         assert_eq!(config.postgres_version, None);
     }
+
+    // --- Diagnostic::code() tests — one per variant ---
+
+    #[test]
+    fn test_diagnostic_code_io_error() {
+        use miette::Diagnostic;
+        let err = ConfigError::IoError(std::io::Error::other("oops"));
+        let code = err.code().unwrap().to_string();
+        assert_eq!(code, "diesel_guard::config::io_error");
+    }
+
+    #[test]
+    fn test_diagnostic_code_parse_error() {
+        use miette::Diagnostic;
+        let toml_err = toml::from_str::<Config>("not_valid_toml = [[[").unwrap_err();
+        let err = ConfigError::ParseError(toml_err);
+        let code = err.code().unwrap().to_string();
+        assert_eq!(code, "diesel_guard::config::parse_error");
+    }
+
+    #[test]
+    fn test_diagnostic_code_invalid_check_name() {
+        use miette::Diagnostic;
+        let err = ConfigError::InvalidCheckName {
+            invalid_name: "Bogus".to_string(),
+        };
+        let code = err.code().unwrap().to_string();
+        assert_eq!(code, "diesel_guard::config::invalid_check");
+    }
+
+    #[test]
+    fn test_diagnostic_code_invalid_timestamp_format() {
+        use miette::Diagnostic;
+        let err = ConfigError::InvalidTimestampFormat("bad-ts".to_string());
+        let code = err.code().unwrap().to_string();
+        assert_eq!(code, "diesel_guard::config::invalid_timestamp");
+    }
+
+    #[test]
+    fn test_diagnostic_code_missing_framework() {
+        use miette::Diagnostic;
+        let err = ConfigError::MissingFramework;
+        let code = err.code().unwrap().to_string();
+        assert_eq!(code, "diesel_guard::config::missing_framework");
+    }
+
+    #[test]
+    fn test_diagnostic_code_invalid_framework() {
+        use miette::Diagnostic;
+        let err = ConfigError::InvalidFramework {
+            framework: "rails".to_string(),
+        };
+        let code = err.code().unwrap().to_string();
+        assert_eq!(code, "diesel_guard::config::invalid_framework");
+    }
+
+    // --- Diagnostic::help() tests ---
+
+    #[test]
+    fn test_diagnostic_help_invalid_timestamp_format() {
+        use miette::Diagnostic;
+        let err = ConfigError::InvalidTimestampFormat("bad".to_string());
+        let help = err.help().unwrap().to_string();
+        assert_eq!(
+            help,
+            "Expected format: YYYYMMDDHHMMSS, YYYY_MM_DD_HHMMSS, or YYYY-MM-DD-HHMMSS (e.g., 20240101000000, 2024_01_01_000000, or 2024-01-01-000000)"
+        );
+    }
+
+    #[test]
+    fn test_diagnostic_help_missing_framework() {
+        use miette::Diagnostic;
+        let err = ConfigError::MissingFramework;
+        let help = err.help().unwrap().to_string();
+        assert_eq!(
+            help,
+            "Add one of the following to your diesel-guard.toml file:\n  framework = \"diesel\"\n  framework = \"sqlx\""
+        );
+    }
+
+    #[test]
+    fn test_diagnostic_help_invalid_framework() {
+        use miette::Diagnostic;
+        let err = ConfigError::InvalidFramework {
+            framework: "mongo".to_string(),
+        };
+        let help = err.help().unwrap().to_string();
+        assert_eq!(help, "Valid values: \"diesel\", \"sqlx\"");
+    }
+
+    #[test]
+    fn test_diagnostic_help_returns_none_for_io_error() {
+        use miette::Diagnostic;
+        let err = ConfigError::IoError(std::io::Error::other("disk full"));
+        assert!(err.help().is_none());
+    }
+
+    #[test]
+    fn test_diagnostic_help_returns_none_for_parse_error() {
+        use miette::Diagnostic;
+        let toml_err = toml::from_str::<Config>("bad = [[[").unwrap_err();
+        let err = ConfigError::ParseError(toml_err);
+        assert!(err.help().is_none());
+    }
 }
