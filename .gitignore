@@ -27,3 +27,6 @@ diesel-guard.toml
 # Added by cargo
 
 /target
+
+# mdBook build output
+/docs/book

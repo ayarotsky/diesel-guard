@@ -53,7 +53,7 @@ ALTER TABLE users DROP COLUMN legacy_field;
 2. **Register** in `src/checks/mod.rs` — add `mod`, `pub use`, and `register_check` call (all alphabetically). Check names are derived from struct names automatically.
 3. **Create fixtures** — `tests/fixtures/your_operation_{safe,unsafe}/up.sql`. First line MUST be `-- Safe: ...` or `-- Unsafe: ...`.
 4. **Update integration tests** in `tests/fixtures_test.rs` — add to `safe_fixtures` vec, add detection test, update `test_check_entire_fixtures_directory` counts.
-5. **Update README** — add to "Supported Checks" section.
+5. **Update docs** — create `docs/src/checks/<check>.md` with bad/good examples and add entry to `docs/src/SUMMARY.md`.
 6. **Verify** — `cargo test && cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings`
 
 ## How Custom Rhai Checks Work

@@ -1,0 +1,9 @@
+[book]
+title = "diesel-guard"
+authors = ["Alex Yarotsky"]
+language = "en"
+src = "src"
+
+[output.html]
+git-repository-url = "https://github.com/ayarotsky/diesel-guard"
+edit-url-template = "https://github.com/ayarotsky/diesel-guard/edit/main/docs/src/{path}"

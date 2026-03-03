@@ -109,7 +109,7 @@ See `AGENTS.md` for detailed step-by-step instructions. Summary:
 3. Register in `src/checks/mod.rs`
 4. Create test fixtures in `tests/fixtures/`
 5. Add integration tests in `tests/fixtures_test.rs`
-6. Update README.md to document the check
+6. Update `docs/src/checks/<check>.md` with check description and examples, and add the entry to `docs/src/SUMMARY.md`
 7. Ensure all tests pass and code quality checks pass
 
 ### Code Style

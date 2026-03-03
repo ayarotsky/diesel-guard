@@ -62,7 +62,13 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-  # Step 4: Create GitHub Release
+  # Step 4: Deploy docs to GitHub Pages
+  docs:
+    name: Deploy Docs
+    needs: publish
+    uses: ./.github/workflows/docs.yml
+
+  # Step 5: Create GitHub Release
   github-release:
     name: Create GitHub Release
     needs: publish
