@@ -93,7 +93,7 @@ jobs:
         run: cargo install --locked cargo-tarpaulin || true
 
       - name: Generate coverage report
-        run: cargo tarpaulin --all-features --out lcov
+        run: cargo tarpaulin --all-features --out lcov --exclude-files src/main.rs
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
