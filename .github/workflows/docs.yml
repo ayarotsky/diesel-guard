@@ -4,11 +4,20 @@ on:
   workflow_dispatch:
   workflow_call:
 
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - name: Install mdbook
@@ -19,8 +28,8 @@ jobs:
           curl -sSL $url | tar -xz --directory=./mdbook
           echo "$(pwd)/mdbook" >> $GITHUB_PATH
       - run: mdbook build docs
-      - uses: peaceiris/actions-gh-pages@v4
+      - uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs/book
-          enable_jekyll: false
+          path: ./docs/book
+      - uses: actions/deploy-pages@v4
+        id: deployment
