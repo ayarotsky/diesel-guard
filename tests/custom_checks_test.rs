@@ -698,7 +698,7 @@ fn test_custom_check_name_conflicts_with_builtin() {
     assert!(
         !violations
             .iter()
-            .any(|(_, v)| v.operation.contains("ADD COLUMN") && !v.operation.contains("CUSTOM")),
+            .any(|(_, v)| v.operation == "ADD COLUMN with DEFAULT"),
         "Built-in AddColumnCheck should be disabled"
     );
 

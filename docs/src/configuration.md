@@ -76,6 +76,10 @@ Use these names in `disable_checks` (blacklist), `enable_checks` (whitelist), or
 | `DropPrimaryKeyCheck` | DROP PRIMARY KEY |
 | `DropTableCheck` | DROP TABLE |
 | `GeneratedColumnCheck` | ADD COLUMN with GENERATED STORED |
+| `IdempotencyAlterCheck` | ALTER TABLE ... ADD/DROP COLUMN without `IF [NOT] EXISTS` |
+| `IdempotencyCreateCheck` | CREATE TABLE without `IF NOT EXISTS` |
+| `IdempotencyDropCheck` | DROP TABLE / DROP INDEX without `IF EXISTS` |
+| `IdempotencyIndexCheck` | CREATE INDEX without `IF NOT EXISTS` |
 | `ReindexCheck` | REINDEX without CONCURRENTLY; CONCURRENTLY inside a transaction |
 | `RenameColumnCheck` | RENAME COLUMN |
 | `RenameTableCheck` | RENAME TABLE |
