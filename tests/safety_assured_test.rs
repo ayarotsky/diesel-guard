@@ -25,8 +25,8 @@ ALTER TABLE posts DROP COLUMN body;
 fn test_without_safety_assured_detects_violations() {
     let checker = SafetyChecker::new();
     let sql = r#"
-ALTER TABLE users DROP COLUMN email;
-ALTER TABLE posts DROP COLUMN body;
+ALTER TABLE users DROP COLUMN IF EXISTS email;
+ALTER TABLE posts DROP COLUMN IF EXISTS body;
     "#;
 
     let violations = checker.check_sql(sql).unwrap();
@@ -41,13 +41,13 @@ ALTER TABLE posts DROP COLUMN body;
 fn test_partial_safety_assured() {
     let checker = SafetyChecker::new();
     let sql = r#"
-ALTER TABLE users DROP COLUMN email;
+ALTER TABLE users DROP COLUMN IF EXISTS email;
 
 -- safety-assured:start
 ALTER TABLE posts DROP COLUMN body;
 -- safety-assured:end
 
-ALTER TABLE comments DROP COLUMN author;
+ALTER TABLE comments DROP COLUMN IF EXISTS author;
     "#;
 
     let violations = checker.check_sql(sql).unwrap();
@@ -73,7 +73,7 @@ fn test_multiple_blocks() {
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
 
-ALTER TABLE posts ADD COLUMN body TEXT;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS body TEXT;
 
 -- safety-assured:start
 ALTER TABLE comments DROP COLUMN author;
@@ -217,7 +217,7 @@ fn test_mixed_safe_and_unsafe_operations() {
     let checker = SafetyChecker::new();
     let sql = r#"
 -- Safe operation - no default
-ALTER TABLE users ADD COLUMN email VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
 
 -- safety-assured:start
 -- Unsafe but assured
@@ -225,7 +225,7 @@ ALTER TABLE users DROP COLUMN deprecated_field;
 -- safety-assured:end
 
 -- Another safe operation
-CREATE INDEX CONCURRENTLY users_email_idx ON users(email);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS users_email_idx ON users(email);
     "#;
 
     let violations = checker.check_sql(sql).unwrap();
@@ -300,20 +300,20 @@ fn test_interleaved_blocks_and_statements_same_keyword() {
     // Edge case: Same keyword appears in block, outside block, and in another block
     let checker = SafetyChecker::new();
     let sql = r#"
-ALTER TABLE users DROP COLUMN a;
+ALTER TABLE users DROP COLUMN IF EXISTS a;
 
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN b;
 ALTER TABLE users DROP COLUMN c;
 -- safety-assured:end
 
-ALTER TABLE users DROP COLUMN d;
+ALTER TABLE users DROP COLUMN IF EXISTS d;
 
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN e;
 -- safety-assured:end
 
-ALTER TABLE users DROP COLUMN f;
+ALTER TABLE users DROP COLUMN IF EXISTS f;
     "#;
 
     let violations = checker.check_sql(sql).unwrap();

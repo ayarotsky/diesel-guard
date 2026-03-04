@@ -1,2 +1,2 @@
--- Unsafe: TIMESTAMP without time zone can cause timezone issues
-ALTER TABLE events ADD COLUMN created_at TIMESTAMP;
+-- Unsafe: TIMESTAMP without timezone
+ALTER TABLE events ADD COLUMN IF NOT EXISTS created_at TIMESTAMP;

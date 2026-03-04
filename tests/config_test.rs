@@ -11,7 +11,7 @@ fn test_check_down_single_migration_dir() {
     fs::create_dir(&migration_dir).unwrap();
     fs::write(
         migration_dir.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS admin BOOLEAN DEFAULT FALSE;",
     )
     .unwrap();
     fs::write(
@@ -204,11 +204,11 @@ fn test_disable_checks_integration() {
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
     assert_eq!(results_default.len(), 1);
-    assert_eq!(results_default[0].1.len(), 1); // 1 violation
+    assert_eq!(results_default[0].1.len(), 2); // AddColumn + idempotency violations
 
-    // With AddColumnCheck disabled - should not detect
+    // With both overlapping checks disabled - should not detect
     let config_disabled = Config {
-        disable_checks: vec!["AddColumnCheck".to_string()],
+        disable_checks: vec!["AddColumnCheck".to_string(), "IdempotencyCheck".to_string()],
         ..Default::default()
     };
     let checker_disabled = SafetyChecker::with_config(config_disabled);
@@ -228,7 +228,7 @@ fn test_combined_config_features() {
     fs::create_dir(&old_migration).unwrap();
     fs::write(
         old_migration.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN admin BOOLEAN;", // Safe
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS admin BOOLEAN;", // Safe
     )
     .unwrap();
     fs::write(
@@ -242,7 +242,7 @@ fn test_combined_config_features() {
     fs::create_dir(&new_migration).unwrap();
     fs::write(
         new_migration.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN email VARCHAR(255);", // Safe
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);", // Safe
     )
     .unwrap();
     fs::write(
@@ -306,7 +306,7 @@ fn test_check_down_with_missing_down_sql() {
     // Only create up.sql, no down.sql
     fs::write(
         migration_dir.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN email VARCHAR(255);",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);",
     )
     .unwrap();
 
@@ -585,7 +585,7 @@ fn test_diesel_concurrently_without_metadata_warns() {
 
     fs::write(
         migration_dir.join("up.sql"),
-        "CREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
+        "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_email ON users(email);",
     )
     .unwrap();
     // No metadata.toml — defaults to run_in_transaction = true

@@ -211,7 +211,7 @@ mod tests {
     #[test]
     fn test_check_safe_sql() {
         let checker = SafetyChecker::new();
-        let sql = "ALTER TABLE users ADD COLUMN email VARCHAR(255);";
+        let sql = "ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 0);
     }
@@ -219,7 +219,7 @@ mod tests {
     #[test]
     fn test_check_unsafe_sql() {
         let checker = SafetyChecker::new();
-        let sql = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
+        let sql = "ALTER TABLE users ADD COLUMN IF NOT EXISTS admin BOOLEAN DEFAULT FALSE;";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 1);
     }
@@ -232,7 +232,7 @@ mod tests {
         };
         let checker = SafetyChecker::with_config(config);
 
-        let sql = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
+        let sql = "ALTER TABLE users ADD COLUMN IF NOT EXISTS admin BOOLEAN DEFAULT FALSE;";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 0);
     }
@@ -304,7 +304,7 @@ mod tests {
     #[test]
     fn test_buffer_input_safe_sql() {
         let checker: SafetyChecker = SafetyChecker::new();
-        let input_data = "ALTER TABLE users ADD COLUMN foo TEXT;";
+        let input_data = "ALTER TABLE users ADD COLUMN IF NOT EXISTS foo TEXT;";
         let violations = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
             .unwrap();
@@ -314,7 +314,7 @@ mod tests {
     #[test]
     fn test_buffer_input_unsafe_sql() {
         let checker: SafetyChecker = SafetyChecker::new();
-        let input_data = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
+        let input_data = "ALTER TABLE users ADD COLUMN IF NOT EXISTS admin BOOLEAN DEFAULT FALSE;";
         let violations = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
             .unwrap();
@@ -331,10 +331,8 @@ mod tests {
         };
         // Should not panic; .txt file is silently ignored
         let checker = SafetyChecker::with_config(config);
-        let violations = checker
-            .check_sql("ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;")
-            .unwrap();
-        assert_eq!(violations.len(), 1);
+        let violations = checker.check_sql("SELECT 1;").unwrap();
+        assert_eq!(violations.len(), 0);
     }
 
     #[test]

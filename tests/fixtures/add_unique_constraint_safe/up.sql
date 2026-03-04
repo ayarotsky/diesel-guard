@@ -1,5 +1,5 @@
 -- Safe: Add unique constraint via CONCURRENTLY index then USING INDEX
-CREATE UNIQUE INDEX CONCURRENTLY users_email_idx ON users(email);
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS users_email_idx ON users(email);
 
 -- Step 2 (Optional): Add constraint using the existing index
 -- This is instant since the index already exists

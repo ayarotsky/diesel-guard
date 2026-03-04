@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- `IdempotencyCheck` - Detects retry-unsafe DDL without idempotency guards:
+  - `CREATE TABLE` without `IF NOT EXISTS`
+  - `CREATE INDEX` / `CREATE INDEX CONCURRENTLY` without `IF NOT EXISTS`
+  - `ALTER TABLE ... ADD COLUMN` without `IF NOT EXISTS`
+  - `DROP TABLE` / `DROP INDEX` / `ALTER TABLE ... DROP COLUMN` without `IF EXISTS`
+
 ## 0.7.0 - 2026-02-23
 
 ### Added

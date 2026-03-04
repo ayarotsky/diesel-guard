@@ -1,2 +1,2 @@
--- Unsafe: Adding JSON column can break SELECT DISTINCT queries
-ALTER TABLE users ADD COLUMN properties JSON;
+-- Unsafe: Add JSON column
+ALTER TABLE users ADD COLUMN IF NOT EXISTS properties JSON;

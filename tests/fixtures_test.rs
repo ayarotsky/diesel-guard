@@ -26,6 +26,7 @@ fn test_safe_fixtures_pass() {
         "drop_index_safe",
         "drop_not_null_safe",
         "generated_column_safe",
+        "idempotency_guard_safe",
         "reindex_safe",
         "safety_assured_drop",
         "safety_assured_multiple",
@@ -82,6 +83,33 @@ fn test_add_index_without_concurrently_detected() {
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
     assert_eq!(violations[0].operation, "ADD INDEX without CONCURRENTLY");
+}
+
+#[test]
+fn test_idempotency_guard_detected() {
+    use std::collections::HashSet;
+
+    let checker = SafetyChecker::new();
+    let path = fixture_path("idempotency_guard_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 3, "Expected 3 violations");
+
+    let observed_operations: HashSet<&str> =
+        violations.iter().map(|v| v.operation.as_str()).collect();
+    let expected_operations: HashSet<&str> = [
+        "CREATE TABLE without IF NOT EXISTS",
+        "CREATE INDEX without IF NOT EXISTS",
+        "ADD COLUMN without IF NOT EXISTS",
+    ]
+    .into_iter()
+    .collect();
+
+    assert_eq!(
+        observed_operations, expected_operations,
+        "Expected idempotency guard violations for CREATE TABLE, CREATE INDEX, and ADD COLUMN"
+    );
 }
 
 #[test]
@@ -227,11 +255,24 @@ fn test_drop_multiple_columns_detected() {
 
     assert_eq!(
         violations.len(),
-        2,
-        "Expected 2 violations (one per column)"
+        4,
+        "Expected 4 violations (2 DROP COLUMN + 2 idempotency)"
     );
-    assert_eq!(violations[0].operation, "DROP COLUMN");
-    assert_eq!(violations[1].operation, "DROP COLUMN");
+
+    let drop_column_count = violations
+        .iter()
+        .filter(|v| v.operation == "DROP COLUMN")
+        .count();
+    let idempotency_count = violations
+        .iter()
+        .filter(|v| v.operation == "DROP COLUMN without IF EXISTS")
+        .count();
+
+    assert_eq!(drop_column_count, 2, "Expected 2 DROP COLUMN violations");
+    assert_eq!(
+        idempotency_count, 2,
+        "Expected 2 DROP COLUMN without IF EXISTS violations"
+    );
 }
 
 #[test]
@@ -457,14 +498,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        28,
-        "Expected violations in 28 files, got {}",
+        29,
+        "Expected violations in 29 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 36,
-        "Expected 36 total violations: 25 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
+        total_violations, 41,
+        "Expected 41 total violations: 25 files with 1 each, idempotency_guard_unsafe with 3, drop_multiple_columns with 4 (2 drop column + 2 idempotency), unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
         total_violations
     );
 }

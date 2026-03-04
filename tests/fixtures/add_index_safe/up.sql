@@ -1,2 +1,2 @@
--- Safe: Create index with CONCURRENTLY
-CREATE INDEX CONCURRENTLY idx_users_email ON users(email);
+-- Safe: Create index with CONCURRENTLY and idempotency guard
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_email ON users(email);

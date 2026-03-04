@@ -1,2 +1,2 @@
--- Safe: Add column without DEFAULT
-ALTER TABLE users ADD COLUMN email VARCHAR(255);
+-- Safe: Add column without default
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
