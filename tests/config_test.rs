@@ -197,16 +197,16 @@ fn test_disable_checks_integration() {
     )
     .unwrap();
 
-    // Without disabling - should detect violation
+    // Without disabling - AddColumnCheck and IdempotencyCheck both detect the statement
     let config_default = Config::default();
     let checker_default = SafetyChecker::with_config(config_default);
     let results_default = checker_default
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
     assert_eq!(results_default.len(), 1);
-    assert_eq!(results_default[0].1.len(), 1); // 1 violation
+    assert_eq!(results_default[0].1.len(), 2); // AddColumn + idempotency
 
-    // With AddColumnCheck disabled - should not detect
+    // With AddColumnCheck disabled, the remaining IdempotencyCheck still fires
     let config_disabled = Config {
         disable_checks: vec!["AddColumnCheck".to_string()],
         ..Default::default()
@@ -215,7 +215,12 @@ fn test_disable_checks_integration() {
     let results_disabled = checker_disabled
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
-    assert_eq!(results_disabled.len(), 0); // No violations
+    assert_eq!(results_disabled.len(), 1);
+    assert_eq!(results_disabled[0].1.len(), 1);
+    assert_eq!(
+        results_disabled[0].1[0].1.operation,
+        "ADD COLUMN without IF NOT EXISTS"
+    );
 }
 
 #[test]
@@ -229,8 +234,8 @@ fn test_disable_checks_separates_serial_checks() {
     fs::write(
         migration_dir.join("up.sql"),
         r"
-CREATE TABLE events (id BIGSERIAL PRIMARY KEY);
-ALTER TABLE users ADD COLUMN id SERIAL;
+CREATE TABLE IF NOT EXISTS events (id BIGSERIAL PRIMARY KEY);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS id SERIAL;
 ",
     )
     .unwrap();
@@ -289,7 +294,7 @@ fn test_combined_config_features() {
     fs::create_dir(&old_migration).unwrap();
     fs::write(
         old_migration.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN admin BOOLEAN;", // Safe
+        "SELECT 1;", // Safe
     )
     .unwrap();
     fs::write(
@@ -303,7 +308,7 @@ fn test_combined_config_features() {
     fs::create_dir(&new_migration).unwrap();
     fs::write(
         new_migration.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN email VARCHAR(255);", // Safe
+        "SELECT 1;", // Safe
     )
     .unwrap();
     fs::write(
@@ -365,11 +370,7 @@ fn test_check_down_with_missing_down_sql() {
     fs::create_dir(&migration_dir).unwrap();
 
     // Only create up.sql, no down.sql
-    fs::write(
-        migration_dir.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN email VARCHAR(255);",
-    )
-    .unwrap();
+    fs::write(migration_dir.join("up.sql"), "SELECT 1;").unwrap();
 
     let config = Config {
         check_down: true,
@@ -652,8 +653,10 @@ fn test_diesel_concurrently_without_metadata_warns() {
     .unwrap();
     // No metadata.toml — defaults to run_in_transaction = true
 
-    let config = Config::default();
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["AddIndexCheck".to_string()],
+        ..Default::default()
+    });
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();

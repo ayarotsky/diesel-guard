@@ -28,11 +28,7 @@ fn test_default_migrations_dir() {
     let tempdir = tempfile::tempdir().expect("Failed to create tempdir");
     let migrations_dir = tempdir.path().join("migrations");
     fs::create_dir(&migrations_dir).expect("Failed to create migrations dir");
-    fs::write(
-        migrations_dir.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN foo TEXT;",
-    )
-    .expect("Failed to write migration");
+    fs::write(migrations_dir.join("up.sql"), "SELECT 1;").expect("Failed to write migration");
 
     let output = Command::new(&bin)
         .arg("check")
@@ -56,7 +52,7 @@ fn test_stdin_input_safe() {
     let command_output = Stdio::piped();
 
     // Create test data for the command
-    let test_data = "ALTER TABLE users ADD COLUMN foo TEXT;";
+    let test_data = "SELECT 1;";
 
     // Run check command
     let mut handle = Command::new(diesel_guard_bin())
