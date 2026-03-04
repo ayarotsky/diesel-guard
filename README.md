@@ -1,6 +1,6 @@
 # Diesel Guard
 
-![Build Status](https://github.com/ayarotsky/diesel-guard/actions/workflows/ci.yml/badge.svg?branch=main) [![codecov](https://codecov.io/github/ayarotsky/diesel-guard/graph/badge.svg?token=YCBD10IGNU)](https://codecov.io/github/ayarotsky/diesel-guard) [![crates.io](https://img.shields.io/crates/v/diesel-guard)](https://crates.io/crates/diesel-guard) [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Build Status](https://github.com/ayarotsky/diesel-guard/actions/workflows/ci.yml/badge.svg?branch=main) [![crates.io](https://img.shields.io/crates/v/diesel-guard)](https://crates.io/crates/diesel-guard) [![docs](https://img.shields.io/badge/docs-documentation-blue)](https://ayarotsky.github.io/diesel-guard/) [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![codecov](https://codecov.io/github/ayarotsky/diesel-guard/graph/badge.svg?token=YCBD10IGNU)](https://codecov.io/github/ayarotsky/diesel-guard)
 
 **Catch dangerous Postgres migrations before they take down production.**
 

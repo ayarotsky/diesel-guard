@@ -5,6 +5,7 @@ language = "en"
 src = "src"
 
 [output.html]
+site-url = "/diesel-guard/"
 git-repository-url = "https://github.com/ayarotsky/diesel-guard"
 edit-url-template = "https://github.com/ayarotsky/diesel-guard/edit/main/docs/src/{path}"
 default-theme = "light"

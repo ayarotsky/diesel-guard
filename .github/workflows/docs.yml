@@ -27,7 +27,16 @@ jobs:
           mkdir mdbook
           curl -sSL $url | tar -xz --directory=./mdbook
           echo "$(pwd)/mdbook" >> $GITHUB_PATH
+      - name: Cache cargo tools
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/bin
+          key: ${{ runner.os }}-cargo-mdbook-tools
+      - name: Install mdbook-sitemap-generator
+        run: cargo install mdbook-sitemap-generator
       - run: mdbook build docs
+      - name: Generate sitemap
+        run: mdbook-sitemap-generator -d https://ayarotsky.github.io/diesel-guard -r ./docs/book
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./docs/book

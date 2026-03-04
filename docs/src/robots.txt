@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://ayarotsky.github.io/diesel-guard/sitemap.xml
