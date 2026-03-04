@@ -1,0 +1,1560 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>diesel-guard</title>
+        <meta name="robots" content="noindex">
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="favicon-8114d1fc.png">
+        <link rel="stylesheet" href="css/variables-8adf115d.css">
+        <link rel="stylesheet" href="css/general-2459343d.css">
+        <link rel="stylesheet" href="css/chrome-ae938929.css">
+        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex-934e709b.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc-d94fc9b6.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">diesel-guard</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://github.com/ayarotsky/diesel-guard" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
+<p>Catch dangerous Postgres migrations before they take down production.</p>
+<p>✓ Detects operations that lock tables or cause downtime<br>
+✓ Provides safe alternatives for each blocking operation<br>
+✓ Works with both Diesel and SQLx migration frameworks<br>
+✓ Supports safety-assured blocks for verified operations<br>
+✓ Extensible with <a href="#custom-checks">custom checks</a><br></p>
+<p>Works with <a href="https://diesel.rs">Diesel</a> and <a href="https://github.com/launchbadge/sqlx">SQLx</a>.</p>
+<h2 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h2>
+<p>diesel-guard analyzes your migration SQL using Postgres’s own parser (<code>pg_query</code> via libpg_query) and checks each statement against a set of safety rules. When it finds a potentially dangerous operation, it reports:</p>
+<ul>
+<li><strong>The operation</strong> — what SQL was detected</li>
+<li><strong>The problem</strong> — what lock it acquires, why it’s dangerous, and under what conditions</li>
+<li><strong>A safe alternative</strong> — a step-by-step approach that achieves the same goal without the risk</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="installation"><a class="header" href="#installation">Installation</a></h1>
+<h2 id="from-cratesio"><a class="header" href="#from-cratesio">From crates.io</a></h2>
+<p>Install the latest release with Cargo:</p>
+<pre><code class="language-sh">cargo install diesel-guard
+</code></pre>
+<h2 id="verify-installation"><a class="header" href="#verify-installation">Verify Installation</a></h2>
+<pre><code class="language-sh">diesel-guard --version
+</code></pre>
+<h2 id="initialize-configuration"><a class="header" href="#initialize-configuration">Initialize Configuration</a></h2>
+<p>Generate a documented configuration file in your project root:</p>
+<pre><code class="language-sh">diesel-guard init
+</code></pre>
+<p>This creates a <code>diesel-guard.toml</code> with all available options and their descriptions. See <a href="#configuration">Configuration</a> for full details.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="quick-start"><a class="header" href="#quick-start">Quick Start</a></h1>
+<h2 id="check-a-single-migration-file"><a class="header" href="#check-a-single-migration-file">Check a Single Migration File</a></h2>
+<pre><code class="language-sh">diesel-guard check migrations/2024_01_01_create_users/up.sql
+</code></pre>
+<h2 id="check-all-migrations-in-a-directory"><a class="header" href="#check-all-migrations-in-a-directory">Check All Migrations in a Directory</a></h2>
+<pre><code class="language-sh">diesel-guard check migrations/
+</code></pre>
+<h2 id="pipe-sql-directly"><a class="header" href="#pipe-sql-directly">Pipe SQL Directly</a></h2>
+<pre><code class="language-sh">cat migrations/2024_01_01_create_users/up.sql | diesel-guard check -
+</code></pre>
+<h2 id="example-output"><a class="header" href="#example-output">Example Output</a></h2>
+<p>When diesel-guard finds an unsafe operation:</p>
+<pre><code>❌ Unsafe migration detected in migrations/2024_01_01_create_users/up.sql
+
+❌ ADD COLUMN with DEFAULT
+
+Problem:
+  Adding column 'admin' with DEFAULT on table 'users' requires a full table rewrite on Postgres &lt; 11,
+  which acquires an ACCESS EXCLUSIVE lock. On large tables, this can take significant time and block all operations.
+
+Safe alternative:
+  1. Add the column without a default:
+     ALTER TABLE users ADD COLUMN admin BOOLEAN;
+
+  2. Backfill data in batches (outside migration):
+     UPDATE users SET admin = &lt;value&gt; WHERE admin IS NULL;
+
+  3. Add default for new rows only:
+     ALTER TABLE users ALTER COLUMN admin SET DEFAULT &lt;value&gt;;
+
+  Note: For Postgres 11+, this is safe if the default is a constant value.
+</code></pre>
+<h2 id="json-output"><a class="header" href="#json-output">JSON Output</a></h2>
+<p>For CI/CD or programmatic processing:</p>
+<pre><code class="language-sh">diesel-guard check migrations/ --format json
+</code></pre>
+<h2 id="inspect-the-ast"><a class="header" href="#inspect-the-ast">Inspect the AST</a></h2>
+<p>Use <code>dump-ast</code> to see the pg_query AST as JSON — essential for writing <a href="#custom-checks">custom checks</a>:</p>
+<pre><code class="language-sh">diesel-guard dump-ast --sql "CREATE INDEX idx_users_email ON users(email);"
+diesel-guard dump-ast --file migration.sql
+</code></pre>
+<p>Example output:</p>
+<pre><code class="language-json">[
+  {
+    "IndexStmt": {
+      "access_method": "btree",
+      "concurrent": false,
+      "idxname": "idx_users_email",
+      "if_not_exists": false,
+      "index_params": [
+        {
+          "node": {
+            "IndexElem": {
+              "name": "email",
+              ...
+            }
+          }
+        }
+      ],
+      "relation": {
+        "relname": "users",
+        "relpersistence": "p",
+        ...
+      },
+      "unique": false,
+      ...
+    }
+  }
+]
+</code></pre>
+<p>The AST structure shown here tells you exactly which fields are available when writing custom Rhai checks. For example, <code>node.IndexStmt.concurrent</code> maps to the <code>concurrent</code> field above.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="configuration"><a class="header" href="#configuration">Configuration</a></h1>
+<p>Create a <code>diesel-guard.toml</code> file in your project root to customize behavior.</p>
+<h2 id="initialize"><a class="header" href="#initialize">Initialize</a></h2>
+<p>Generate a documented configuration file:</p>
+<pre><code class="language-sh">diesel-guard init
+</code></pre>
+<p>Use <code>--force</code> to overwrite an existing file:</p>
+<pre><code class="language-sh">diesel-guard init --force
+</code></pre>
+<h2 id="all-options"><a class="header" href="#all-options">All Options</a></h2>
+<pre><code class="language-toml"># Framework configuration (REQUIRED)
+# Specify which migration framework you're using
+# Valid values: "diesel" or "sqlx"
+framework = "diesel"
+
+# Skip migrations before this timestamp
+# Accepts: YYYYMMDDHHMMSS, YYYY_MM_DD_HHMMSS, or YYYY-MM-DD-HHMMSS
+# Works with any migration directory format
+start_after = "2024_01_01_000000"
+
+# Also check down.sql files (default: false)
+check_down = true
+
+# Disable specific checks
+disable_checks = ["AddColumnCheck"]
+
+# Directory containing custom Rhai check scripts
+custom_checks_dir = "checks"
+
+# Target Postgres major version.
+# When set, version-aware checks adjust their behavior accordingly.
+# Example: setting 11 allows ADD COLUMN with constant DEFAULT (safe on PG 11+),
+# but still warns for volatile defaults like DEFAULT now() on all versions.
+postgres_version = 16
+</code></pre>
+<h2 id="available-check-names"><a class="header" href="#available-check-names">Available Check Names</a></h2>
+<p>Use these names in <code>disable_checks</code> to turn off individual checks:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Check Name</th><th>Operation</th></tr>
+</thead>
+<tbody>
+<tr><td><code>AddColumnCheck</code></td><td>ADD COLUMN with DEFAULT</td></tr>
+<tr><td><code>AddIndexCheck</code></td><td>CREATE INDEX without CONCURRENTLY</td></tr>
+<tr><td><code>AddJsonColumnCheck</code></td><td>ADD COLUMN with JSON type</td></tr>
+<tr><td><code>AddNotNullCheck</code></td><td>ALTER COLUMN SET NOT NULL</td></tr>
+<tr><td><code>AddPrimaryKeyCheck</code></td><td>ADD PRIMARY KEY to existing table</td></tr>
+<tr><td><code>AddSerialColumnCheck</code></td><td>ADD COLUMN with SERIAL</td></tr>
+<tr><td><code>AddUniqueConstraintCheck</code></td><td>ADD UNIQUE constraint via ALTER TABLE</td></tr>
+<tr><td><code>AlterColumnTypeCheck</code></td><td>ALTER COLUMN TYPE</td></tr>
+<tr><td><code>CharTypeCheck</code></td><td>CHAR/CHARACTER column types</td></tr>
+<tr><td><code>CreateExtensionCheck</code></td><td>CREATE EXTENSION</td></tr>
+<tr><td><code>DropColumnCheck</code></td><td>DROP COLUMN</td></tr>
+<tr><td><code>DropDatabaseCheck</code></td><td>DROP DATABASE</td></tr>
+<tr><td><code>DropIndexCheck</code></td><td>DROP INDEX without CONCURRENTLY</td></tr>
+<tr><td><code>DropPrimaryKeyCheck</code></td><td>DROP PRIMARY KEY</td></tr>
+<tr><td><code>DropTableCheck</code></td><td>DROP TABLE</td></tr>
+<tr><td><code>GeneratedColumnCheck</code></td><td>ADD COLUMN with GENERATED STORED</td></tr>
+<tr><td><code>ReindexCheck</code></td><td>REINDEX without CONCURRENTLY</td></tr>
+<tr><td><code>RenameColumnCheck</code></td><td>RENAME COLUMN</td></tr>
+<tr><td><code>RenameTableCheck</code></td><td>RENAME TABLE</td></tr>
+<tr><td><code>ShortIntegerPrimaryKeyCheck</code></td><td>SMALLINT/INT/INTEGER primary keys</td></tr>
+<tr><td><code>TimestampTypeCheck</code></td><td>TIMESTAMP without time zone</td></tr>
+<tr><td><code>TruncateTableCheck</code></td><td>TRUNCATE TABLE</td></tr>
+<tr><td><code>UnnamedConstraintCheck</code></td><td>Unnamed constraints (UNIQUE, FOREIGN KEY, CHECK)</td></tr>
+<tr><td><code>WideIndexCheck</code></td><td>Indexes with 4+ columns</td></tr>
+</tbody>
+</table>
+</div>
+<p>Custom check names are the filename stem of the <code>.rhai</code> file (e.g., <code>require_concurrent_index.rhai</code> → <code>require_concurrent_index</code>).</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="framework-adapters"><a class="header" href="#framework-adapters">Framework Adapters</a></h1>
+<p>diesel-guard supports both <strong>Diesel</strong> and <strong>SQLx</strong> Postgres migrations. The framework is configured via <code>diesel-guard.toml</code> (see <a href="#configuration">Configuration</a>).</p>
+<h2 id="diesel"><a class="header" href="#diesel">Diesel</a></h2>
+<p>Diesel uses a directory-based migration structure:</p>
+<pre><code>migrations/
+└── 2024_01_01_000000_create_users/
+    ├── up.sql
+    ├── down.sql
+    └── metadata.toml (optional)
+</code></pre>
+<p>Supported timestamp formats for directory names:</p>
+<ul>
+<li><code>YYYY_MM_DD_HHMMSS</code> (e.g., <code>2024_01_01_000000</code>)</li>
+<li><code>YYYY-MM-DD-HHMMSS</code></li>
+<li><code>YYYYMMDDHHMMSS</code></li>
+</ul>
+<h2 id="sqlx"><a class="header" href="#sqlx">SQLx</a></h2>
+<p>SQLx supports multiple migration file formats. diesel-guard handles all of them.</p>
+<h3 id="format-1-suffix-based-recommended"><a class="header" href="#format-1-suffix-based-recommended">Format 1: Suffix-based (recommended)</a></h3>
+<p>Most common SQLx format with separate up/down files:</p>
+<pre><code>migrations/
+├── 20240101000000_create_users.up.sql
+└── 20240101000000_create_users.down.sql
+</code></pre>
+<h3 id="format-2-single-file-up-only"><a class="header" href="#format-2-single-file-up-only">Format 2: Single file (up-only)</a></h3>
+<p>Single migration file without rollback:</p>
+<pre><code>migrations/
+└── 20240101000000_create_users.sql
+</code></pre>
+<p>SQLx versions are any positive integer (e.g., <code>1</code>, <code>001</code>, <code>42</code>, <code>20240101000000</code>). Short numeric versions use numeric comparison for <code>start_after</code> filtering; 14-digit timestamps use string comparison.</p>
+<h2 id="framework-configuration"><a class="header" href="#framework-configuration">Framework Configuration</a></h2>
+<p>diesel-guard requires explicit framework configuration in <code>diesel-guard.toml</code>:</p>
+<pre><code class="language-toml"># Framework configuration (REQUIRED)
+framework = "diesel"  # or "sqlx"
+</code></pre>
+<p>Generate a config file with:</p>
+<pre><code class="language-sh">diesel-guard init
+</code></pre>
+<h2 id="sqlx-metadata-directives"><a class="header" href="#sqlx-metadata-directives">SQLx Metadata Directives</a></h2>
+<p>SQLx uses comment directives for migration metadata. diesel-guard recognizes these and validates their usage:</p>
+<pre><code class="language-sql">-- no-transaction
+
+CREATE INDEX CONCURRENTLY idx_users_email ON users(email);
+</code></pre>
+<p>diesel-guard will warn you if you use <code>CONCURRENTLY</code> operations without the <code>-- no-transaction</code> directive, since <code>CONCURRENTLY</code> cannot run inside a transaction block.</p>
+<h2 id="diesel-metadata"><a class="header" href="#diesel-metadata">Diesel Metadata</a></h2>
+<p>For Diesel, use a <code>metadata.toml</code> file in the migration directory to run outside a transaction:</p>
+<pre><code class="language-toml"># migrations/2024_01_01_add_user_index/metadata.toml
+run_in_transaction = false
+</code></pre>
+<p>This is required for any migration using <code>CONCURRENTLY</code> operations (CREATE INDEX CONCURRENTLY, DROP INDEX CONCURRENTLY, REINDEX CONCURRENTLY).</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="checks"><a class="header" href="#checks">Checks</a></h1>
+<p>diesel-guard ships with 24 built-in safety checks covering the most common Postgres migration hazards.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Check</th><th>Operation</th><th>Lock Type</th></tr>
+</thead>
+<tbody>
+<tr><td><a href="#add-column-with-default">ADD COLUMN with DEFAULT</a></td><td><code>ALTER TABLE ... ADD COLUMN ... DEFAULT</code></td><td>ACCESS EXCLUSIVE + table rewrite</td></tr>
+<tr><td><a href="#adding-an-index">Adding an Index</a></td><td><code>CREATE INDEX</code> without <code>CONCURRENTLY</code></td><td>SHARE</td></tr>
+<tr><td><a href="#adding-a-unique-constraint">Adding a UNIQUE Constraint</a></td><td><code>ALTER TABLE ... ADD UNIQUE</code></td><td>ACCESS EXCLUSIVE</td></tr>
+<tr><td><a href="#changing-column-type">Changing Column Type</a></td><td><code>ALTER TABLE ... ALTER COLUMN ... TYPE</code></td><td>ACCESS EXCLUSIVE + table rewrite</td></tr>
+<tr><td><a href="#char-fields">CHAR Fields</a></td><td><code>CHAR</code>/<code>CHARACTER</code> column types</td><td>— (best practice)</td></tr>
+<tr><td><a href="#creating-an-extension">Creating an Extension</a></td><td><code>CREATE EXTENSION</code></td><td>— (requires superuser)</td></tr>
+<tr><td><a href="#dropping-a-column">Dropping a Column</a></td><td><code>ALTER TABLE ... DROP COLUMN</code></td><td>ACCESS EXCLUSIVE</td></tr>
+<tr><td><a href="#dropping-a-constraint-unnamed-constraints">Dropping a Constraint</a></td><td>Unnamed <code>UNIQUE</code>/<code>FOREIGN KEY</code>/<code>CHECK</code> constraints</td><td>— (best practice)</td></tr>
+<tr><td><a href="#dropping-a-database">Dropping a Database</a></td><td><code>DROP DATABASE</code></td><td>Exclusive access</td></tr>
+<tr><td><a href="#dropping-an-index">Dropping an Index</a></td><td><code>DROP INDEX</code> without <code>CONCURRENTLY</code></td><td>ACCESS EXCLUSIVE</td></tr>
+<tr><td><a href="#dropping-a-primary-key">Dropping a Primary Key</a></td><td><code>ALTER TABLE ... DROP CONSTRAINT ... pkey</code></td><td>ACCESS EXCLUSIVE</td></tr>
+<tr><td><a href="#dropping-a-table">Dropping a Table</a></td><td><code>DROP TABLE</code></td><td>ACCESS EXCLUSIVE</td></tr>
+<tr><td><a href="#generated-columns">Generated Columns</a></td><td><code>ADD COLUMN ... GENERATED ALWAYS AS ... STORED</code></td><td>ACCESS EXCLUSIVE + table rewrite</td></tr>
+<tr><td><a href="#json-fields">JSON Fields</a></td><td><code>ADD COLUMN ... JSON</code></td><td>— (best practice)</td></tr>
+<tr><td><a href="#wide-indexes">Wide Indexes</a></td><td><code>CREATE INDEX</code> with 4+ columns</td><td>— (best practice)</td></tr>
+<tr><td><a href="#renaming-a-column">Renaming a Column</a></td><td><code>ALTER TABLE ... RENAME COLUMN</code></td><td>ACCESS EXCLUSIVE</td></tr>
+<tr><td><a href="#renaming-a-table">Renaming a Table</a></td><td><code>ALTER TABLE ... RENAME TO</code></td><td>ACCESS EXCLUSIVE</td></tr>
+<tr><td><a href="#reindex">REINDEX</a></td><td><code>REINDEX</code> without <code>CONCURRENTLY</code></td><td>ACCESS EXCLUSIVE</td></tr>
+<tr><td><a href="#serial-primary-keys">SERIAL Primary Keys</a></td><td><code>ADD COLUMN ... SERIAL/BIGSERIAL</code></td><td>ACCESS EXCLUSIVE + table rewrite</td></tr>
+<tr><td><a href="#set-not-null">SET NOT NULL</a></td><td><code>ALTER TABLE ... ALTER COLUMN ... SET NOT NULL</code></td><td>ACCESS EXCLUSIVE</td></tr>
+<tr><td><a href="#short-primary-keys">Short Primary Keys</a></td><td><code>SMALLINT</code>/<code>INT</code> primary keys</td><td>— (best practice)</td></tr>
+<tr><td><a href="#timestamp-fields">TIMESTAMP Fields</a></td><td><code>TIMESTAMP</code> without time zone</td><td>— (best practice)</td></tr>
+<tr><td><a href="#truncate-table">TRUNCATE TABLE</a></td><td><code>TRUNCATE TABLE</code></td><td>ACCESS EXCLUSIVE</td></tr>
+<tr><td><a href="#unnamed-constraints">Unnamed Constraints</a></td><td>Constraints without explicit names</td><td>— (best practice)</td></tr>
+</tbody>
+</table>
+</div>
+<p>Need project-specific rules beyond these? See <a href="#custom-checks">Custom Checks</a>.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="add-column-with-default"><a class="header" href="#add-column-with-default">ADD COLUMN with DEFAULT</a></h1>
+<p><strong>Check name:</strong> <code>AddColumnCheck</code></p>
+<p><strong>Lock type:</strong> ACCESS EXCLUSIVE + full table rewrite (Postgres &lt; 11)</p>
+<h2 id="bad"><a class="header" href="#bad">Bad</a></h2>
+<p>In Postgres versions before 11, adding a column with a default value requires a full table rewrite. This acquires an ACCESS EXCLUSIVE lock and can take hours on large tables, blocking all reads and writes.</p>
+<pre><code class="language-sql">ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
+</code></pre>
+<h2 id="good"><a class="header" href="#good">Good</a></h2>
+<p>Add the column first, backfill the data separately, then add the default:</p>
+<pre><code class="language-sql">-- Migration 1: Add column without default
+ALTER TABLE users ADD COLUMN admin BOOLEAN;
+
+-- Outside migration: Backfill in batches
+UPDATE users SET admin = FALSE WHERE admin IS NULL;
+
+-- Migration 2: Add default for new rows only
+ALTER TABLE users ALTER COLUMN admin SET DEFAULT FALSE;
+</code></pre>
+<p><strong>Note:</strong> For Postgres 11+, adding a column with a constant default value is instant and safe. Set <code>postgres_version = 11</code> (or higher) in <code>diesel-guard.toml</code> to suppress this check for constant defaults.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="adding-an-index"><a class="header" href="#adding-an-index">Adding an Index</a></h1>
+<p><strong>Check name:</strong> <code>AddIndexCheck</code></p>
+<p><strong>Lock type:</strong> SHARE (blocks all writes)</p>
+<h2 id="bad-1"><a class="header" href="#bad-1">Bad</a></h2>
+<p>Creating an index without CONCURRENTLY acquires a SHARE lock, blocking all write operations (INSERT, UPDATE, DELETE) for the duration of the index build.</p>
+<pre><code class="language-sql">CREATE INDEX idx_users_email ON users(email);
+CREATE UNIQUE INDEX idx_users_username ON users(username);
+</code></pre>
+<h2 id="good-1"><a class="header" href="#good-1">Good</a></h2>
+<p>Use CONCURRENTLY to allow concurrent writes during the index build:</p>
+<pre><code class="language-sql">CREATE INDEX CONCURRENTLY idx_users_email ON users(email);
+CREATE UNIQUE INDEX CONCURRENTLY idx_users_username ON users(username);
+</code></pre>
+<p><strong>Important:</strong> CONCURRENTLY cannot run inside a transaction block.</p>
+<p><strong>For Diesel migrations:</strong> Add a <code>metadata.toml</code> file to your migration directory:</p>
+<pre><code class="language-toml"># migrations/2024_01_01_add_user_index/metadata.toml
+run_in_transaction = false
+</code></pre>
+<p><strong>For SQLx migrations:</strong> Add the no-transaction directive at the top of your migration file:</p>
+<pre><code class="language-sql">-- no-transaction
+CREATE INDEX CONCURRENTLY idx_users_email ON users(email);
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="adding-a-unique-constraint"><a class="header" href="#adding-a-unique-constraint">Adding a UNIQUE Constraint</a></h1>
+<p><strong>Check name:</strong> <code>AddUniqueConstraintCheck</code></p>
+<p><strong>Lock type:</strong> ACCESS EXCLUSIVE (blocks all reads and writes)</p>
+<h2 id="bad-2"><a class="header" href="#bad-2">Bad</a></h2>
+<p>Adding a UNIQUE constraint via ALTER TABLE acquires an ACCESS EXCLUSIVE lock, blocking all reads and writes during index creation. This is worse than CREATE INDEX without CONCURRENTLY.</p>
+<pre><code class="language-sql">ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
+ALTER TABLE users ADD UNIQUE (email);  -- Unnamed is also bad
+</code></pre>
+<h2 id="good-2"><a class="header" href="#good-2">Good</a></h2>
+<p>Use CREATE UNIQUE INDEX CONCURRENTLY, then optionally add the constraint:</p>
+<pre><code class="language-sql">-- Step 1: Create the unique index concurrently
+CREATE UNIQUE INDEX CONCURRENTLY users_email_idx ON users(email);
+
+-- Step 2 (Optional): Add constraint using the existing index
+-- This is instant since the index already exists
+ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_idx;
+</code></pre>
+<p><strong>Important:</strong> Requires a migration without a transaction block:</p>
+<p>For Diesel:</p>
+<pre><code class="language-toml"># migrations/2024_01_01_add_unique/metadata.toml
+run_in_transaction = false
+</code></pre>
+<p>For SQLx:</p>
+<pre><code class="language-sql">-- no-transaction
+CREATE UNIQUE INDEX CONCURRENTLY users_email_idx ON users(email);
+</code></pre>
+<h2 id="adding-a-primary-key"><a class="header" href="#adding-a-primary-key">Adding a Primary Key</a></h2>
+<p>Adding a primary key constraint to an existing table acquires an ACCESS EXCLUSIVE lock, blocking all operations (reads and writes). The operation must also create an index to enforce uniqueness.</p>
+<p><strong>Check name:</strong> <code>AddPrimaryKeyCheck</code></p>
+<h3 id="bad-1-1"><a class="header" href="#bad-1-1">Bad</a></h3>
+<pre><code class="language-sql">-- Blocks all operations while creating index and adding constraint
+ALTER TABLE users ADD PRIMARY KEY (id);
+ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+</code></pre>
+<h3 id="good-1-1"><a class="header" href="#good-1-1">Good</a></h3>
+<p>Use CREATE UNIQUE INDEX CONCURRENTLY first, then add the primary key constraint using the existing index:</p>
+<pre><code class="language-sql">-- Step 1: Create unique index concurrently (allows concurrent operations)
+CREATE UNIQUE INDEX CONCURRENTLY users_pkey ON users(id);
+
+-- Step 2: Add PRIMARY KEY using the existing index (fast, minimal lock)
+ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY USING INDEX users_pkey;
+</code></pre>
+<p><strong>Important:</strong> The CONCURRENTLY approach requires a migration without a transaction block (same <code>metadata.toml</code> or <code>-- no-transaction</code> directive as above).</p>
+<p><strong>Note:</strong> This approach requires Postgres 11+. For earlier versions, you must use the unsafe <code>ALTER TABLE ADD PRIMARY KEY</code> during a maintenance window.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="changing-column-type"><a class="header" href="#changing-column-type">Changing Column Type</a></h1>
+<p><strong>Check name:</strong> <code>AlterColumnTypeCheck</code></p>
+<p><strong>Lock type:</strong> ACCESS EXCLUSIVE + full table rewrite</p>
+<h2 id="bad-3"><a class="header" href="#bad-3">Bad</a></h2>
+<p>Changing a column’s type typically requires an ACCESS EXCLUSIVE lock and triggers a full table rewrite, blocking all operations.</p>
+<pre><code class="language-sql">ALTER TABLE users ALTER COLUMN age TYPE BIGINT;
+ALTER TABLE users ALTER COLUMN data TYPE JSONB USING data::JSONB;
+</code></pre>
+<h2 id="good-3"><a class="header" href="#good-3">Good</a></h2>
+<p>Use a multi-step approach with a new column:</p>
+<pre><code class="language-sql">-- Migration 1: Add new column
+ALTER TABLE users ADD COLUMN age_new BIGINT;
+
+-- Outside migration: Backfill in batches
+UPDATE users SET age_new = age::BIGINT;
+
+-- Migration 2: Swap columns
+ALTER TABLE users DROP COLUMN age;
+ALTER TABLE users RENAME COLUMN age_new TO age;
+</code></pre>
+<h2 id="safe-type-changes"><a class="header" href="#safe-type-changes">Safe Type Changes</a></h2>
+<p>These type changes do not trigger a table rewrite on Postgres 9.2+ and are safe:</p>
+<ul>
+<li>Increasing VARCHAR length: <code>VARCHAR(50)</code> → <code>VARCHAR(100)</code></li>
+<li>Converting to TEXT: <code>VARCHAR(255)</code> → <code>TEXT</code></li>
+<li>Increasing numeric precision</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="char-fields"><a class="header" href="#char-fields">CHAR Fields</a></h1>
+<p><strong>Check name:</strong> <code>CharTypeCheck</code></p>
+<p><strong>Lock type:</strong> None (best practice warning)</p>
+<h2 id="bad-4"><a class="header" href="#bad-4">Bad</a></h2>
+<p>CHAR and CHARACTER types are fixed-length and padded with spaces. This wastes storage and can cause subtle bugs with string comparisons and equality checks.</p>
+<pre><code class="language-sql">ALTER TABLE users ADD COLUMN country_code CHAR(2);
+CREATE TABLE products (sku CHARACTER(10) PRIMARY KEY);
+</code></pre>
+<h2 id="good-4"><a class="header" href="#good-4">Good</a></h2>
+<p>Use TEXT or VARCHAR instead:</p>
+<pre><code class="language-sql">-- For ALTER TABLE
+ALTER TABLE users ADD COLUMN country_code TEXT;
+ALTER TABLE users ADD COLUMN country_code VARCHAR(2);
+
+-- For CREATE TABLE
+CREATE TABLE products (sku TEXT);
+CREATE TABLE products (sku VARCHAR(10));
+
+-- Or TEXT with CHECK constraint for length validation
+ALTER TABLE users ADD COLUMN country_code TEXT CHECK (length(country_code) = 2);
+CREATE TABLE products (sku TEXT CHECK (length(sku) &lt;= 10));
+</code></pre>
+<h2 id="why-char-is-problematic"><a class="header" href="#why-char-is-problematic">Why CHAR Is Problematic</a></h2>
+<ul>
+<li>Fixed-length padding wastes storage</li>
+<li>Trailing spaces affect equality comparisons (<code>'US' != 'US  '</code>)</li>
+<li>DISTINCT, GROUP BY, and joins may behave unexpectedly</li>
+<li>No performance benefit over VARCHAR or TEXT in Postgres</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="creating-an-extension"><a class="header" href="#creating-an-extension">Creating an Extension</a></h1>
+<p><strong>Check name:</strong> <code>CreateExtensionCheck</code></p>
+<p><strong>Lock type:</strong> Requires superuser privileges</p>
+<h2 id="bad-5"><a class="header" href="#bad-5">Bad</a></h2>
+<p>Creating an extension in migrations often requires superuser privileges, which application database users typically don’t have in production environments.</p>
+<pre><code class="language-sql">CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION uuid_ossp;
+</code></pre>
+<h2 id="good-5"><a class="header" href="#good-5">Good</a></h2>
+<p>Install extensions outside of application migrations:</p>
+<pre><code class="language-sql">-- For local development: add to database setup scripts
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- For production: use infrastructure automation
+-- (Ansible, Terraform, or manual DBA installation)
+</code></pre>
+<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<ul>
+<li>Document required extensions in your project README</li>
+<li>Include extension installation in database provisioning scripts</li>
+<li>Use infrastructure automation (Ansible, Terraform) for production</li>
+<li>Have your DBA or infrastructure team install extensions before deployment</li>
+</ul>
+<p>Common extensions that require this approach: <code>pg_trgm</code>, <code>uuid-ossp</code>, <code>hstore</code>, <code>postgis</code>, <code>pg_stat_statements</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="dropping-a-column"><a class="header" href="#dropping-a-column">Dropping a Column</a></h1>
+<p><strong>Check name:</strong> <code>DropColumnCheck</code></p>
+<p><strong>Lock type:</strong> ACCESS EXCLUSIVE + table rewrite</p>
+<h2 id="bad-6"><a class="header" href="#bad-6">Bad</a></h2>
+<p>Dropping a column acquires an ACCESS EXCLUSIVE lock and typically triggers a table rewrite. This blocks all operations and can cause errors if application code is still referencing the column.</p>
+<pre><code class="language-sql">ALTER TABLE users DROP COLUMN email;
+</code></pre>
+<h2 id="good-6"><a class="header" href="#good-6">Good</a></h2>
+<p>Remove references from application code first, then drop the column in a later migration:</p>
+<pre><code class="language-sql">-- Step 1: Mark column as unused in application code
+-- Deploy application code changes first
+
+-- Step 2: (Optional) Set to NULL to reclaim space
+ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+UPDATE users SET email = NULL;
+
+-- Step 3: Drop in later migration after confirming it's unused
+ALTER TABLE users DROP COLUMN email;
+</code></pre>
+<p>Postgres doesn’t support <code>DROP COLUMN CONCURRENTLY</code>, so the table rewrite is unavoidable. Staging the removal minimizes risk by ensuring no running application code depends on the column at the time of the drop.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="dropping-a-constraint-unnamed-constraints"><a class="header" href="#dropping-a-constraint-unnamed-constraints">Dropping a Constraint (Unnamed Constraints)</a></h1>
+<p><strong>Check name:</strong> <code>UnnamedConstraintCheck</code></p>
+<p><strong>Lock type:</strong> None (best practice warning)</p>
+<p>This check flags constraints added without an explicit name. Auto-generated names vary between databases and make future <code>DROP CONSTRAINT</code> operations unpredictable.</p>
+<h2 id="bad-7"><a class="header" href="#bad-7">Bad</a></h2>
+<p>Adding constraints without explicit names results in auto-generated names from Postgres. These names vary between databases and make future migrations difficult.</p>
+<pre><code class="language-sql">-- Unnamed UNIQUE constraint
+ALTER TABLE users ADD UNIQUE (email);
+
+-- Unnamed FOREIGN KEY constraint
+ALTER TABLE posts ADD FOREIGN KEY (user_id) REFERENCES users(id);
+
+-- Unnamed CHECK constraint
+ALTER TABLE users ADD CHECK (age &gt;= 0);
+</code></pre>
+<h2 id="good-7"><a class="header" href="#good-7">Good</a></h2>
+<p>Always name constraints explicitly using the CONSTRAINT keyword:</p>
+<pre><code class="language-sql">-- Named UNIQUE constraint
+ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
+
+-- Named FOREIGN KEY constraint
+ALTER TABLE posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+
+-- Named CHECK constraint
+ALTER TABLE users ADD CONSTRAINT users_age_check CHECK (age &gt;= 0);
+</code></pre>
+<h2 id="naming-conventions"><a class="header" href="#naming-conventions">Naming Conventions</a></h2>
+<ul>
+<li><strong>UNIQUE</strong>: <code>{table}_{column}_key</code> or <code>{table}_{column1}_{column2}_key</code></li>
+<li><strong>FOREIGN KEY</strong>: <code>{table}_{column}_fkey</code></li>
+<li><strong>CHECK</strong>: <code>{table}_{column}_check</code> or <code>{table}_{description}_check</code></li>
+</ul>
+<p>Named constraints make future migrations predictable:</p>
+<pre><code class="language-sql">-- Easy to reference in later migrations
+ALTER TABLE users DROP CONSTRAINT users_email_key;
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="dropping-a-database"><a class="header" href="#dropping-a-database">Dropping a Database</a></h1>
+<p><strong>Check name:</strong> <code>DropDatabaseCheck</code></p>
+<p><strong>Lock type:</strong> Exclusive access (all connections must be terminated)</p>
+<h2 id="bad-8"><a class="header" href="#bad-8">Bad</a></h2>
+<p>Dropping a database permanently deletes the entire database including all tables, data, and objects. This operation is irreversible. Postgres requires exclusive access to the target database — all active connections must be terminated before the drop can proceed. The command cannot be executed inside a transaction block.</p>
+<pre><code class="language-sql">DROP DATABASE mydb;
+DROP DATABASE IF EXISTS testdb;
+</code></pre>
+<h2 id="good-8"><a class="header" href="#good-8">Good</a></h2>
+<p>DROP DATABASE should almost never appear in application migrations. Database lifecycle should be managed through infrastructure automation or DBA operations.</p>
+<pre><code class="language-sql">-- For local development: use database setup scripts
+-- For production: use infrastructure automation (Terraform, Ansible)
+-- For test cleanup: coordinate with DBA or use dedicated test infrastructure
+
+-- If absolutely necessary (e.g., test cleanup), use a safety-assured block:
+-- safety-assured:start
+DROP DATABASE test_db;
+-- safety-assured:end
+</code></pre>
+<h2 id="important-considerations"><a class="header" href="#important-considerations">Important Considerations</a></h2>
+<ul>
+<li>Database deletion should be handled by DBAs or infrastructure automation, not application migrations</li>
+<li>Ensure complete backups exist before proceeding</li>
+<li>Verify all connections to the database are terminated</li>
+<li>Consider using infrastructure tools (Terraform, Ansible) instead of migrations</li>
+</ul>
+<p><strong>Note:</strong> Postgres 13+ supports <code>DROP DATABASE ... WITH (FORCE)</code> to terminate active connections automatically, but this makes the operation even more dangerous and should be used with extreme caution.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="dropping-an-index"><a class="header" href="#dropping-an-index">Dropping an Index</a></h1>
+<p><strong>Check name:</strong> <code>DropIndexCheck</code></p>
+<p><strong>Lock type:</strong> ACCESS EXCLUSIVE (blocks all queries)</p>
+<h2 id="bad-9"><a class="header" href="#bad-9">Bad</a></h2>
+<p>Dropping an index without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock on the table, blocking all queries (SELECT, INSERT, UPDATE, DELETE) until the drop operation completes.</p>
+<pre><code class="language-sql">DROP INDEX idx_users_email;
+DROP INDEX IF EXISTS idx_users_username;
+</code></pre>
+<h2 id="good-9"><a class="header" href="#good-9">Good</a></h2>
+<p>Use CONCURRENTLY to drop the index without blocking queries:</p>
+<pre><code class="language-sql">DROP INDEX CONCURRENTLY idx_users_email;
+DROP INDEX CONCURRENTLY IF EXISTS idx_users_username;
+</code></pre>
+<p><strong>Important:</strong> CONCURRENTLY requires Postgres 9.2+ and cannot run inside a transaction block.</p>
+<p><strong>For Diesel migrations:</strong> Add a <code>metadata.toml</code> file to your migration directory:</p>
+<pre><code class="language-toml"># migrations/2024_01_01_drop_user_index/metadata.toml
+run_in_transaction = false
+</code></pre>
+<p><strong>For SQLx migrations:</strong> Add the no-transaction directive at the top of your migration file:</p>
+<pre><code class="language-sql">-- no-transaction
+DROP INDEX CONCURRENTLY idx_users_email;
+</code></pre>
+<p><strong>Note:</strong> Dropping an index concurrently takes longer than a regular drop and uses more resources, but allows concurrent queries to continue. If it fails, the index may be left in an “invalid” state and should be dropped again.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="dropping-a-primary-key"><a class="header" href="#dropping-a-primary-key">Dropping a Primary Key</a></h1>
+<p><strong>Check name:</strong> <code>DropPrimaryKeyCheck</code></p>
+<p><strong>Lock type:</strong> ACCESS EXCLUSIVE (blocks all operations)</p>
+<h2 id="bad-10"><a class="header" href="#bad-10">Bad</a></h2>
+<p>Dropping a primary key removes the critical uniqueness constraint and breaks foreign key relationships in other tables that reference this table. It also acquires an ACCESS EXCLUSIVE lock, blocking all operations.</p>
+<pre><code class="language-sql">-- Breaks foreign keys that reference users(id)
+ALTER TABLE users DROP CONSTRAINT users_pkey;
+</code></pre>
+<h2 id="good-10"><a class="header" href="#good-10">Good</a></h2>
+<p>If you must change your primary key strategy, use a multi-step migration approach:</p>
+<pre><code class="language-sql">-- Step 1: Identify all foreign key dependencies
+SELECT
+  tc.table_name, kcu.column_name, rc.constraint_name
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.unique_constraint_name
+WHERE tc.table_name = 'users' AND tc.constraint_type = 'PRIMARY KEY';
+
+-- Step 2: Create the new primary key FIRST (if migrating to a new key)
+ALTER TABLE users ADD CONSTRAINT users_new_pkey PRIMARY KEY (uuid);
+
+-- Step 3: Update all foreign keys to reference the new key
+-- (This may require adding new columns to referencing tables)
+ALTER TABLE posts ADD COLUMN user_uuid UUID;
+UPDATE posts SET user_uuid = users.uuid FROM users WHERE posts.user_id = users.id;
+ALTER TABLE posts ADD CONSTRAINT posts_user_uuid_fkey FOREIGN KEY (user_uuid) REFERENCES users(uuid);
+
+-- Step 4: Only after all foreign keys are migrated, drop the old key
+ALTER TABLE users DROP CONSTRAINT users_pkey;
+
+-- Step 5: Clean up old columns
+ALTER TABLE posts DROP COLUMN user_id;
+</code></pre>
+<h2 id="important-considerations-1"><a class="header" href="#important-considerations-1">Important Considerations</a></h2>
+<ul>
+<li>Review ALL tables with foreign keys to this table</li>
+<li>Consider a transition period where both old and new keys exist</li>
+<li>Update application code to use the new key before dropping the old one</li>
+<li>Test thoroughly in a staging environment first</li>
+</ul>
+<p><strong>Limitation:</strong> This check relies on Postgres naming conventions (e.g., <code>users_pkey</code>). It may not detect primary keys with custom names. Future versions will support database connections for accurate verification.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="dropping-a-table"><a class="header" href="#dropping-a-table">Dropping a Table</a></h1>
+<p><strong>Check name:</strong> <code>DropTableCheck</code></p>
+<p><strong>Lock type:</strong> ACCESS EXCLUSIVE (blocks all operations)</p>
+<h2 id="bad-11"><a class="header" href="#bad-11">Bad</a></h2>
+<p>Dropping a table permanently deletes all data, indexes, triggers, and constraints. This operation acquires an ACCESS EXCLUSIVE lock and cannot be undone after the transaction commits. Foreign key relationships in other tables may block the drop or cause cascading deletes.</p>
+<pre><code class="language-sql">DROP TABLE users;
+DROP TABLE IF EXISTS orders CASCADE;
+</code></pre>
+<h2 id="good-11"><a class="header" href="#good-11">Good</a></h2>
+<p>Before dropping a table in production, take these precautions:</p>
+<pre><code class="language-sql">-- Step 1: Verify the table is no longer in use
+-- Check application code for references to this table
+-- Monitor for queries against the table
+
+-- Step 2: Check for foreign key dependencies
+SELECT
+  tc.table_name, kcu.column_name, rc.constraint_name
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.constraint_name
+WHERE rc.unique_constraint_schema = 'public'
+  AND rc.unique_constraint_name IN (
+    SELECT constraint_name FROM information_schema.table_constraints
+    WHERE table_name = 'users' AND constraint_type IN ('PRIMARY KEY', 'UNIQUE')
+  );
+
+-- Step 3: Ensure backups exist or data has been migrated
+
+-- Step 4: Drop the table (use safety-assured if intentional)
+-- safety-assured:start
+DROP TABLE users;
+-- safety-assured:end
+</code></pre>
+<h2 id="important-considerations-2"><a class="header" href="#important-considerations-2">Important Considerations</a></h2>
+<ul>
+<li>Verify all application code references have been removed and deployed</li>
+<li>Check for foreign keys in other tables that reference this table</li>
+<li>Ensure data backups exist before dropping</li>
+<li>Consider renaming the table first (e.g., <code>users_deprecated</code>) and waiting before dropping</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="generated-columns"><a class="header" href="#generated-columns">Generated Columns</a></h1>
+<p><strong>Check name:</strong> <code>GeneratedColumnCheck</code></p>
+<p><strong>Lock type:</strong> ACCESS EXCLUSIVE + full table rewrite</p>
+<h2 id="bad-12"><a class="header" href="#bad-12">Bad</a></h2>
+<p>Adding a <code>GENERATED ALWAYS AS ... STORED</code> column acquires an ACCESS EXCLUSIVE lock and triggers a full table rewrite because Postgres must compute and store the expression value for every existing row.</p>
+<pre><code class="language-sql">ALTER TABLE products ADD COLUMN total_price INTEGER GENERATED ALWAYS AS (price * quantity) STORED;
+</code></pre>
+<h2 id="good-12"><a class="header" href="#good-12">Good</a></h2>
+<pre><code class="language-sql">-- Step 1: Add a regular nullable column
+ALTER TABLE products ADD COLUMN total_price INTEGER;
+
+-- Step 2: Backfill in batches (outside migration)
+UPDATE products SET total_price = price * quantity WHERE total_price IS NULL;
+
+-- Step 3: Optionally add NOT NULL constraint
+ALTER TABLE products ALTER COLUMN total_price SET NOT NULL;
+
+-- Step 4: Use a trigger for new rows
+CREATE FUNCTION compute_total_price() RETURNS TRIGGER AS $$
+BEGIN
+  NEW.total_price := NEW.price * NEW.quantity;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_total_price
+BEFORE INSERT OR UPDATE ON products
+FOR EACH ROW EXECUTE FUNCTION compute_total_price();
+</code></pre>
+<p><strong>Note:</strong> Postgres does not support VIRTUAL generated columns (only STORED). For new empty tables, <code>GENERATED STORED</code> columns are acceptable.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="json-fields"><a class="header" href="#json-fields">JSON Fields</a></h1>
+<p><strong>Check name:</strong> <code>AddJsonColumnCheck</code></p>
+<p><strong>Lock type:</strong> None (best practice warning)</p>
+<h2 id="bad-13"><a class="header" href="#bad-13">Bad</a></h2>
+<p>In Postgres, the <code>json</code> type has no equality operator, which breaks existing <code>SELECT DISTINCT</code> queries and other operations that require comparing values.</p>
+<pre><code class="language-sql">ALTER TABLE users ADD COLUMN properties JSON;
+</code></pre>
+<h2 id="good-13"><a class="header" href="#good-13">Good</a></h2>
+<p>Use <code>jsonb</code> instead of <code>json</code>:</p>
+<pre><code class="language-sql">ALTER TABLE users ADD COLUMN properties JSONB;
+</code></pre>
+<h2 id="benefits-of-jsonb-over-json"><a class="header" href="#benefits-of-jsonb-over-json">Benefits of JSONB over JSON</a></h2>
+<ul>
+<li>Has proper equality and comparison operators (supports DISTINCT, GROUP BY, UNION)</li>
+<li>Supports indexing (GIN indexes for efficient queries)</li>
+<li>Faster to process (binary format, no reparsing)</li>
+<li>Generally better performance for most use cases</li>
+</ul>
+<p><strong>Note:</strong> The only advantage of JSON over JSONB is that it preserves exact formatting and key order, which is rarely needed in practice.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="wide-indexes"><a class="header" href="#wide-indexes">Wide Indexes</a></h1>
+<p><strong>Check name:</strong> <code>WideIndexCheck</code></p>
+<p><strong>Lock type:</strong> None (best practice warning)</p>
+<h2 id="bad-14"><a class="header" href="#bad-14">Bad</a></h2>
+<p>Indexes with 4 or more columns are rarely effective. Postgres can only use multi-column indexes efficiently when filtering on the leftmost columns in order. Wide indexes also increase storage costs and slow down write operations (INSERT, UPDATE, DELETE).</p>
+<pre><code class="language-sql">-- 4+ columns: rarely useful
+CREATE INDEX idx_users_search ON users(tenant_id, email, name, status);
+CREATE INDEX idx_orders_composite ON orders(user_id, product_id, status, created_at);
+</code></pre>
+<h2 id="good-14"><a class="header" href="#good-14">Good</a></h2>
+<p>Use narrower, more targeted indexes based on actual query patterns:</p>
+<pre><code class="language-sql">-- Option 1: Partial index for specific query pattern
+CREATE INDEX idx_users_active_email ON users(email)
+WHERE status = 'active';
+
+-- Option 2: Separate indexes for different queries
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_status ON users(status);
+
+-- Option 3: Covering index with INCLUDE (Postgres 11+)
+-- Includes extra columns for SELECT without adding them to index keys
+CREATE INDEX idx_users_email_covering ON users(email)
+INCLUDE (name, status);
+
+-- Option 4: Two-column composite (still useful for some patterns)
+CREATE INDEX idx_users_tenant_email ON users(tenant_id, email);
+</code></pre>
+<h2 id="when-wide-indexes-might-be-acceptable"><a class="header" href="#when-wide-indexes-might-be-acceptable">When Wide Indexes Might Be Acceptable</a></h2>
+<ul>
+<li>Composite foreign keys matching the referenced table’s primary key</li>
+<li>Specific, verified query patterns that need all columns in order</li>
+<li>Use <code>safety-assured</code> if you’ve confirmed the index is necessary</li>
+</ul>
+<p><strong>Performance tip:</strong> Postgres can combine multiple indexes using bitmap scans. Two separate indexes often outperform one wide index.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="renaming-a-column"><a class="header" href="#renaming-a-column">Renaming a Column</a></h1>
+<p><strong>Check name:</strong> <code>RenameColumnCheck</code></p>
+<p><strong>Lock type:</strong> ACCESS EXCLUSIVE (brief, but breaks running app instances)</p>
+<h2 id="bad-15"><a class="header" href="#bad-15">Bad</a></h2>
+<p>Renaming a column breaks running application instances immediately. Any code that references the old column name will fail after the rename is applied, causing downtime.</p>
+<pre><code class="language-sql">ALTER TABLE users RENAME COLUMN email TO email_address;
+</code></pre>
+<h2 id="good-15"><a class="header" href="#good-15">Good</a></h2>
+<p>Use a multi-step migration to maintain compatibility during the transition:</p>
+<pre><code class="language-sql">-- Migration 1: Add new column
+ALTER TABLE users ADD COLUMN email_address VARCHAR(255);
+
+-- Outside migration: Backfill in batches
+UPDATE users SET email_address = email;
+
+-- Migration 2: Add NOT NULL if needed
+ALTER TABLE users ALTER COLUMN email_address SET NOT NULL;
+
+-- Update application code to use email_address
+
+-- Migration 3: Drop old column after deploying code changes
+ALTER TABLE users DROP COLUMN email;
+</code></pre>
+<p><strong>Important:</strong> The RENAME COLUMN operation itself is fast (brief ACCESS EXCLUSIVE lock), but the primary risk is application compatibility, not lock duration. All running instances must be updated to reference the new column name before the rename is applied.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="renaming-a-table"><a class="header" href="#renaming-a-table">Renaming a Table</a></h1>
+<p><strong>Check name:</strong> <code>RenameTableCheck</code></p>
+<p><strong>Lock type:</strong> ACCESS EXCLUSIVE (blocks on busy tables; breaks running app instances)</p>
+<h2 id="bad-16"><a class="header" href="#bad-16">Bad</a></h2>
+<p>Renaming a table breaks running application instances immediately. Any code that references the old table name will fail after the rename is applied. Additionally, this operation requires an ACCESS EXCLUSIVE lock which can block on busy tables.</p>
+<pre><code class="language-sql">ALTER TABLE users RENAME TO customers;
+</code></pre>
+<h2 id="good-16"><a class="header" href="#good-16">Good</a></h2>
+<p>Use a multi-step dual-write migration to safely rename the table:</p>
+<pre><code class="language-sql">-- Migration 1: Create new table
+CREATE TABLE customers (LIKE users INCLUDING ALL);
+
+-- Update application code to write to BOTH tables
+
+-- Migration 2: Backfill data in batches
+INSERT INTO customers
+SELECT * FROM users
+WHERE id &gt; last_processed_id
+LIMIT 10000;
+
+-- Update application code to read from new table
+
+-- Deploy updated application
+
+-- Update application code to stop writing to old table
+
+-- Migration 3: Drop old table
+DROP TABLE users;
+</code></pre>
+<p><strong>Important:</strong> This multi-step approach avoids the ACCESS EXCLUSIVE lock issues on large tables and ensures zero downtime. The migration requires multiple deployments coordinated with application code changes.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="reindex"><a class="header" href="#reindex">REINDEX</a></h1>
+<p><strong>Check name:</strong> <code>ReindexCheck</code></p>
+<p><strong>Lock type:</strong> ACCESS EXCLUSIVE (blocks all operations)</p>
+<h2 id="bad-17"><a class="header" href="#bad-17">Bad</a></h2>
+<p>Reindexing without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock on the table, blocking all operations until complete. Duration depends on index size.</p>
+<pre><code class="language-sql">REINDEX INDEX idx_users_email;
+REINDEX TABLE users;
+</code></pre>
+<h2 id="good-17"><a class="header" href="#good-17">Good</a></h2>
+<p>Use CONCURRENTLY to reindex without blocking operations:</p>
+<pre><code class="language-sql">REINDEX INDEX CONCURRENTLY idx_users_email;
+REINDEX TABLE CONCURRENTLY users;
+</code></pre>
+<p><strong>Important:</strong> CONCURRENTLY requires Postgres 12+ and cannot run inside a transaction block.</p>
+<p><strong>For Diesel migrations:</strong> Add a <code>metadata.toml</code> file to your migration directory:</p>
+<pre><code class="language-toml"># migrations/2024_01_01_reindex_users/metadata.toml
+run_in_transaction = false
+</code></pre>
+<p><strong>For SQLx migrations:</strong> Add the no-transaction directive at the top of your migration file:</p>
+<pre><code class="language-sql">-- no-transaction
+REINDEX INDEX CONCURRENTLY idx_users_email;
+</code></pre>
+<p><strong>Note:</strong> REINDEX CONCURRENTLY rebuilds the index without locking out writes. If it fails, the index may be left in an “invalid” state — check with <code>\d tablename</code> and run REINDEX again if needed.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="serial-primary-keys"><a class="header" href="#serial-primary-keys">SERIAL Primary Keys</a></h1>
+<p><strong>Check name:</strong> <code>AddSerialColumnCheck</code></p>
+<p><strong>Lock type:</strong> ACCESS EXCLUSIVE + full table rewrite</p>
+<h2 id="bad-18"><a class="header" href="#bad-18">Bad</a></h2>
+<p>Adding a SERIAL column to an existing table triggers a full table rewrite because Postgres must populate sequence values for all existing rows. This acquires an ACCESS EXCLUSIVE lock and blocks all operations.</p>
+<pre><code class="language-sql">ALTER TABLE users ADD COLUMN id SERIAL;
+ALTER TABLE users ADD COLUMN order_number BIGSERIAL;
+</code></pre>
+<h2 id="good-18"><a class="header" href="#good-18">Good</a></h2>
+<p>Create the sequence separately, add the column without a default, then backfill:</p>
+<pre><code class="language-sql">-- Step 1: Create a sequence
+CREATE SEQUENCE users_id_seq;
+
+-- Step 2: Add the column WITHOUT default (fast, no rewrite)
+ALTER TABLE users ADD COLUMN id INTEGER;
+
+-- Outside migration: Backfill existing rows in batches
+UPDATE users SET id = nextval('users_id_seq') WHERE id IS NULL;
+
+-- Step 3: Set default for future inserts only
+ALTER TABLE users ALTER COLUMN id SET DEFAULT nextval('users_id_seq');
+
+-- Step 4: Set NOT NULL if needed (Postgres 11+: safe if all values present)
+ALTER TABLE users ALTER COLUMN id SET NOT NULL;
+
+-- Step 5: Set sequence ownership
+ALTER SEQUENCE users_id_seq OWNED BY users.id;
+</code></pre>
+<p><strong>Key insight:</strong> Adding a column with <code>DEFAULT nextval(...)</code> on an existing table still triggers a table rewrite. The solution is to add the column first without any default, backfill separately, then set the default for future rows only.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="set-not-null"><a class="header" href="#set-not-null">SET NOT NULL</a></h1>
+<p><strong>Check name:</strong> <code>AddNotNullCheck</code></p>
+<p><strong>Lock type:</strong> ACCESS EXCLUSIVE (blocks all operations while scanning table)</p>
+<h2 id="bad-19"><a class="header" href="#bad-19">Bad</a></h2>
+<p>Adding a NOT NULL constraint requires scanning the entire table to verify all values are non-null. This acquires an ACCESS EXCLUSIVE lock and blocks all operations.</p>
+<pre><code class="language-sql">ALTER TABLE users ALTER COLUMN email SET NOT NULL;
+</code></pre>
+<h2 id="good-19"><a class="header" href="#good-19">Good</a></h2>
+<p>For large tables, use a CHECK constraint approach that allows concurrent operations:</p>
+<pre><code class="language-sql">-- Step 1: Add CHECK constraint without validating existing rows
+ALTER TABLE users ADD CONSTRAINT users_email_not_null_check CHECK (email IS NOT NULL) NOT VALID;
+
+-- Step 2: Validate separately (uses SHARE UPDATE EXCLUSIVE lock)
+ALTER TABLE users VALIDATE CONSTRAINT users_email_not_null_check;
+
+-- Step 3: Add NOT NULL constraint (instant if CHECK exists)
+ALTER TABLE users ALTER COLUMN email SET NOT NULL;
+
+-- Step 4: Optionally drop redundant CHECK constraint
+ALTER TABLE users DROP CONSTRAINT users_email_not_null_check;
+</code></pre>
+<p>The VALIDATE step allows concurrent reads and writes, only blocking other schema changes. On Postgres 12+, NOT NULL constraints are more efficient, but this approach still provides better control.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="short-primary-keys"><a class="header" href="#short-primary-keys">Short Primary Keys</a></h1>
+<p><strong>Check name:</strong> <code>ShortIntegerPrimaryKeyCheck</code></p>
+<p><strong>Lock type:</strong> None (best practice warning)</p>
+<h2 id="bad-20"><a class="header" href="#bad-20">Bad</a></h2>
+<p>Using SMALLINT or INT for primary keys risks ID exhaustion. SMALLINT maxes out at ~32,767 records, and INT at ~2.1 billion. While 2.1 billion seems large, active applications can exhaust this faster than expected, especially with high-frequency inserts, soft deletes, or partitioned data.</p>
+<p>Changing the type later requires an ALTER COLUMN TYPE operation with a full table rewrite and ACCESS EXCLUSIVE lock.</p>
+<pre><code class="language-sql">-- SMALLINT exhausts at ~32K records
+CREATE TABLE users (id SMALLINT PRIMARY KEY);
+
+-- INT exhausts at ~2.1B records
+CREATE TABLE posts (id INT PRIMARY KEY);
+CREATE TABLE events (id INTEGER PRIMARY KEY);
+
+-- Composite PKs with short integers still risky
+CREATE TABLE tenant_events (
+    tenant_id BIGINT,
+    event_id INT,  -- Will exhaust per tenant
+    PRIMARY KEY (tenant_id, event_id)
+);
+</code></pre>
+<h2 id="good-20"><a class="header" href="#good-20">Good</a></h2>
+<p>Use BIGINT for all primary keys to avoid exhaustion:</p>
+<pre><code class="language-sql">-- BIGINT: effectively unlimited (~9.2 quintillion)
+CREATE TABLE users (id BIGINT PRIMARY KEY);
+
+-- BIGSERIAL: auto-incrementing BIGINT
+CREATE TABLE posts (id BIGSERIAL PRIMARY KEY);
+
+-- Composite PKs with all BIGINT
+CREATE TABLE tenant_events (
+    tenant_id BIGINT,
+    event_id BIGINT,
+    PRIMARY KEY (tenant_id, event_id)
+);
+</code></pre>
+<p><strong>Storage overhead:</strong> BIGINT uses 8 bytes vs INT’s 4 bytes — only 4 extra bytes per row. For a 1 million row table, this is ~4MB of additional storage, which is negligible compared to the operational cost of changing column types later.</p>
+<p><strong>Safe exceptions:</strong> Small, finite lookup tables with &lt;100 entries (e.g., status codes, country lists) can safely use smaller types. Use <code>safety-assured</code> to bypass the check for these cases.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="timestamp-fields"><a class="header" href="#timestamp-fields">TIMESTAMP Fields</a></h1>
+<p><strong>Check name:</strong> <code>TimestampTypeCheck</code></p>
+<p><strong>Lock type:</strong> None (best practice warning)</p>
+<h2 id="bad-21"><a class="header" href="#bad-21">Bad</a></h2>
+<p>TIMESTAMP (or TIMESTAMP WITHOUT TIME ZONE) stores values without timezone context, which can cause issues in multi-timezone applications, during DST transitions, and makes it difficult to determine the actual point in time represented.</p>
+<pre><code class="language-sql">-- ALTER TABLE
+ALTER TABLE events ADD COLUMN created_at TIMESTAMP;
+ALTER TABLE events ADD COLUMN updated_at TIMESTAMP WITHOUT TIME ZONE;
+
+-- CREATE TABLE
+CREATE TABLE events (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE
+);
+</code></pre>
+<h2 id="good-21"><a class="header" href="#good-21">Good</a></h2>
+<p>Use TIMESTAMPTZ (TIMESTAMP WITH TIME ZONE) instead:</p>
+<pre><code class="language-sql">-- ALTER TABLE
+ALTER TABLE events ADD COLUMN created_at TIMESTAMPTZ;
+ALTER TABLE events ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE;
+
+-- CREATE TABLE
+CREATE TABLE events (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+</code></pre>
+<h2 id="why-timestamptz-is-better"><a class="header" href="#why-timestamptz-is-better">Why TIMESTAMPTZ Is Better</a></h2>
+<ul>
+<li>Stores values in UTC internally and converts on input/output based on session timezone</li>
+<li>Provides consistent behavior across different timezones and server environments</li>
+<li>Handles DST transitions correctly</li>
+<li>Makes it clear what point in time is represented</li>
+</ul>
+<h2 id="when-timestamp-without-time-zone-might-be-acceptable"><a class="header" href="#when-timestamp-without-time-zone-might-be-acceptable">When TIMESTAMP Without Time Zone Might Be Acceptable</a></h2>
+<ul>
+<li>Storing dates that are inherently timezone-agnostic (e.g., birth dates stored as midnight)</li>
+<li>Legacy systems where all data is known to be in a single timezone</li>
+<li>Use <code>safety-assured</code> if you’ve confirmed timezone-naive timestamps are appropriate</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="truncate-table"><a class="header" href="#truncate-table">TRUNCATE TABLE</a></h1>
+<p><strong>Check name:</strong> <code>TruncateTableCheck</code></p>
+<p><strong>Lock type:</strong> ACCESS EXCLUSIVE (blocks all operations)</p>
+<h2 id="bad-22"><a class="header" href="#bad-22">Bad</a></h2>
+<p>TRUNCATE TABLE acquires an ACCESS EXCLUSIVE lock, blocking all operations (reads and writes) on the table. Unlike DELETE, TRUNCATE cannot be batched or throttled, making it unsuitable for large tables in production environments.</p>
+<pre><code class="language-sql">TRUNCATE TABLE users;
+TRUNCATE TABLE orders, order_items;
+</code></pre>
+<h2 id="good-22"><a class="header" href="#good-22">Good</a></h2>
+<p>Use DELETE with batching to incrementally remove rows while allowing concurrent access:</p>
+<pre><code class="language-sql">-- Delete rows in small batches to allow concurrent access
+DELETE FROM users WHERE id IN (
+  SELECT id FROM users LIMIT 1000
+);
+
+-- Repeat the batched DELETE until all rows are removed
+-- (Can be done outside migration with monitoring)
+
+-- Optional: Reset sequences if needed
+ALTER SEQUENCE users_id_seq RESTART WITH 1;
+
+-- Optional: Reclaim space
+VACUUM users;
+</code></pre>
+<p><strong>Important:</strong> If you absolutely must use TRUNCATE (e.g., in a test environment or during a maintenance window), use a <code>safety-assured</code> block:</p>
+<pre><code class="language-sql">-- safety-assured:start
+-- Safe because: running in test environment / maintenance window
+TRUNCATE TABLE users;
+-- safety-assured:end
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="unnamed-constraints"><a class="header" href="#unnamed-constraints">Unnamed Constraints</a></h1>
+<p><strong>Check name:</strong> <code>UnnamedConstraintCheck</code></p>
+<p><strong>Lock type:</strong> None (best practice warning)</p>
+<h2 id="bad-23"><a class="header" href="#bad-23">Bad</a></h2>
+<p>Adding constraints without explicit names results in auto-generated names from Postgres. These names vary between databases and make future migrations difficult — you can’t reliably reference a constraint you don’t know the name of.</p>
+<pre><code class="language-sql">-- Unnamed UNIQUE constraint
+ALTER TABLE users ADD UNIQUE (email);
+
+-- Unnamed FOREIGN KEY constraint
+ALTER TABLE posts ADD FOREIGN KEY (user_id) REFERENCES users(id);
+
+-- Unnamed CHECK constraint
+ALTER TABLE users ADD CHECK (age &gt;= 0);
+</code></pre>
+<h2 id="good-23"><a class="header" href="#good-23">Good</a></h2>
+<p>Always name constraints explicitly using the CONSTRAINT keyword:</p>
+<pre><code class="language-sql">-- Named UNIQUE constraint
+ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
+
+-- Named FOREIGN KEY constraint
+ALTER TABLE posts ADD CONSTRAINT posts_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+
+-- Named CHECK constraint
+ALTER TABLE users ADD CONSTRAINT users_age_check CHECK (age &gt;= 0);
+</code></pre>
+<h2 id="naming-conventions-1"><a class="header" href="#naming-conventions-1">Naming Conventions</a></h2>
+<ul>
+<li><strong>UNIQUE</strong>: <code>{table}_{column}_key</code> or <code>{table}_{column1}_{column2}_key</code></li>
+<li><strong>FOREIGN KEY</strong>: <code>{table}_{column}_fkey</code></li>
+<li><strong>CHECK</strong>: <code>{table}_{column}_check</code> or <code>{table}_{description}_check</code></li>
+</ul>
+<p>Named constraints make future migrations predictable:</p>
+<pre><code class="language-sql">-- Easy to reference in later migrations
+ALTER TABLE users DROP CONSTRAINT users_email_key;
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="custom-checks"><a class="header" href="#custom-checks">Custom Checks</a></h1>
+<p>Built-in checks cover common Postgres migration hazards, but every project has unique rules — naming conventions, banned operations, team policies. Custom checks let you enforce these with simple <a href="https://rhai.rs">Rhai</a> scripts.</p>
+<p>Write your checks as <code>.rhai</code> files, point <code>custom_checks_dir</code> at the directory in <code>diesel-guard.toml</code>, and diesel-guard will run them alongside the built-in checks.</p>
+<h2 id="quick-start-1"><a class="header" href="#quick-start-1">Quick Start</a></h2>
+<ol>
+<li>Create a directory for your checks:</li>
+</ol>
+<pre><code class="language-sh">mkdir checks
+</code></pre>
+<ol start="2">
+<li>Write a check script (e.g., <code>checks/require_concurrent_index.rhai</code>):</li>
+</ol>
+<pre><code class="language-rhai">let stmt = node.IndexStmt;
+if stmt == () { return; }
+
+if !stmt.concurrent {
+    let idx_name = if stmt.idxname != "" { stmt.idxname } else { "(unnamed)" };
+    #{
+        operation: "INDEX without CONCURRENTLY: " + idx_name,
+        problem: "Creating index '" + idx_name + "' without CONCURRENTLY blocks writes on the table.",
+        safe_alternative: "Use CREATE INDEX CONCURRENTLY:\n  CREATE INDEX CONCURRENTLY " + idx_name + " ON ...;"
+    }
+}
+</code></pre>
+<ol start="3">
+<li>Add to <code>diesel-guard.toml</code>:</li>
+</ol>
+<pre><code class="language-toml">custom_checks_dir = "checks"
+</code></pre>
+<ol start="4">
+<li>Run as usual:</li>
+</ol>
+<pre><code class="language-sh">diesel-guard check migrations/
+</code></pre>
+<h2 id="how-it-works-1"><a class="header" href="#how-it-works-1">How It Works</a></h2>
+<ul>
+<li>Each <code>.rhai</code> script is called <strong>once per SQL statement</strong> in the migration</li>
+<li>The <code>node</code> variable contains the pg_query AST for that statement (a nested map)</li>
+<li>The <code>config</code> variable exposes the current <code>diesel-guard.toml</code> settings (e.g., <code>config.postgres_version</code>)</li>
+<li>Scripts match on a specific node type: <code>let stmt = node.IndexStmt;</code></li>
+<li>If the node doesn’t match, <code>node.IndexStmt</code> returns <code>()</code> — early-return with <code>if stmt == () { return; }</code></li>
+<li>Return <code>()</code> for no violation, a map for one, or an array of maps for multiple</li>
+<li>Map keys: <code>operation</code>, <code>problem</code>, <code>safe_alternative</code> (all required strings)</li>
+</ul>
+<h2 id="the-config-variable"><a class="header" href="#the-config-variable">The <code>config</code> Variable</a></h2>
+<p><code>config</code> gives scripts access to the user’s configuration. Use it to make version-aware checks:</p>
+<pre><code class="language-rhai">// Only flag this on Postgres &lt; 14
+if config.postgres_version != () &amp;&amp; config.postgres_version &gt;= 14 { return; }
+</code></pre>
+<p>Available fields:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Field</th><th>Type</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>config.postgres_version</code></td><td>integer or <code>()</code></td><td>Target PG major version, or <code>()</code> if unset</td></tr>
+<tr><td><code>config.check_down</code></td><td>bool</td><td>Whether down migrations are checked</td></tr>
+<tr><td><code>config.disable_checks</code></td><td>array</td><td>Check names that are disabled</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="using-dump-ast"><a class="header" href="#using-dump-ast">Using <code>dump-ast</code></a></h2>
+<p>Use <code>dump-ast</code> to inspect the AST for any SQL statement. This is the easiest way to discover which fields are available:</p>
+<pre><code class="language-sh">diesel-guard dump-ast --sql "CREATE INDEX idx_users_email ON users(email);"
+</code></pre>
+<p>Key fields and how they map to Rhai (using <code>IndexStmt</code> as an example):</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>JSON path</th><th>Rhai access</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>IndexStmt.concurrent</code></td><td><code>stmt.concurrent</code></td><td>Whether <code>CONCURRENTLY</code> was specified</td></tr>
+<tr><td><code>IndexStmt.idxname</code></td><td><code>stmt.idxname</code></td><td>Index name</td></tr>
+<tr><td><code>IndexStmt.unique</code></td><td><code>stmt.unique</code></td><td>Whether it’s a UNIQUE index</td></tr>
+<tr><td><code>IndexStmt.relation.relname</code></td><td><code>stmt.relation.relname</code></td><td>Table name</td></tr>
+<tr><td><code>IndexStmt.index_params</code></td><td><code>stmt.index_params</code></td><td>Array of indexed columns</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="return-values"><a class="header" href="#return-values">Return Values</a></h2>
+<p><strong>No violation</strong> — return <code>()</code> (either explicitly or by reaching the end of the script):</p>
+<pre><code class="language-rhai">let stmt = node.IndexStmt;
+if stmt == () { return; }
+
+if stmt.concurrent {
+    return;  // All good, CONCURRENTLY is used
+}
+</code></pre>
+<p><strong>Single violation</strong> — return a map with <code>operation</code>, <code>problem</code>, and <code>safe_alternative</code>:</p>
+<pre><code class="language-rhai">#{
+    operation: "INDEX without CONCURRENTLY: idx_users_email",
+    problem: "Creating index without CONCURRENTLY blocks writes on the table.",
+    safe_alternative: "Use CREATE INDEX CONCURRENTLY."
+}
+</code></pre>
+<p><strong>Multiple violations</strong> — return an array of maps:</p>
+<pre><code class="language-rhai">let violations = [];
+for rel in stmt.relations {
+    violations.push(#{
+        operation: "TRUNCATE: " + rel.node.RangeVar.relname,
+        problem: "TRUNCATE acquires ACCESS EXCLUSIVE lock.",
+        safe_alternative: "Use batched DELETE instead."
+    });
+}
+violations
+</code></pre>
+<h2 id="common-ast-node-types"><a class="header" href="#common-ast-node-types">Common AST Node Types</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>SQL</th><th>Node Type</th><th>Key Fields</th></tr>
+</thead>
+<tbody>
+<tr><td><code>CREATE TABLE</code></td><td><code>CreateStmt</code></td><td><code>relation.relname</code>, <code>relation.relpersistence</code>, <code>table_elts</code></td></tr>
+<tr><td><code>CREATE INDEX</code></td><td><code>IndexStmt</code></td><td><code>idxname</code>, <code>concurrent</code>, <code>unique</code>, <code>relation</code>, <code>index_params</code></td></tr>
+<tr><td><code>ALTER TABLE</code></td><td><code>AlterTableStmt</code></td><td><code>relation</code>, <code>cmds</code> (array of <code>AlterTableCmd</code>)</td></tr>
+<tr><td><code>DROP TABLE/INDEX/...</code></td><td><code>DropStmt</code></td><td><code>remove_type</code>, <code>objects</code>, <code>missing_ok</code>, <code>behavior</code></td></tr>
+<tr><td><code>ALTER TABLE RENAME</code></td><td><code>RenameStmt</code></td><td><code>rename_type</code>, <code>relation</code>, <code>subname</code>, <code>newname</code></td></tr>
+<tr><td><code>TRUNCATE</code></td><td><code>TruncateStmt</code></td><td><code>relations</code> (array of Node-wrapped <code>RangeVar</code>)</td></tr>
+<tr><td><code>CREATE EXTENSION</code></td><td><code>CreateExtensionStmt</code></td><td><code>extname</code>, <code>if_not_exists</code></td></tr>
+<tr><td><code>REINDEX</code></td><td><code>ReindexStmt</code></td><td><code>kind</code>, <code>concurrent</code>, <code>relation</code></td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>Note:</strong> Column definitions (<code>ColumnDef</code>) are nested inside <code>CreateStmt.table_elts</code> and <code>AlterTableCmd.def</code>, not top-level nodes. Use <code>dump-ast</code> to explore the nesting for <code>ALTER TABLE ADD COLUMN</code> statements.</p>
+<h2 id="pg-constants"><a class="header" href="#pg-constants"><code>pg::</code> Constants</a></h2>
+<p>Protobuf enum fields like <code>DropStmt.remove_type</code> and <code>AlterTableCmd.subtype</code> are integer values. Instead of hard-coding magic numbers, use the built-in <code>pg::</code> module:</p>
+<pre><code class="language-rhai">// Instead of: stmt.remove_type == 42
+if stmt.remove_type == pg::OBJECT_TABLE { ... }
+</code></pre>
+<h3 id="objecttype"><a class="header" href="#objecttype">ObjectType</a></h3>
+<p>Used by <code>DropStmt.remove_type</code>, <code>RenameStmt.rename_type</code>, etc.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Constant</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>pg::OBJECT_INDEX</code></td><td>Index</td></tr>
+<tr><td><code>pg::OBJECT_TABLE</code></td><td>Table</td></tr>
+<tr><td><code>pg::OBJECT_COLUMN</code></td><td>Column</td></tr>
+<tr><td><code>pg::OBJECT_DATABASE</code></td><td>Database</td></tr>
+<tr><td><code>pg::OBJECT_SCHEMA</code></td><td>Schema</td></tr>
+<tr><td><code>pg::OBJECT_SEQUENCE</code></td><td>Sequence</td></tr>
+<tr><td><code>pg::OBJECT_VIEW</code></td><td>View</td></tr>
+<tr><td><code>pg::OBJECT_FUNCTION</code></td><td>Function</td></tr>
+<tr><td><code>pg::OBJECT_EXTENSION</code></td><td>Extension</td></tr>
+<tr><td><code>pg::OBJECT_TRIGGER</code></td><td>Trigger</td></tr>
+<tr><td><code>pg::OBJECT_TYPE</code></td><td>Type</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="altertabletype"><a class="header" href="#altertabletype">AlterTableType</a></h3>
+<p>Used by <code>AlterTableCmd.subtype</code>.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Constant</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>pg::AT_ADD_COLUMN</code></td><td>ADD COLUMN</td></tr>
+<tr><td><code>pg::AT_COLUMN_DEFAULT</code></td><td>SET DEFAULT / DROP DEFAULT</td></tr>
+<tr><td><code>pg::AT_DROP_NOT_NULL</code></td><td>DROP NOT NULL</td></tr>
+<tr><td><code>pg::AT_SET_NOT_NULL</code></td><td>SET NOT NULL</td></tr>
+<tr><td><code>pg::AT_DROP_COLUMN</code></td><td>DROP COLUMN</td></tr>
+<tr><td><code>pg::AT_ALTER_COLUMN_TYPE</code></td><td>ALTER COLUMN TYPE</td></tr>
+<tr><td><code>pg::AT_ADD_CONSTRAINT</code></td><td>ADD CONSTRAINT</td></tr>
+<tr><td><code>pg::AT_DROP_CONSTRAINT</code></td><td>DROP CONSTRAINT</td></tr>
+<tr><td><code>pg::AT_VALIDATE_CONSTRAINT</code></td><td>VALIDATE CONSTRAINT</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="constrtype"><a class="header" href="#constrtype">ConstrType</a></h3>
+<p>Used by <code>Constraint.contype</code>.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Constant</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>pg::CONSTR_NOTNULL</code></td><td>NOT NULL</td></tr>
+<tr><td><code>pg::CONSTR_DEFAULT</code></td><td>DEFAULT</td></tr>
+<tr><td><code>pg::CONSTR_IDENTITY</code></td><td>IDENTITY</td></tr>
+<tr><td><code>pg::CONSTR_GENERATED</code></td><td>GENERATED</td></tr>
+<tr><td><code>pg::CONSTR_CHECK</code></td><td>CHECK</td></tr>
+<tr><td><code>pg::CONSTR_PRIMARY</code></td><td>PRIMARY KEY</td></tr>
+<tr><td><code>pg::CONSTR_UNIQUE</code></td><td>UNIQUE</td></tr>
+<tr><td><code>pg::CONSTR_EXCLUSION</code></td><td>EXCLUSION</td></tr>
+<tr><td><code>pg::CONSTR_FOREIGN</code></td><td>FOREIGN KEY</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="dropbehavior"><a class="header" href="#dropbehavior">DropBehavior</a></h3>
+<p>Used by <code>DropStmt.behavior</code>.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Constant</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td><code>pg::DROP_RESTRICT</code></td><td>RESTRICT (default)</td></tr>
+<tr><td><code>pg::DROP_CASCADE</code></td><td>CASCADE</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<p>The <code>examples/</code> directory contains ready-to-use scripts covering common patterns — naming conventions, banned operations, version-aware checks, and more. Browse them to get started or use as templates for your own checks.</p>
+<h2 id="disabling-custom-checks"><a class="header" href="#disabling-custom-checks">Disabling Custom Checks</a></h2>
+<p>Custom checks can be disabled in <code>diesel-guard.toml</code> using the filename stem as the check name:</p>
+<pre><code class="language-toml"># Disables checks/require_concurrent_index.rhai
+disable_checks = ["require_concurrent_index"]
+</code></pre>
+<p><a href="#safety-assured-blocks"><code>safety-assured</code> blocks</a> also suppress custom check violations — any SQL inside a safety-assured block is skipped by all checks, both built-in and custom.</p>
+<h2 id="debugging-tips"><a class="header" href="#debugging-tips">Debugging Tips</a></h2>
+<ul>
+<li><strong>Inspect the AST:</strong> Use <code>diesel-guard dump-ast --sql "..."</code> to see exactly what fields are available</li>
+<li><strong>Runtime errors:</strong> Invalid field access or type errors produce stderr warnings — the check is skipped but other checks continue</li>
+<li><strong>Compilation errors:</strong> Syntax errors in <code>.rhai</code> files are reported at startup</li>
+<li><strong>Infinite loops:</strong> Scripts that exceed the operations limit are terminated safely with a warning</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="safety-assured-blocks"><a class="header" href="#safety-assured-blocks">Safety-Assured Blocks</a></h1>
+<p>When you’ve manually verified an operation is safe, use <code>safety-assured</code> comment blocks to bypass checks:</p>
+<pre><code class="language-sql">-- safety-assured:start
+ALTER TABLE users DROP COLUMN deprecated_column;
+ALTER TABLE posts DROP COLUMN old_field;
+-- safety-assured:end
+</code></pre>
+<p>All statements between the start and end markers are skipped by all checks — both built-in and custom.</p>
+<h2 id="multiple-blocks"><a class="header" href="#multiple-blocks">Multiple Blocks</a></h2>
+<pre><code class="language-sql">-- safety-assured:start
+ALTER TABLE users DROP COLUMN email;
+-- safety-assured:end
+
+-- This will be checked normally
+CREATE INDEX users_email_idx ON users(email);
+
+-- safety-assured:start
+ALTER TABLE posts DROP COLUMN body;
+-- safety-assured:end
+</code></pre>
+<h2 id="when-to-use-safety-assured"><a class="header" href="#when-to-use-safety-assured">When to Use Safety-Assured</a></h2>
+<p><strong>Only use when you’ve taken proper precautions:</strong></p>
+<ol>
+<li>
+<p><strong>For DROP COLUMN:</strong></p>
+<ul>
+<li>Stopped reading/writing the column in application code</li>
+<li>Deployed those changes to production</li>
+<li>Verified no references remain in your codebase</li>
+</ul>
+</li>
+<li>
+<p><strong>For other operations:</strong></p>
+<pre><code class="language-sql">-- safety-assured:start
+-- Safe because: table is empty, deployed in maintenance window
+ALTER TABLE new_table ADD COLUMN status TEXT DEFAULT 'pending';
+-- safety-assured:end
+</code></pre>
+</li>
+</ol>
+<h2 id="error-handling"><a class="header" href="#error-handling">Error Handling</a></h2>
+<p>diesel-guard will error if blocks are mismatched:</p>
+<pre><code>Error: Unclosed 'safety-assured:start' at line 1
+</code></pre>
+<p>Rules:</p>
+<ul>
+<li>Blocks cannot be nested — a second <code>start</code> before <code>end</code> is an error</li>
+<li>Unclosed blocks are errors</li>
+<li>Unmatched <code>end</code> directives (without a preceding <code>start</code>) are errors</li>
+<li>The directives are case-insensitive</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="cicd-integration"><a class="header" href="#cicd-integration">CI/CD Integration</a></h1>
+<h2 id="github-actions"><a class="header" href="#github-actions">GitHub Actions</a></h2>
+<p>Add <code>diesel-guard</code> to your CI pipeline to automatically check migrations on pull requests.</p>
+<h3 id="option-1-github-action-recommended"><a class="header" href="#option-1-github-action-recommended">Option 1: GitHub Action (Recommended)</a></h3>
+<p>Use the official GitHub Action:</p>
+<pre><code class="language-yaml">name: Check Migrations
+on: [pull_request]
+
+jobs:
+  check-migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pin to specific version (recommended for stability)
+      - uses: ayarotsky/diesel-guard@v0.4.0
+        with:
+          path: migrations/
+</code></pre>
+<p><strong>Versioning:</strong></p>
+<ul>
+<li>The action automatically installs the diesel-guard CLI version matching the tag</li>
+<li><code>@v0.4.0</code> installs diesel-guard v0.4.0</li>
+<li><code>@main</code> installs the latest version</li>
+</ul>
+<p><strong>Alternatives:</strong></p>
+<pre><code class="language-yaml"># Always use latest (gets new checks and fixes automatically)
+- uses: ayarotsky/diesel-guard@main
+  with:
+    path: migrations/
+</code></pre>
+<p>This will:</p>
+<ul>
+<li>Install diesel-guard</li>
+<li>Check your migrations for unsafe patterns</li>
+<li>Display detailed violation reports in workflow logs</li>
+<li>Fail the workflow if violations are detected</li>
+</ul>
+<h3 id="option-2-manual-installation"><a class="header" href="#option-2-manual-installation">Option 2: Manual Installation</a></h3>
+<p>For more control or custom workflows:</p>
+<pre><code class="language-yaml">name: Check Migrations
+on: [pull_request]
+
+jobs:
+  check-migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install diesel-guard
+        run: cargo install diesel-guard
+
+      - name: Check DB migrations
+        run: diesel-guard check migrations/
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr-ef4e11c1.min.js"></script>
+        <script src="mark-09e88c2c.min.js"></script>
+        <script src="searcher-c2a407aa.js"></script>
+
+        <script src="clipboard-1626706a.min.js"></script>
+        <script src="highlight-abc7f01d.js"></script>
+        <script src="book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+
+
+    </div>
+    </body>
+</html>
