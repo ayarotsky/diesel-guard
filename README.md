@@ -4,7 +4,7 @@
 
 **Catch dangerous Postgres migrations before they take down production.**
 
-[![demo](https://asciinema.org/a/kwXJvinBnf0Y5nTP.svg)](https://asciinema.org/a/kwXJvinBnf0Y5nTP)
+![demo](demo.gif)
 
 ✓ Detects operations that lock tables or cause downtime<br>
 ✓ Provides safe alternatives for each blocking operation<br>
