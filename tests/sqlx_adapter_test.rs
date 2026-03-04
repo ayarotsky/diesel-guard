@@ -24,23 +24,32 @@ fn test_concurrently_violations_include_sqlx_transaction_hint() {
 
     assert_eq!(results.len(), 1);
     let violations = &results[0].1;
-    assert_eq!(violations.len(), 3);
+    assert_eq!(violations.len(), 5);
 
-    assert_eq!(violations[0].1.operation, "ADD INDEX without CONCURRENTLY");
+    let add_index_without_concurrently = violations
+        .iter()
+        .find(|(_, violation)| violation.operation == "ADD INDEX without CONCURRENTLY")
+        .expect("missing ADD INDEX without CONCURRENTLY violation");
     assert_eq!(
-        violations[0].1.safe_alternative,
+        add_index_without_concurrently.1.safe_alternative,
         "Use CONCURRENTLY to build the index without blocking writes:\n   CREATE INDEX CONCURRENTLY idx_a ON users;\n\nNote: CONCURRENTLY takes longer and uses more resources, but allows concurrent INSERT, UPDATE, and DELETE operations. The index build may fail if there are deadlocks or unique constraint violations.\n\nConsiderations:\n- Requires more total work and takes longer to complete\n- If it fails, it leaves behind an \"invalid\" index that should be dropped\n\nNote: CONCURRENTLY cannot run inside a transaction block.\nAdd `-- no-transaction` as the first line of the migration file."
     );
 
-    assert_eq!(violations[1].1.operation, "DROP INDEX without CONCURRENTLY");
+    let drop_index_without_concurrently = violations
+        .iter()
+        .find(|(_, violation)| violation.operation == "DROP INDEX without CONCURRENTLY")
+        .expect("missing DROP INDEX without CONCURRENTLY violation");
     assert_eq!(
-        violations[1].1.safe_alternative,
+        drop_index_without_concurrently.1.safe_alternative,
         "Use CONCURRENTLY to drop the index without blocking queries:\n   DROP INDEX CONCURRENTLY idx_b;\n\nNote: CONCURRENTLY requires Postgres 9.2+.\n\nConsiderations:\n- Takes longer to complete than regular DROP INDEX\n- Allows concurrent SELECT, INSERT, UPDATE, DELETE operations\n- If it fails, the index may be marked \"invalid\" and should be dropped again\n- Cannot be rolled back (no transaction support)\n\nNote: CONCURRENTLY cannot run inside a transaction block.\nAdd `-- no-transaction` as the first line of the migration file."
     );
 
-    assert_eq!(violations[2].1.operation, "REINDEX without CONCURRENTLY");
+    let reindex_without_concurrently = violations
+        .iter()
+        .find(|(_, violation)| violation.operation == "REINDEX without CONCURRENTLY")
+        .expect("missing REINDEX without CONCURRENTLY violation");
     assert_eq!(
-        violations[2].1.safe_alternative,
+        reindex_without_concurrently.1.safe_alternative,
         "Use REINDEX CONCURRENTLY for lock-free reindexing (Postgres 12+):\n\n   REINDEX INDEX CONCURRENTLY idx_a;\n\nNote: CONCURRENTLY requires Postgres 12+.\n\nConsiderations:\n- Takes longer to complete than regular REINDEX\n- Allows concurrent read/write operations\n- If it fails, the index may be left in \"invalid\" state and need manual cleanup\n- Cannot be rolled back (no transaction support)\n\nNote: CONCURRENTLY cannot run inside a transaction block.\nAdd `-- no-transaction` as the first line of the migration file."
     );
 }

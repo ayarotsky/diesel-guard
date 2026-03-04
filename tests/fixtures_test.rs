@@ -5,46 +5,101 @@
 //! - Unsafe fixtures should produce the expected violations
 
 use camino::Utf8Path;
-use diesel_guard::SafetyChecker;
+use diesel_guard::{Config, SafetyChecker};
+
+const IDEMPOTENCY_CHECKS: &[&str] = &[
+    "IdempotencyAlterCheck",
+    "IdempotencyCreateCheck",
+    "IdempotencyDropCheck",
+    "IdempotencyIndexCheck",
+];
 
 /// Helper to get fixture path
 fn fixture_path(name: &str) -> String {
     format!("tests/fixtures/{name}/up.sql")
 }
 
+fn checker_with_enabled_checks(checks: &[&str]) -> SafetyChecker {
+    SafetyChecker::with_config(Config {
+        enable_checks: checks.iter().map(|check| (*check).to_string()).collect(),
+        ..Default::default()
+    })
+}
+
+fn sqlx_checker_with_enabled_checks(checks: &[&str], check_down: bool) -> SafetyChecker {
+    SafetyChecker::with_config(Config {
+        framework: "sqlx".to_string(),
+        check_down,
+        enable_checks: checks.iter().map(|check| (*check).to_string()).collect(),
+        ..Default::default()
+    })
+}
+
+fn checker_with_disabled_checks(checks: &[&str]) -> SafetyChecker {
+    SafetyChecker::with_config(Config {
+        disable_checks: checks.iter().map(|check| (*check).to_string()).collect(),
+        ..Default::default()
+    })
+}
+
+fn sqlx_checker_with_disabled_checks(checks: &[&str], check_down: bool) -> SafetyChecker {
+    SafetyChecker::with_config(Config {
+        framework: "sqlx".to_string(),
+        check_down,
+        disable_checks: checks.iter().map(|check| (*check).to_string()).collect(),
+        ..Default::default()
+    })
+}
+
 #[test]
 fn test_safe_fixtures_pass() {
-    let checker = SafetyChecker::new();
     let safe_fixtures = vec![
-        "add_check_constraint_safe",
-        "add_column_safe",
-        "add_foreign_key_safe",
-        "add_identity_column_safe",
-        "add_index_safe",
-        "add_json_column_safe",
-        "add_primary_key_safe",
-        "add_serial_column_safe",
-        "add_unique_constraint_safe",
-        "char_type_safe",
-        "create_table_serial_safe",
-        "create_table_without_pk_safe",
-        "delete_with_where_safe",
-        "update_with_where_safe",
-        "domain_check_constraint_safe",
-        "drop_index_safe",
-        "drop_not_null_safe",
-        "generated_column_safe",
-        "refresh_matview_safe",
-        "reindex_safe",
-        "safety_assured_drop",
-        "safety_assured_multiple",
-        "short_int_pk_safe",
-        "timestamp_type_safe",
-        "unnamed_constraint_safe",
-        "wide_index_safe",
+        ("add_check_constraint_safe", vec!["AddCheckConstraintCheck"]),
+        ("add_column_safe", vec!["AddColumnCheck"]),
+        ("add_foreign_key_safe", vec!["AddForeignKeyCheck"]),
+        ("add_identity_column_safe", vec!["AddIdentityColumnCheck"]),
+        ("add_index_safe", vec!["AddIndexCheck"]),
+        ("add_json_column_safe", vec!["AddJsonColumnCheck"]),
+        ("add_primary_key_safe", vec!["AddPrimaryKeyCheck"]),
+        ("add_serial_column_safe", vec!["AddSerialColumnCheck"]),
+        (
+            "add_unique_constraint_safe",
+            vec!["AddUniqueConstraintCheck"],
+        ),
+        ("char_type_safe", vec!["CharTypeCheck"]),
+        ("create_table_serial_safe", vec!["CreateTableSerialCheck"]),
+        (
+            "create_table_without_pk_safe",
+            vec!["CreateTableWithoutPkCheck"],
+        ),
+        ("delete_with_where_safe", vec!["MutationWithoutWhereCheck"]),
+        ("update_with_where_safe", vec!["MutationWithoutWhereCheck"]),
+        (
+            "domain_check_constraint_safe",
+            vec!["AddDomainCheckConstraintCheck"],
+        ),
+        ("drop_index_safe", vec!["DropIndexCheck"]),
+        ("drop_not_null_safe", vec!["DropNotNullCheck"]),
+        ("generated_column_safe", vec!["GeneratedColumnCheck"]),
+        ("idempotency_guard_safe", IDEMPOTENCY_CHECKS.to_vec()),
+        ("refresh_matview_safe", vec!["RefreshMatViewCheck"]),
+        ("reindex_safe", vec!["ReindexCheck"]),
+        ("safety_assured_drop", vec!["DropColumnCheck"]),
+        (
+            "safety_assured_multiple",
+            vec!["AddIndexCheck", "DropColumnCheck"],
+        ),
+        (
+            "short_int_pk_safe",
+            vec!["ShortIntegerPrimaryKeyCheck", "CreateTableWithoutPkCheck"],
+        ),
+        ("timestamp_type_safe", vec!["TimestampTypeCheck"]),
+        ("unnamed_constraint_safe", vec!["UnnamedConstraintCheck"]),
+        ("wide_index_safe", vec!["WideIndexCheck"]),
     ];
 
-    for fixture in safe_fixtures {
+    for (fixture, checks) in safe_fixtures {
+        let checker = checker_with_enabled_checks(&checks);
         let path = fixture_path(fixture);
         let violations = checker
             .check_file(Utf8Path::new(&path))
@@ -62,7 +117,7 @@ fn test_safe_fixtures_pass() {
 
 #[test]
 fn test_add_column_with_default_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["AddColumnCheck"]);
     let path = fixture_path("add_column_with_default_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -73,7 +128,7 @@ fn test_add_column_with_default_detected() {
 
 #[test]
 fn test_add_identity_column_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["AddIdentityColumnCheck"]);
     let path = fixture_path("add_identity_column_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -84,7 +139,7 @@ fn test_add_identity_column_detected() {
 
 #[test]
 fn test_add_foreign_key_unsafe_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["AddForeignKeyCheck"]);
     let path = fixture_path("add_foreign_key_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -95,7 +150,7 @@ fn test_add_foreign_key_unsafe_detected() {
 
 #[test]
 fn test_add_exclude_constraint_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["AddExcludeConstraintCheck"]);
     let path = fixture_path("add_exclude_constraint_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -106,7 +161,7 @@ fn test_add_exclude_constraint_detected() {
 
 #[test]
 fn test_add_check_constraint_unsafe_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["AddCheckConstraintCheck"]);
     let path = fixture_path("add_check_constraint_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -117,7 +172,7 @@ fn test_add_check_constraint_unsafe_detected() {
 
 #[test]
 fn test_add_not_null_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["AddNotNullCheck"]);
     let path = fixture_path("add_not_null_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -128,7 +183,7 @@ fn test_add_not_null_detected() {
 
 #[test]
 fn test_add_index_without_concurrently_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["AddIndexCheck"]);
     let path = fixture_path("add_index_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -139,7 +194,7 @@ fn test_add_index_without_concurrently_detected() {
 
 #[test]
 fn test_add_json_column_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["AddJsonColumnCheck"]);
     let path = fixture_path("add_json_column_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -150,7 +205,7 @@ fn test_add_json_column_detected() {
 
 #[test]
 fn test_add_unique_index_without_concurrently_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["AddIndexCheck"]);
     let path = fixture_path("add_unique_index_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -165,7 +220,7 @@ fn test_add_unique_index_without_concurrently_detected() {
 
 #[test]
 fn test_alter_column_type_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["AlterColumnTypeCheck"]);
     let path = fixture_path("alter_column_type_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -176,7 +231,7 @@ fn test_alter_column_type_detected() {
 
 #[test]
 fn test_alter_column_type_with_using_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["AlterColumnTypeCheck"]);
     let path = fixture_path("alter_column_type_using_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -187,7 +242,7 @@ fn test_alter_column_type_with_using_detected() {
 
 #[test]
 fn test_char_type_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["CharTypeCheck"]);
     let path = fixture_path("char_type_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -198,7 +253,7 @@ fn test_char_type_detected() {
 
 #[test]
 fn test_create_table_without_pk_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["CreateTableWithoutPkCheck"]);
     let path = fixture_path("create_table_without_pk_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -212,7 +267,7 @@ fn test_create_table_without_pk_detected() {
 
 #[test]
 fn test_create_extension_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["CreateExtensionCheck"]);
     let path = fixture_path("create_extension_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -223,7 +278,7 @@ fn test_create_extension_detected() {
 
 #[test]
 fn test_create_table_serial_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["CreateTableSerialCheck"]);
     let path = fixture_path("create_table_serial_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -234,7 +289,7 @@ fn test_create_table_serial_detected() {
 
 #[test]
 fn test_add_unique_constraint_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["AddUniqueConstraintCheck"]);
     let path = fixture_path("add_unique_constraint_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -245,7 +300,7 @@ fn test_add_unique_constraint_detected() {
 
 #[test]
 fn test_unique_using_index_is_safe() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["AddUniqueConstraintCheck"]);
     let path = fixture_path("add_unique_constraint_safe");
 
     // Should parse successfully (even though sqlparser can't parse it)
@@ -261,7 +316,12 @@ fn test_unique_using_index_is_safe() {
 
 #[test]
 fn test_unnamed_constraint_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&[
+        "AddCheckConstraintCheck",
+        "AddForeignKeyCheck",
+        "AddUniqueConstraintCheck",
+        "UnnamedConstraintCheck",
+    ]);
     let path = fixture_path("unnamed_constraint_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -278,7 +338,7 @@ fn test_unnamed_constraint_detected() {
 
 #[test]
 fn test_drop_column_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["DropColumnCheck"]);
     let path = fixture_path("drop_column_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -289,7 +349,7 @@ fn test_drop_column_detected() {
 
 #[test]
 fn test_drop_column_if_exists_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["DropColumnCheck"]);
     let path = fixture_path("drop_column_if_exists_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -300,7 +360,7 @@ fn test_drop_column_if_exists_detected() {
 
 #[test]
 fn test_drop_multiple_columns_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["DropColumnCheck"]);
     let path = fixture_path("drop_multiple_columns_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -316,7 +376,7 @@ fn test_drop_multiple_columns_detected() {
 
 #[test]
 fn test_drop_index_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["DropIndexCheck"]);
     let path = fixture_path("drop_index_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -327,7 +387,7 @@ fn test_drop_index_detected() {
 
 #[test]
 fn test_drop_not_null_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["DropNotNullCheck"]);
     let path = fixture_path("drop_not_null_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -338,7 +398,7 @@ fn test_drop_not_null_detected() {
 
 #[test]
 fn test_drop_table_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["DropTableCheck"]);
     let path = fixture_path("drop_table_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -349,7 +409,7 @@ fn test_drop_table_detected() {
 
 #[test]
 fn test_drop_database_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["DropDatabaseCheck"]);
     let path = fixture_path("drop_database_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -360,7 +420,7 @@ fn test_drop_database_detected() {
 
 #[test]
 fn test_drop_index_concurrently_is_safe() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["DropIndexCheck"]);
     let path = fixture_path("drop_index_safe");
 
     // Should parse successfully (even though sqlparser can't parse it)
@@ -376,7 +436,7 @@ fn test_drop_index_concurrently_is_safe() {
 
 #[test]
 fn test_generated_column_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["GeneratedColumnCheck"]);
     let path = fixture_path("generated_column_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -390,7 +450,7 @@ fn test_generated_column_detected() {
 
 #[test]
 fn test_refresh_matview_without_concurrently_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["RefreshMatViewCheck"]);
     let path = fixture_path("refresh_matview_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -404,7 +464,7 @@ fn test_refresh_matview_without_concurrently_detected() {
 
 #[test]
 fn test_reindex_without_concurrently_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["ReindexCheck"]);
     let path = fixture_path("reindex_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -415,7 +475,7 @@ fn test_reindex_without_concurrently_detected() {
 
 #[test]
 fn test_reindex_concurrently_is_safe() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["ReindexCheck"]);
     let path = fixture_path("reindex_safe");
 
     // Should parse successfully (even though sqlparser can't parse it)
@@ -431,7 +491,7 @@ fn test_reindex_concurrently_is_safe() {
 
 #[test]
 fn test_rename_column_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["RenameColumnCheck"]);
     let path = fixture_path("rename_column_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -442,7 +502,7 @@ fn test_rename_column_detected() {
 
 #[test]
 fn test_rename_schema_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["RenameSchemaCheck"]);
     let path = fixture_path("rename_schema_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -453,7 +513,7 @@ fn test_rename_schema_detected() {
 
 #[test]
 fn test_rename_table_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["RenameTableCheck"]);
     let path = fixture_path("rename_table_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -464,7 +524,7 @@ fn test_rename_table_detected() {
 
 #[test]
 fn test_add_serial_column_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["AddSerialColumnCheck"]);
     let path = fixture_path("add_serial_column_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -475,7 +535,7 @@ fn test_add_serial_column_detected() {
 
 #[test]
 fn test_timestamp_type_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["TimestampTypeCheck"]);
     let path = fixture_path("timestamp_type_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -486,7 +546,11 @@ fn test_timestamp_type_detected() {
 
 #[test]
 fn test_short_int_pk_unsafe_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&[
+        "AddPrimaryKeyCheck",
+        "CreateTableWithoutPkCheck",
+        "ShortIntegerPrimaryKeyCheck",
+    ]);
     let path = fixture_path("short_int_pk_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -530,7 +594,7 @@ fn test_short_int_pk_unsafe_detected() {
 
 #[test]
 fn test_truncate_table_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["TruncateTableCheck"]);
     let path = fixture_path("truncate_table_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -541,7 +605,7 @@ fn test_truncate_table_detected() {
 
 #[test]
 fn test_wide_index_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["WideIndexCheck"]);
     let path = fixture_path("wide_index_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -555,7 +619,7 @@ fn test_wide_index_detected() {
 
 #[test]
 fn test_add_primary_key_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["AddPrimaryKeyCheck"]);
     let path = fixture_path("add_primary_key_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -566,7 +630,7 @@ fn test_add_primary_key_detected() {
 
 #[test]
 fn test_drop_primary_key_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["DropPrimaryKeyCheck"]);
     let path = fixture_path("drop_primary_key_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -577,7 +641,7 @@ fn test_drop_primary_key_detected() {
 
 #[test]
 fn test_domain_check_constraint_alter_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["AddDomainCheckConstraintCheck"]);
     let path = fixture_path("domain_check_constraint_alter_unsafe");
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
     assert_eq!(violations.len(), 1, "Expected 1 violation");
@@ -586,7 +650,7 @@ fn test_domain_check_constraint_alter_detected() {
 
 #[test]
 fn test_delete_without_where_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["MutationWithoutWhereCheck"]);
     let path = fixture_path("delete_without_where_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -597,7 +661,7 @@ fn test_delete_without_where_detected() {
 
 #[test]
 fn test_update_without_where_detected() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_enabled_checks(&["MutationWithoutWhereCheck"]);
     let path = fixture_path("update_without_where_unsafe");
 
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
@@ -608,7 +672,7 @@ fn test_update_without_where_detected() {
 
 #[test]
 fn test_check_entire_fixtures_directory() {
-    let checker = SafetyChecker::new();
+    let checker = checker_with_disabled_checks(IDEMPOTENCY_CHECKS);
     let results = checker
         .check_directory(Utf8Path::new("tests/fixtures"))
         .unwrap();
@@ -617,14 +681,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        40,
-        "Expected violations in 40 files, got {}",
+        42,
+        "Expected violations in 42 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 51,
-        "Expected 51 total violations: 37 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 6, short_int_pk_unsafe with 6 (4 short int + 1 add pk + 1 no pk), got {total_violations}"
+        total_violations, 57,
+        "Expected 57 total violations: 38 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 6, short_int_pk_unsafe with 6 (4 short int + 1 add pk + 1 no pk), add_identity_column_unsafe with 1, and drop_column_if_exists_unsafe with 1, got {total_violations}"
     );
 }
 
@@ -632,13 +696,7 @@ fn test_check_entire_fixtures_directory() {
 
 #[test]
 fn test_sqlx_suffix_format_detected() {
-    use diesel_guard::Config;
-
-    let config = Config {
-        check_down: true, // Check both up and down
-        ..Default::default()
-    };
-    let checker = SafetyChecker::with_config(config);
+    let checker = sqlx_checker_with_enabled_checks(&["AddColumnCheck", "DropColumnCheck"], true);
 
     let results = checker
         .check_directory(Utf8Path::new(
@@ -657,7 +715,7 @@ fn test_sqlx_suffix_format_detected() {
     assert_eq!(
         add_column_result.1.len(),
         1,
-        "Expected 1 violation in up.sql"
+        "Expected 1 AddColumnCheck violation in up.sql"
     );
     assert_eq!(
         add_column_result.1[0].1.operation,
@@ -672,33 +730,34 @@ fn test_sqlx_suffix_format_detected() {
     assert_eq!(
         drop_column_result.1.len(),
         1,
-        "Expected 1 violation in down.sql"
+        "Expected 1 DropColumnCheck violation in down.sql"
     );
     assert_eq!(drop_column_result.1[0].1.operation, "DROP COLUMN");
 }
 
 #[test]
 fn test_safe_sqlx_fixtures_pass() {
-    use diesel_guard::Config;
-
-    // Use the SQLx adapter so that the `-- no-transaction` directive is recognized.
-    let config = Config {
-        framework: "sqlx".to_string(),
-        ..Default::default()
-    };
-    let checker = SafetyChecker::with_config(config);
-
-    // Note: sqlx_concurrently_missing_directive is intentionally excluded here —
-    // it contains CREATE INDEX CONCURRENTLY without a no-transaction directive,
-    // which is now correctly detected as a violation.
     let safe_sqlx_fixtures = vec![
-        "tests/fixtures_sqlx/sqlx_concurrently_with_directive",
-        "tests/fixtures_sqlx/sqlx_drop_index_safe",
-        "tests/fixtures_sqlx/sqlx_reindex_safe",
-        "tests/fixtures_sqlx/sqlx_refresh_matview_safe",
+        (
+            "tests/fixtures_sqlx/sqlx_concurrently_with_directive",
+            vec!["AddIndexCheck"],
+        ),
+        (
+            "tests/fixtures_sqlx/sqlx_drop_index_safe",
+            vec!["DropIndexCheck"],
+        ),
+        (
+            "tests/fixtures_sqlx/sqlx_reindex_safe",
+            vec!["ReindexCheck"],
+        ),
+        (
+            "tests/fixtures_sqlx/sqlx_refresh_matview_safe",
+            vec!["RefreshMatViewCheck"],
+        ),
     ];
 
-    for fixture in safe_sqlx_fixtures {
+    for (fixture, checks) in safe_sqlx_fixtures {
+        let checker = sqlx_checker_with_enabled_checks(&checks, false);
         let results = checker
             .check_directory(Utf8Path::new(fixture))
             .unwrap_or_else(|e| panic!("Failed to check {fixture}: {e}"));
@@ -713,13 +772,7 @@ fn test_safe_sqlx_fixtures_pass() {
 
 #[test]
 fn test_sqlx_concurrently_without_no_transaction_detected() {
-    use diesel_guard::Config;
-
-    let config = Config {
-        framework: "sqlx".to_string(),
-        ..Default::default()
-    };
-    let checker = SafetyChecker::with_config(config);
+    let checker = sqlx_checker_with_enabled_checks(&["AddIndexCheck"], false);
 
     let results = checker
         .check_directory(Utf8Path::new(
@@ -737,13 +790,7 @@ fn test_sqlx_concurrently_without_no_transaction_detected() {
 
 #[test]
 fn test_sqlx_add_index_without_concurrently_detected() {
-    use diesel_guard::Config;
-
-    let config = Config {
-        framework: "sqlx".to_string(),
-        ..Default::default()
-    };
-    let checker = SafetyChecker::with_config(config);
+    let checker = sqlx_checker_with_enabled_checks(&["AddIndexCheck"], false);
 
     let results = checker
         .check_directory(Utf8Path::new("tests/fixtures_sqlx/sqlx_add_index_unsafe"))
@@ -759,13 +806,7 @@ fn test_sqlx_add_index_without_concurrently_detected() {
 
 #[test]
 fn test_sqlx_drop_index_without_concurrently_detected() {
-    use diesel_guard::Config;
-
-    let config = Config {
-        framework: "sqlx".to_string(),
-        ..Default::default()
-    };
-    let checker = SafetyChecker::with_config(config);
+    let checker = sqlx_checker_with_enabled_checks(&["DropIndexCheck"], false);
 
     let results = checker
         .check_directory(Utf8Path::new("tests/fixtures_sqlx/sqlx_drop_index_unsafe"))
@@ -781,13 +822,7 @@ fn test_sqlx_drop_index_without_concurrently_detected() {
 
 #[test]
 fn test_sqlx_drop_index_concurrently_missing_directive_detected() {
-    use diesel_guard::Config;
-
-    let config = Config {
-        framework: "sqlx".to_string(),
-        ..Default::default()
-    };
-    let checker = SafetyChecker::with_config(config);
+    let checker = sqlx_checker_with_enabled_checks(&["DropIndexCheck"], false);
 
     let results = checker
         .check_directory(Utf8Path::new(
@@ -805,13 +840,7 @@ fn test_sqlx_drop_index_concurrently_missing_directive_detected() {
 
 #[test]
 fn test_sqlx_reindex_concurrently_missing_directive_detected() {
-    use diesel_guard::Config;
-
-    let config = Config {
-        framework: "sqlx".to_string(),
-        ..Default::default()
-    };
-    let checker = SafetyChecker::with_config(config);
+    let checker = sqlx_checker_with_enabled_checks(&["ReindexCheck"], false);
 
     let results = checker
         .check_directory(Utf8Path::new(
@@ -829,13 +858,7 @@ fn test_sqlx_reindex_concurrently_missing_directive_detected() {
 
 #[test]
 fn test_sqlx_refresh_matview_without_concurrently_detected() {
-    use diesel_guard::Config;
-
-    let config = Config {
-        framework: "sqlx".to_string(),
-        ..Default::default()
-    };
-    let checker = SafetyChecker::with_config(config);
+    let checker = sqlx_checker_with_enabled_checks(&["RefreshMatViewCheck"], false);
 
     let results = checker
         .check_directory(Utf8Path::new(
@@ -853,13 +876,7 @@ fn test_sqlx_refresh_matview_without_concurrently_detected() {
 
 #[test]
 fn test_sqlx_refresh_matview_concurrently_missing_directive_detected() {
-    use diesel_guard::Config;
-
-    let config = Config {
-        framework: "sqlx".to_string(),
-        ..Default::default()
-    };
-    let checker = SafetyChecker::with_config(config);
+    let checker = sqlx_checker_with_enabled_checks(&["RefreshMatViewCheck"], false);
 
     let results = checker
         .check_directory(Utf8Path::new(
@@ -877,14 +894,7 @@ fn test_sqlx_refresh_matview_concurrently_missing_directive_detected() {
 
 #[test]
 fn test_check_all_sqlx_fixtures() {
-    use diesel_guard::Config;
-
-    let config = Config {
-        framework: "sqlx".to_string(),
-        check_down: false, // Only check up migrations
-        ..Default::default()
-    };
-    let checker = SafetyChecker::with_config(config);
+    let checker = sqlx_checker_with_disabled_checks(IDEMPOTENCY_CHECKS, false);
 
     // Check each fixture directory individually and collect results
     let fixture_dirs = vec![
@@ -916,17 +926,17 @@ fn test_check_all_sqlx_fixtures() {
         }
     }
 
-    // Expected violations (with check_down = false):
-    // 1. sqlx_suffix_add_column_unsafe - 1 violation (ADD COLUMN with DEFAULT)
-    // 2. sqlx_add_index_unsafe - 1 violation (ADD INDEX without CONCURRENTLY)
-    // 3. sqlx_concurrently_missing_directive - 1 violation (CREATE INDEX CONCURRENTLY inside a transaction)
-    // 4. sqlx_drop_index_unsafe - 1 violation (DROP INDEX without CONCURRENTLY)
-    // 5. sqlx_drop_index_missing_directive - 1 violation (DROP INDEX CONCURRENTLY inside a transaction)
-    // 6. sqlx_reindex_unsafe - 1 violation (REINDEX without CONCURRENTLY)
-    // 7. sqlx_reindex_missing_directive - 1 violation (REINDEX CONCURRENTLY inside a transaction)
-    // 8. sqlx_refresh_matview_unsafe - 1 violation (REFRESH MATERIALIZED VIEW without CONCURRENTLY)
-    // 9. sqlx_refresh_matview_missing_directive - 1 violation (REFRESH MATERIALIZED VIEW CONCURRENTLY inside a transaction)
-    // Note: .down.sql correctly skipped, with-directive and safe fixtures have 0 violations
+    // Expected violations (with check_down = false and idempotency checks excluded):
+    // - sqlx_suffix_add_column_unsafe up.sql: 1
+    // - sqlx_add_index_unsafe: 1
+    // - sqlx_concurrently_missing_directive: 1
+    // - sqlx_drop_index_unsafe: 1
+    // - sqlx_drop_index_missing_directive: 1
+    // - sqlx_reindex_unsafe: 1
+    // - sqlx_reindex_missing_directive: 1
+    // - sqlx_refresh_matview_unsafe: 1
+    // - sqlx_refresh_matview_missing_directive: 1
+    // Note: .down.sql is skipped here, and idempotency has dedicated fixture coverage.
     assert_eq!(
         files_with_violations, 9,
         "Expected 9 files with violations, got {files_with_violations}"
@@ -935,4 +945,29 @@ fn test_check_all_sqlx_fixtures() {
         all_violations, 9,
         "Expected 9 total violations, got {all_violations}"
     );
+}
+
+#[test]
+fn test_idempotency_guard_detected() {
+    let checker = checker_with_enabled_checks(IDEMPOTENCY_CHECKS);
+    let path = fixture_path("idempotency_guard_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 6, "Expected 6 idempotency violations");
+    assert_eq!(
+        violations[0].1.operation,
+        "CREATE TABLE without IF NOT EXISTS"
+    );
+    assert_eq!(
+        violations[1].1.operation,
+        "CREATE INDEX without IF NOT EXISTS"
+    );
+    assert_eq!(
+        violations[2].1.operation,
+        "ADD COLUMN without IF NOT EXISTS"
+    );
+    assert_eq!(violations[3].1.operation, "DROP TABLE without IF EXISTS");
+    assert_eq!(violations[4].1.operation, "DROP INDEX without IF EXISTS");
+    assert_eq!(violations[5].1.operation, "DROP COLUMN without IF EXISTS");
 }
