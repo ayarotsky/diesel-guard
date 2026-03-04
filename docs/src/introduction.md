@@ -1,14 +1,12 @@
 # Introduction
 
-Catch dangerous Postgres migrations before they take down production.
+Linter for dangerous Postgres migration patterns in Diesel and SQLx.
 
 ✓ Detects operations that lock tables or cause downtime<br>
 ✓ Provides safe alternatives for each blocking operation<br>
 ✓ Works with both Diesel and SQLx migration frameworks<br>
 ✓ Supports safety-assured blocks for verified operations<br>
 ✓ Extensible with [custom checks](custom-checks.md)<br>
-
-Works with [Diesel](https://diesel.rs) and [SQLx](https://github.com/launchbadge/sqlx).
 
 ## How It Works
 
