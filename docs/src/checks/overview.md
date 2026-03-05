@@ -1,6 +1,6 @@
 # Checks
 
-diesel-guard ships with 24 built-in safety checks covering the most common Postgres migration hazards.
+diesel-guard ships with 25 built-in safety checks covering the most common Postgres migration hazards.
 
 | Check | Operation | Lock Type |
 |---|---|---|
@@ -9,6 +9,7 @@ diesel-guard ships with 24 built-in safety checks covering the most common Postg
 | [Adding a UNIQUE Constraint](adding-unique-constraint.md) | `ALTER TABLE ... ADD UNIQUE` | ACCESS EXCLUSIVE |
 | [Changing Column Type](changing-column-type.md) | `ALTER TABLE ... ALTER COLUMN ... TYPE` | ACCESS EXCLUSIVE + table rewrite |
 | [CHAR Fields](char-field.md) | `CHAR`/`CHARACTER` column types | — (best practice) |
+| [Create Table with SERIAL](create-table-serial.md) | `SERIAL/BIGSERIAL/SMALLSERIAL` in `CREATE TABLE` | — (best practice) |
 | [Creating an Extension](creating-extension.md) | `CREATE EXTENSION` | — (requires superuser) |
 | [Dropping a Column](dropping-column.md) | `ALTER TABLE ... DROP COLUMN` | ACCESS EXCLUSIVE |
 | [Dropping a Constraint](dropping-constraint.md) | Unnamed `UNIQUE`/`FOREIGN KEY`/`CHECK` constraints | — (best practice) |
@@ -22,7 +23,7 @@ diesel-guard ships with 24 built-in safety checks covering the most common Postg
 | [Renaming a Column](renaming-column.md) | `ALTER TABLE ... RENAME COLUMN` | ACCESS EXCLUSIVE |
 | [Renaming a Table](renaming-table.md) | `ALTER TABLE ... RENAME TO` | ACCESS EXCLUSIVE |
 | [REINDEX](reindexing.md) | `REINDEX` without `CONCURRENTLY` | ACCESS EXCLUSIVE |
-| [SERIAL Primary Keys](serial-primary-key.md) | `ADD COLUMN ... SERIAL/BIGSERIAL` | ACCESS EXCLUSIVE + table rewrite |
+| [Adding SERIAL/BIGSERIAL/SMALLSERIAL Columns](serial-primary-key.md) | `ALTER TABLE ... ADD COLUMN ... SERIAL/BIGSERIAL/SMALLSERIAL` | ACCESS EXCLUSIVE + table rewrite |
 | [SET NOT NULL](set-not-null.md) | `ALTER TABLE ... ALTER COLUMN ... SET NOT NULL` | ACCESS EXCLUSIVE |
 | [Short Primary Keys](short-primary-key.md) | `SMALLINT`/`INT` primary keys | — (best practice) |
 | [TIMESTAMP Fields](timestamp-field.md) | `TIMESTAMP` without time zone | — (best practice) |

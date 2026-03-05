@@ -11,6 +11,7 @@
   - [Adding a UNIQUE Constraint](checks/adding-unique-constraint.md)
   - [Changing Column Type](checks/changing-column-type.md)
   - [CHAR Fields](checks/char-field.md)
+  - [Create Table with SERIAL](checks/create-table-serial.md)
   - [Creating an Extension](checks/creating-extension.md)
   - [Dropping a Column](checks/dropping-column.md)
   - [Dropping a Constraint](checks/dropping-constraint.md)
