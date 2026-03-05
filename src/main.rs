@@ -10,8 +10,25 @@ use std::process::exit;
 const CONFIG_TEMPLATE: &str = include_str!("../diesel-guard.toml.example");
 
 #[derive(Parser)]
-#[command(name = "diesel-guard")]
-#[command(version, about = "Catch unsafe Postgres migrations in Diesel and SQLx before they take down production", long_about = None)]
+#[command(
+    name = "diesel-guard",
+    version,
+    about = "Catch unsafe Postgres migrations in Diesel and SQLx before they take down production",
+    long_about = "Catch unsafe Postgres migrations in Diesel and SQLx before they take down production.
+
+diesel-guard parses SQL with PostgreSQL's own parser (libpg_query) and flags operations
+that acquire dangerous locks or cause table rewrites.
+
+QUICK START:
+  diesel-guard init              Create diesel-guard.toml in the current directory
+  diesel-guard check migrations/ Check all migration files in a directory
+  diesel-guard check up.sql      Check a single file
+  diesel-guard check -           Read SQL from stdin
+
+Exit codes:
+  0  No violations found
+  1  One or more violations found (or a fatal error occurred)"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -20,23 +37,62 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Check migrations for unsafe operations
+    #[command(long_about = "Check migrations for unsafe operations.
+
+PATH can be:
+  - A directory — scans all up.sql files recursively
+  - A single .sql file
+  - \"-\" to read from stdin
+
+diesel-guard looks for diesel-guard.toml in the current directory. If no config
+file is found, default settings are used with a warning.
+
+Exit codes:
+  0  No violations found
+  1  One or more violations found
+
+EXAMPLES:
+  diesel-guard check migrations/
+  diesel-guard check db/migrate/20240101_add_users/up.sql
+  cat migration.sql | diesel-guard check -
+  diesel-guard check migrations/ --format json")]
     Check {
-        /// Path to migration file or directory or "-" for stdin input
+        /// Path to migration file or directory, or "-" for stdin
         path: Utf8PathBuf,
 
-        /// Output format (text or json)
+        /// Output format: "text" (default) or "json"
         #[arg(long, default_value = "text")]
         format: String,
     },
 
     /// Initialize diesel-guard configuration file
+    #[command(long_about = "Initialize diesel-guard configuration file.
+
+Creates diesel-guard.toml in the current directory with all available options
+documented. Edit the file to set your migration framework (\"diesel\" or \"sqlx\")
+and any other options.
+
+Use --force to regenerate the config file and reset it to defaults.
+
+EXAMPLES:
+  diesel-guard init
+  diesel-guard init --force")]
     Init {
         /// Overwrite existing config file if it exists
         #[arg(long)]
         force: bool,
     },
 
-    /// Dump the pg_query AST for SQL as JSON (useful for writing custom Rhai checks)
+    /// Dump the pg_query AST for SQL as JSON
+    #[command(long_about = "Dump the pg_query AST for SQL as JSON.
+
+Useful when writing custom Rhai checks — shows the exact AST structure that
+your scripts receive. Provide either --sql for an inline string or --file for
+a .sql file (not both).
+
+EXAMPLES:
+  diesel-guard dump-ast --sql \"ALTER TABLE users ADD COLUMN email TEXT\"
+  diesel-guard dump-ast --file migrations/20240101/up.sql")]
     DumpAst {
         /// SQL string to parse
         #[arg(long)]
