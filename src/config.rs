@@ -34,6 +34,9 @@ pub enum ConfigError {
 
     #[error("Invalid framework \"{framework}\". Expected \"diesel\" or \"sqlx\".")]
     InvalidFramework { framework: String },
+
+    #[error("enable_checks and disable_checks cannot both be set")]
+    ConflictingCheckConfig,
 }
 
 impl Diagnostic for ConfigError {
@@ -49,6 +52,9 @@ impl Diagnostic for ConfigError {
             Self::InvalidFramework { .. } => {
                 Some(Box::new("diesel_guard::config::invalid_framework"))
             }
+            Self::ConflictingCheckConfig => {
+                Some(Box::new("diesel_guard::config::conflicting_check_config"))
+            }
         }
     }
 
@@ -62,6 +68,9 @@ impl Diagnostic for ConfigError {
                 "Add one of the following to your diesel-guard.toml file:\n  framework = \"diesel\"\n  framework = \"sqlx\"",
             )),
             Self::InvalidFramework { .. } => Some(Box::new("Valid values: \"diesel\", \"sqlx\"")),
+            Self::ConflictingCheckConfig => Some(Box::new(
+                "Use either enable_checks (whitelist) or disable_checks (blacklist), not both.",
+            )),
             _ => None,
         }
     }
@@ -93,6 +102,10 @@ pub struct Config {
     /// List of check struct names to disable
     #[serde(default)]
     pub disable_checks: Vec<String>,
+
+    /// List of check names to run exclusively (whitelist). Cannot be used with disable_checks.
+    #[serde(default)]
+    pub enable_checks: Vec<String>,
 
     /// Directory containing custom Rhai check scripts (.rhai files)
     #[serde(default)]
@@ -147,11 +160,18 @@ impl Config {
         // Timestamp validation is framework-specific and done by adapters
         // during migration file collection
 
+        if !self.enable_checks.is_empty() && !self.disable_checks.is_empty() {
+            return Err(ConfigError::ConflictingCheckConfig);
+        }
+
         Ok(())
     }
 
     /// Check if a specific check is enabled
     pub fn is_check_enabled(&self, check_name: &str) -> bool {
+        if !self.enable_checks.is_empty() {
+            return self.enable_checks.iter().any(|c| c == check_name);
+        }
         !self.disable_checks.iter().any(|c| c == check_name)
     }
 }
@@ -163,6 +183,7 @@ impl Default for Config {
             start_after: None,
             check_down: false,
             disable_checks: Vec::new(),
+            enable_checks: Vec::new(),
             custom_checks_dir: None,
             postgres_version: None,
         }
@@ -440,5 +461,63 @@ postgres_version = 14
         let toml_err = toml::from_str::<Config>("bad = [[[").unwrap_err();
         let err = ConfigError::ParseError(toml_err);
         assert!(err.help().is_none());
+    }
+
+    #[test]
+    fn test_is_check_enabled_with_whitelist() {
+        let config = Config {
+            enable_checks: vec!["AddIndexCheck".to_string(), "AddNotNullCheck".to_string()],
+            ..Default::default()
+        };
+
+        assert!(config.is_check_enabled("AddIndexCheck"));
+        assert!(config.is_check_enabled("AddNotNullCheck"));
+        assert!(!config.is_check_enabled("AddColumnCheck"));
+        assert!(!config.is_check_enabled("DropColumnCheck"));
+    }
+
+    #[test]
+    fn test_enable_and_disable_checks_conflict() {
+        let config = Config {
+            enable_checks: vec!["AddIndexCheck".to_string()],
+            disable_checks: vec!["DropColumnCheck".to_string()],
+            ..Default::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(matches!(err, ConfigError::ConflictingCheckConfig));
+    }
+
+    #[test]
+    fn test_enable_checks_loads_from_toml() {
+        let config: Config = toml::from_str(
+            r#"
+framework = "diesel"
+enable_checks = ["AddIndexCheck", "AddNotNullCheck"]
+            "#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.enable_checks,
+            vec!["AddIndexCheck".to_string(), "AddNotNullCheck".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_diagnostic_code_conflicting_check_config() {
+        use miette::Diagnostic;
+        let err = ConfigError::ConflictingCheckConfig;
+        let code = err.code().unwrap().to_string();
+        assert_eq!(code, "diesel_guard::config::conflicting_check_config");
+    }
+
+    #[test]
+    fn test_diagnostic_help_conflicting_check_config() {
+        use miette::Diagnostic;
+        let err = ConfigError::ConflictingCheckConfig;
+        let help = err.help().unwrap().to_string();
+        assert_eq!(
+            help,
+            "Use either enable_checks (whitelist) or disable_checks (blacklist), not both."
+        );
     }
 }

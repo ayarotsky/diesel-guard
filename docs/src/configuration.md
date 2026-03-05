@@ -32,8 +32,11 @@ start_after = "2024_01_01_000000"
 # Also check down.sql files (default: false)
 check_down = true
 
-# Disable specific checks
+# Disable specific checks (blacklist)
 disable_checks = ["AddColumnCheck"]
+
+# Run only specific checks (whitelist). Cannot be used with disable_checks.
+enable_checks = ["AddIndexCheck", "AddNotNullCheck"]
 
 # Directory containing custom Rhai check scripts
 custom_checks_dir = "checks"
@@ -47,7 +50,7 @@ postgres_version = 16
 
 ## Available Check Names
 
-Use these names in `disable_checks` to turn off individual checks:
+Use these names in `disable_checks` (blacklist) or `enable_checks` (whitelist):
 
 | Check Name | Operation |
 |---|---|

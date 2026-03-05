@@ -39,6 +39,16 @@ framework = "diesel"
 # Default: [] (all checks enabled)
 # disable_checks = []
 
+# Enable only specific safety checks (whitelist)
+# When set, only the listed checks run — all others are skipped.
+# Cannot be used together with disable_checks.
+#
+# Example: Only check for concurrent index and not-null violations
+# enable_checks = ["AddIndexCheck", "AddNotNullCheck"]
+#
+# Default: [] (all checks enabled, subject to disable_checks)
+# enable_checks = []
+
 # Directory containing custom Rhai check scripts (.rhai files)
 # Each script receives a pg_query AST node and can return violations.
 # Use `diesel-guard dump-ast --sql "..."` to inspect the AST structure.
