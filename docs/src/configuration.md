@@ -64,6 +64,7 @@ Use these names in `disable_checks` (blacklist) or `enable_checks` (whitelist):
 | `AlterColumnTypeCheck` | ALTER COLUMN TYPE |
 | `CharTypeCheck` | CHAR/CHARACTER column types |
 | `CreateExtensionCheck` | CREATE EXTENSION |
+| `CreateTableSerialCheck` | CREATE TABLE with SERIAL |
 | `DropColumnCheck` | DROP COLUMN |
 | `DropDatabaseCheck` | DROP DATABASE |
 | `DropIndexCheck` | DROP INDEX without CONCURRENTLY |
