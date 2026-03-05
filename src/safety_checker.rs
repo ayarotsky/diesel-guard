@@ -46,43 +46,46 @@ impl SafetyChecker {
         // We check against all built-in names (not just enabled ones) and all
         // custom script stems so that disabling a valid check doesn't trigger
         // a spurious warning.
-        if !config.disable_checks.is_empty() {
-            let builtin_names = Registry::builtin_check_names();
-            let custom_names: Vec<String> = config
-                .custom_checks_dir
-                .as_deref()
-                .and_then(|d| {
-                    let dir = Utf8Path::new(d);
-                    if dir.exists() {
-                        std::fs::read_dir(dir).ok()
-                    } else {
-                        None
-                    }
-                })
-                .into_iter()
-                .flatten()
-                .filter_map(|entry| {
-                    let path = entry.ok()?.path();
-                    if path.extension().and_then(|e| e.to_str()) == Some("rhai") {
-                        path.file_stem()
-                            .and_then(|s| s.to_str())
-                            .map(|s| s.to_string())
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+        let builtin_names = Registry::builtin_check_names();
+        let custom_names: Vec<String> = config
+            .custom_checks_dir
+            .as_deref()
+            .and_then(|d| {
+                let dir = Utf8Path::new(d);
+                if dir.exists() {
+                    std::fs::read_dir(dir).ok()
+                } else {
+                    None
+                }
+            })
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| {
+                let path = entry.ok()?.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("rhai") {
+                    path.file_stem()
+                        .and_then(|s| s.to_str())
+                        .map(|s| s.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
 
-            for name in &config.disable_checks {
+        let warn_unknown = |names: &[String], field: &str| {
+            for name in names {
                 if !builtin_names.contains(&name.as_str())
                     && !custom_names.iter().any(|c| c == name)
                 {
                     eprintln!(
-                        "Warning: Unknown check name '{name}' in disable_checks. Run --list-checks to see available checks."
+                        "Warning: Unknown check name '{name}' in {field}. Run --list-checks to see available checks."
                     );
                 }
             }
-        }
+        };
+
+        warn_unknown(&config.disable_checks, "disable_checks");
+        warn_unknown(&config.enable_checks, "enable_checks");
 
         Self { registry, config }
     }
@@ -316,6 +319,47 @@ mod tests {
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
             .unwrap();
         assert_eq!(violations.len(), 1)
+    }
+
+    #[test]
+    fn test_custom_checks_dir_ignores_non_rhai_files() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(temp_dir.path().join("readme.txt"), "not a check").unwrap();
+        let config = Config {
+            custom_checks_dir: Some(temp_dir.path().to_str().unwrap().to_string()),
+            ..Default::default()
+        };
+        // Should not panic; .txt file is silently ignored
+        let checker = SafetyChecker::with_config(config);
+        let violations = checker
+            .check_sql("ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;")
+            .unwrap();
+        assert_eq!(violations.len(), 1);
+    }
+
+    #[test]
+    fn test_unknown_check_name_in_enable_checks_warns() {
+        let config = Config {
+            enable_checks: vec!["NonExistentCheck".to_string()],
+            ..Default::default()
+        };
+        // Should not panic; warning is printed to stderr
+        let checker = SafetyChecker::with_config(config);
+        let violations = checker
+            .check_sql("ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;")
+            .unwrap();
+        // NonExistentCheck is unknown so nothing runs — zero violations
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_unknown_check_name_in_disable_checks_warns() {
+        let config = Config {
+            disable_checks: vec!["NonExistentCheck".to_string()],
+            ..Default::default()
+        };
+        // Should not panic; warning is printed to stderr
+        let _checker = SafetyChecker::with_config(config);
     }
 
     #[test]

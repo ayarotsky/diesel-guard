@@ -1,5 +1,6 @@
 use camino::Utf8Path;
 use diesel_guard::{Config, ConfigError, SafetyChecker};
+use miette::Diagnostic as _;
 use std::fs;
 use tempfile::TempDir;
 
@@ -493,6 +494,85 @@ fn test_standalone_sql_without_timestamp_always_checked() {
     // No timestamp — always checked
     assert_eq!(results.len(), 1);
     assert!(results[0].0.contains("seed.sql"));
+}
+
+#[test]
+fn test_enable_checks_integration() {
+    let temp_dir = TempDir::new().unwrap();
+    let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
+    fs::create_dir(&migration_dir).unwrap();
+
+    // SQL that triggers both AddColumnCheck and DropColumnCheck
+    fs::write(
+        migration_dir.join("up.sql"),
+        "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;\nALTER TABLE users DROP COLUMN old_col;",
+    )
+    .unwrap();
+
+    // With enable_checks = ["AddColumnCheck"], only AddColumnCheck fires
+    let config = Config {
+        enable_checks: vec!["AddColumnCheck".to_string()],
+        ..Default::default()
+    };
+    let checker = SafetyChecker::with_config(config);
+    let results = checker
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
+
+    assert_eq!(results.len(), 1);
+    let violations = &results[0].1;
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].operation.contains("ADD COLUMN"));
+}
+
+#[test]
+fn test_enable_checks_suppresses_all_when_unmatched() {
+    let temp_dir = TempDir::new().unwrap();
+    let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
+    fs::create_dir(&migration_dir).unwrap();
+
+    // SQL that triggers DropColumnCheck
+    fs::write(
+        migration_dir.join("up.sql"),
+        "ALTER TABLE users DROP COLUMN old_col;",
+    )
+    .unwrap();
+
+    // Whitelist a check that doesn't apply to this SQL
+    let config = Config {
+        enable_checks: vec!["AddIndexCheck".to_string()],
+        ..Default::default()
+    };
+    let checker = SafetyChecker::with_config(config);
+    let results = checker
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
+
+    assert_eq!(results.len(), 0);
+}
+
+#[test]
+fn test_enable_and_disable_checks_conflict_in_config() {
+    // File-level: load_from_path propagates ConflictingCheckConfig
+    let temp_dir = TempDir::new().unwrap();
+    let config_path = temp_dir.path().join("diesel-guard.toml");
+    fs::write(
+        &config_path,
+        r#"
+framework = "diesel"
+enable_checks = ["AddIndexCheck"]
+disable_checks = ["DropColumnCheck"]
+        "#,
+    )
+    .unwrap();
+
+    let config_path_utf8 = Utf8Path::from_path(&config_path).unwrap();
+    let err = Config::load_from_path(config_path_utf8).unwrap_err();
+    assert!(matches!(err, ConfigError::ConflictingCheckConfig));
+    assert_eq!(
+        err.code().unwrap().to_string(),
+        "diesel_guard::config::conflicting_check_config"
+    );
 }
 
 #[test]
