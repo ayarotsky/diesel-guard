@@ -41,10 +41,21 @@ walkdir = "2.4"
 regex = "1.12"
 
 # Error reporting
-miette = { version = "7.0", features = ["fancy"] }
+miette = { version = "7.0", features = ["fancy-no-backtrace"] }
 
 # Derive macros
 derive_more = { version = "2.1", features = ["display", "from", "error"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
 
 [dev-dependencies]
 tempfile = "3.26"

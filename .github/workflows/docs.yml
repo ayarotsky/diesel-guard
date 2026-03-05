@@ -3,6 +3,10 @@ name: Docs
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      plan:
+        required: false
+        type: string
 
 concurrency:
   group: "pages"

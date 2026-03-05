@@ -14,12 +14,28 @@ runs:
   using: 'composite'
   steps:
     - name: Install diesel-guard
-      uses: baptiste0928/cargo-install@v3
-      with:
-        crate: diesel-guard
-        # Extract version from action ref (strips 'v' prefix from tags like v0.2.0)
-        # If using @main, this will be empty and install latest
-        version: ${{ github.action_ref != 'main' && github.action_ref || '' }}
+      shell: bash
+      run: |
+        VERSION="${{ github.action_ref }}"
+        VERSION="${VERSION#v}"
+        if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Error: diesel-guard action must be pinned to a version tag (e.g. uses: ayarotsky/diesel-guard@v0.8.0)"
+          exit 1
+        fi
+
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        ARCH=$(uname -m)
+        case "$OS/$ARCH" in
+          linux/x86_64)  TARGET="x86_64-unknown-linux-gnu" ;;
+          linux/aarch64) TARGET="aarch64-unknown-linux-gnu" ;;
+          darwin/x86_64) TARGET="x86_64-apple-darwin" ;;
+          darwin/arm64)  TARGET="aarch64-apple-darwin" ;;
+          *) echo "Unsupported platform: $OS/$ARCH" && exit 1 ;;
+        esac
+
+        curl -fsSL \
+          "https://github.com/ayarotsky/diesel-guard/releases/download/v${VERSION}/diesel-guard-${TARGET}.tar.gz" \
+          | tar xz -C /usr/local/bin
 
     - name: Check DB migrations
       shell: bash
