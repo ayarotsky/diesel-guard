@@ -155,6 +155,17 @@ fn test_create_extension_detected() {
 }
 
 #[test]
+fn test_create_table_serial_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("create_table_serial_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(violations[0].operation, "CREATE TABLE with SERIAL");
+}
+
+#[test]
 fn test_add_unique_constraint_detected() {
     let checker = SafetyChecker::new();
     let path = fixture_path("add_unique_constraint_unsafe");
@@ -457,14 +468,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        28,
-        "Expected violations in 28 files, got {}",
+        29,
+        "Expected violations in 29 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 36,
-        "Expected 36 total violations: 25 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
+        total_violations, 37,
+        "Expected 37 total violations: 26 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
         total_violations
     );
 }

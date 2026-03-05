@@ -6,7 +6,8 @@
 
 ## Bad
 
-Adding a SERIAL column to an existing table triggers a full table rewrite because Postgres must populate sequence values for all existing rows. This acquires an ACCESS EXCLUSIVE lock and blocks all operations.
+Adding SERIAL columns to existing tables triggers a full table rewrite and
+ACCESS EXCLUSIVE lock.
 
 ```sql
 ALTER TABLE users ADD COLUMN id SERIAL;
@@ -15,7 +16,7 @@ ALTER TABLE users ADD COLUMN order_number BIGSERIAL;
 
 ## Good
 
-Create the sequence separately, add the column without a default, then backfill:
+For existing tables, create the sequence separately, add the column without a default, then backfill:
 
 ```sql
 -- Step 1: Create a sequence
@@ -37,4 +38,7 @@ ALTER TABLE users ALTER COLUMN id SET NOT NULL;
 ALTER SEQUENCE users_id_seq OWNED BY users.id;
 ```
 
-**Key insight:** Adding a column with `DEFAULT nextval(...)` on an existing table still triggers a table rewrite. The solution is to add the column first without any default, backfill separately, then set the default for future rows only.
+**Key insight:** For existing large tables, staged sequence/backfill migration avoids
+the rewrite-heavy `ADD COLUMN ... SERIAL`.
+
+For `CREATE TABLE ... SERIAL` guidance, see [Create Table with SERIAL](create-table-serial.md).
