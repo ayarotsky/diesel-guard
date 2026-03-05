@@ -14,6 +14,7 @@
   - [Adding a UNIQUE Constraint](checks/adding-unique-constraint.md)
   - [Changing Column Type](checks/changing-column-type.md)
   - [CHAR Fields](checks/char-field.md)
+  - [Create Table with SERIAL](checks/create-table-serial.md)
   - [Creating an Extension](checks/creating-extension.md)
   - [Creating a Table without Primary Key](checks/create-table-without-pk.md)
   - [Domain CHECK Constraint](checks/add-domain-check-constraint.md)

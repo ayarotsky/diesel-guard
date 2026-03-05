@@ -12,6 +12,7 @@ diesel-guard ships safety checks covering the most common Postgres migration haz
 | [Adding a UNIQUE Constraint](adding-unique-constraint.md) | `ALTER TABLE ... ADD UNIQUE` | ACCESS EXCLUSIVE |
 | [Changing Column Type](changing-column-type.md) | `ALTER TABLE ... ALTER COLUMN ... TYPE` | ACCESS EXCLUSIVE + table rewrite |
 | [CHAR Fields](char-field.md) | `CHAR`/`CHARACTER` column types | — (best practice) |
+| [Create Table with SERIAL](create-table-serial.md) | `SERIAL/BIGSERIAL/SMALLSERIAL` in `CREATE TABLE` | — (best practice) |
 | [Creating an Extension](creating-extension.md) | `CREATE EXTENSION` | — (requires superuser) |
 | [Domain CHECK Constraint](add-domain-check-constraint.md) | `ALTER DOMAIN ... ADD CONSTRAINT ... CHECK` without `NOT VALID` | ACCESS EXCLUSIVE |
 | [Dropping a Column](dropping-column.md) | `ALTER TABLE ... DROP COLUMN` | ACCESS EXCLUSIVE |

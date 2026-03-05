@@ -219,6 +219,67 @@ fn test_disable_checks_integration() {
 }
 
 #[test]
+fn test_disable_checks_separates_serial_checks() {
+    use std::collections::HashSet;
+
+    let temp_dir = TempDir::new().unwrap();
+    let migration_dir = temp_dir.path().join("2024_01_01_000001_test");
+    fs::create_dir(&migration_dir).unwrap();
+
+    fs::write(
+        migration_dir.join("up.sql"),
+        r"
+CREATE TABLE events (id BIGSERIAL PRIMARY KEY);
+ALTER TABLE users ADD COLUMN id SERIAL;
+",
+    )
+    .unwrap();
+
+    let checker_default = SafetyChecker::with_config(Config::default());
+    let results_default = checker_default
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
+    assert_eq!(results_default.len(), 1);
+    assert_eq!(results_default[0].1.len(), 2);
+
+    let operations_default: HashSet<String> = results_default[0]
+        .1
+        .iter()
+        .map(|(_, v)| v.operation.clone())
+        .collect();
+    assert!(operations_default.contains("CREATE TABLE with SERIAL"));
+    assert!(operations_default.contains("ADD COLUMN with SERIAL"));
+
+    let checker_add_disabled = SafetyChecker::with_config(Config {
+        disable_checks: vec!["AddSerialColumnCheck".to_string()],
+        ..Default::default()
+    });
+    let results_add_disabled = checker_add_disabled
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
+    assert_eq!(results_add_disabled.len(), 1);
+    assert_eq!(results_add_disabled[0].1.len(), 1);
+    assert_eq!(
+        results_add_disabled[0].1[0].1.operation,
+        "CREATE TABLE with SERIAL"
+    );
+
+    let checker_create_disabled = SafetyChecker::with_config(Config {
+        disable_checks: vec!["CreateTableSerialCheck".to_string()],
+        ..Default::default()
+    });
+    let results_create_disabled = checker_create_disabled
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
+    assert_eq!(results_create_disabled.len(), 1);
+    assert_eq!(results_create_disabled[0].1.len(), 1);
+    assert_eq!(
+        results_create_disabled[0].1[0].1.operation,
+        "ADD COLUMN with SERIAL"
+    );
+}
+
+#[test]
 fn test_combined_config_features() {
     // Test all three config features together
     let temp_dir = TempDir::new().unwrap();
