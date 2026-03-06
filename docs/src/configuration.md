@@ -38,6 +38,11 @@ disable_checks = ["AddColumnCheck"]
 # Run only specific checks (whitelist). Cannot be used with disable_checks.
 enable_checks = ["AddIndexCheck", "AddNotNullCheck"]
 
+# Downgrade specific checks to warnings instead of errors.
+# Warnings are reported in output but do not cause a non-zero exit code.
+# Useful for checks like TruncateTableCheck that are context-dependent.
+warn_checks = ["TruncateTableCheck"]
+
 # Directory containing custom Rhai check scripts
 custom_checks_dir = "checks"
 
@@ -50,7 +55,7 @@ postgres_version = 16
 
 ## Available Check Names
 
-Use these names in `disable_checks` (blacklist) or `enable_checks` (whitelist):
+Use these names in `disable_checks` (blacklist), `enable_checks` (whitelist), or `warn_checks` (downgrade to warning):
 
 | Check Name | Operation |
 |---|---|
