@@ -7,8 +7,12 @@
 //! operation. Unlike DELETE, TRUNCATE cannot be batched or throttled, making it unsuitable
 //! for removing data from large tables in production.
 //!
-//! The recommended approach is to use DELETE with batching to remove rows incrementally,
-//! allowing concurrent access to the table.
+//! **When this fires legitimately:** TRUNCATE is often intentional in migrations — for
+//! example, clearing a lookup/seed table before re-populating it, wiping a staging
+//! environment, or truncating a table that is known to be empty or small. In those cases,
+//! silence the check per-statement with a `safety-assured` block, or project-wide with
+//! `warn_checks = ["TruncateTableCheck"]` (warning only) or
+//! `disable_checks = ["TruncateTableCheck"]` (fully disabled).
 
 use crate::checks::pg_helpers::{NodeEnum, range_var_name};
 use crate::checks::{Check, Config, MigrationContext};
@@ -32,26 +36,44 @@ impl Check for TruncateTableCheck {
                     Some(Violation::new(
                         "TRUNCATE TABLE",
                         format!(
-                            "TRUNCATE TABLE on '{table}' acquires an ACCESS EXCLUSIVE lock, blocking all operations (reads and writes). \
-                            Unlike DELETE, TRUNCATE cannot be batched or throttled, making it unsafe for large tables in production.",
+                            "TRUNCATE TABLE on '{table}' acquires an ACCESS EXCLUSIVE lock, blocking \
+                            all reads and writes. Unlike DELETE, it cannot be batched or throttled. \
+                            This is safe for empty/small tables or non-production environments, but \
+                            dangerous on large production tables.",
                             table = table_name_str
                         ),
-                        format!(r#"Use DELETE with batching instead:
+                        format!(
+                            r#"If this table can be large in production, prefer batched DELETE:
 
-1. Delete rows in small batches to allow concurrent access:
+1. Delete rows in small batches:
    DELETE FROM {table} WHERE id IN (
      SELECT id FROM {table} LIMIT 1000
    );
 
-2. Repeat the batched DELETE until all rows are removed.
+2. Repeat until all rows are removed.
 
-3. (Optional) If you need to reset sequences:
+3. (Optional) Reset sequences:
    ALTER SEQUENCE {table}_id_seq RESTART WITH 1;
 
-4. (Optional) Run VACUUM to reclaim space:
+4. (Optional) Reclaim space:
    VACUUM {table};
 
-Note: If you absolutely must use TRUNCATE (e.g., in a test environment), use a safety-assured block."#,
+If TRUNCATE is intentional (e.g. lookup table, test/staging environment,
+or table is known to be small), silence this check:
+
+  Per-statement — wrap in a safety-assured block:
+    -- safety-assured:start
+    -- Safe because: lookup table, always small
+    TRUNCATE TABLE {table};
+    -- safety-assured:end
+
+  Project-wide as a warning (reported but non-blocking):
+    # diesel-guard.toml
+    warn_checks = ["TruncateTableCheck"]
+
+  Project-wide silenced:
+    # diesel-guard.toml
+    disable_checks = ["TruncateTableCheck"]"#,
                             table = table_name_str
                         ),
                     ))

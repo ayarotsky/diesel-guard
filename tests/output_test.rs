@@ -137,13 +137,29 @@ fn test_format_text_empty_violations() {
 #[test]
 fn test_format_summary_no_violations() {
     colored::control::set_override(false);
-    let output = OutputFormatter::format_summary(0);
+    let output = OutputFormatter::format_summary(0, 0);
     assert_eq!(output, "✅ No unsafe migrations detected!");
 }
 
 #[test]
-fn test_format_summary_with_violations() {
+fn test_format_summary_with_errors() {
     colored::control::set_override(false);
-    let output = OutputFormatter::format_summary(3);
+    let output = OutputFormatter::format_summary(3, 0);
     assert_eq!(output, "\n❌ 3 unsafe migration(s) detected");
+}
+
+#[test]
+fn test_format_summary_with_warnings_only() {
+    colored::control::set_override(false);
+    let output = OutputFormatter::format_summary(0, 2);
+    assert_eq!(output, "
+⚠️  2 migration warning(s) detected (not blocking)");
+}
+
+#[test]
+fn test_format_summary_with_errors_and_warnings() {
+    colored::control::set_override(false);
+    let output = OutputFormatter::format_summary(1, 2);
+    assert_eq!(output, "
+❌ 1 unsafe migration(s) and 2 warning(s) detected");
 }

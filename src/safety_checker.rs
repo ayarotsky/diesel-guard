@@ -86,6 +86,7 @@ impl SafetyChecker {
 
         warn_unknown(&config.disable_checks, "disable_checks");
         warn_unknown(&config.enable_checks, "enable_checks");
+        warn_unknown(&config.warn_checks, "warn_checks");
 
         Self { registry, config }
     }
