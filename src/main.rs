@@ -2,6 +2,7 @@ use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use diesel_guard::ast_dump;
 use diesel_guard::output::OutputFormatter;
+use diesel_guard::violation::Severity;
 use diesel_guard::{Config, SafetyChecker};
 use miette::{IntoDiagnostic, Result};
 use std::fs;
@@ -26,8 +27,8 @@ QUICK START:
   diesel-guard check -           Read SQL from stdin
 
 Exit codes:
-  0  No violations found
-  1  One or more violations found (or a fatal error occurred)"
+  0  No violations found (warnings do not affect exit code)
+  1  One or more errors found (or a fatal error occurred)"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -50,8 +51,8 @@ diesel-guard looks for diesel-guard.toml in the current directory. If no config
 file is found, default settings are used with a warning.
 
 Exit codes:
-  0  No violations found
-  1  One or more violations found
+  0  No errors found (warnings do not affect exit code)
+  1  One or more errors found
 
 EXAMPLES:
   diesel-guard check
@@ -144,11 +145,20 @@ fn main() -> Result<()> {
             let results = checker.check_path(&path)?;
 
             if results.is_empty() {
-                println!("{}", OutputFormatter::format_summary(0));
+                println!("{}", OutputFormatter::format_summary(0, 0));
                 exit(0);
             }
 
-            let total_violations: usize = results.iter().map(|(_, v)| v.len()).sum();
+            let total_errors: usize = results
+                .iter()
+                .flat_map(|(_, v)| v)
+                .filter(|v| v.severity == Severity::Error)
+                .count();
+            let total_warnings: usize = results
+                .iter()
+                .flat_map(|(_, v)| v)
+                .filter(|v| v.severity == Severity::Warning)
+                .count();
 
             match format.as_str() {
                 "json" => {
@@ -159,11 +169,14 @@ fn main() -> Result<()> {
                     for (file_path, violations) in &results {
                         print!("{}", OutputFormatter::format_text(file_path, violations));
                     }
-                    println!("{}", OutputFormatter::format_summary(total_violations));
+                    println!(
+                        "{}",
+                        OutputFormatter::format_summary(total_errors, total_warnings)
+                    );
                 }
             }
 
-            if total_violations > 0 {
+            if total_errors > 0 {
                 exit(1);
             }
         }

@@ -1,4 +1,4 @@
-use crate::violation::Violation;
+use crate::violation::{Severity, Violation};
 use colored::*;
 use serde_json;
 
@@ -9,18 +9,27 @@ impl OutputFormatter {
     pub fn format_text(file_path: &str, violations: &[Violation]) -> String {
         let mut output = String::new();
 
+        let has_errors = violations.iter().any(|v| v.severity == Severity::Error);
+        let header_icon = if has_errors { "❌" } else { "⚠️" };
+        let header_label = if has_errors {
+            "Unsafe migration detected in".red().bold()
+        } else {
+            "Migration warnings in".yellow().bold()
+        };
+
         output.push_str(&format!(
             "{} {}\n\n",
-            "❌ Unsafe migration detected in".red().bold(),
-            file_path.yellow()
+            header_icon,
+            format!("{} {}", header_label, file_path.yellow())
         ));
 
         for violation in violations {
-            output.push_str(&format!(
-                "{} {}\n\n",
-                "❌",
-                violation.operation.as_str().red().bold()
-            ));
+            let (icon, label) = match violation.severity {
+                Severity::Error => ("❌", violation.operation.as_str().red().bold()),
+                Severity::Warning => ("⚠️ ", violation.operation.as_str().yellow().bold()),
+            };
+
+            output.push_str(&format!("{} {}\n\n", icon, label));
 
             output.push_str(&format!("{}\n", "Problem:".white().bold()));
             output.push_str(&format!("  {}\n\n", violation.problem));
@@ -42,15 +51,25 @@ impl OutputFormatter {
     }
 
     /// Format summary
-    pub fn format_summary(total_violations: usize) -> String {
-        if total_violations == 0 {
-            format!("{}", "✅ No unsafe migrations detected!".green().bold())
-        } else {
-            format!(
+    pub fn format_summary(total_errors: usize, total_warnings: usize) -> String {
+        match (total_errors, total_warnings) {
+            (0, 0) => format!("{}", "✅ No unsafe migrations detected!".green().bold()),
+            (0, w) => format!(
+                "\n{} {} migration warning(s) detected (not blocking)",
+                "⚠️ ",
+                w.to_string().yellow().bold()
+            ),
+            (e, 0) => format!(
                 "\n{} {} unsafe migration(s) detected",
                 "❌".red(),
-                total_violations.to_string().red().bold()
-            )
+                e.to_string().red().bold()
+            ),
+            (e, w) => format!(
+                "\n{} {} unsafe migration(s) and {} warning(s) detected",
+                "❌".red(),
+                e.to_string().red().bold(),
+                w.to_string().yellow().bold()
+            ),
         }
     }
 }

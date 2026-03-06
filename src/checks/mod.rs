@@ -167,9 +167,20 @@ impl Registry {
         config: &Config,
         ctx: &MigrationContext,
     ) -> Vec<Violation> {
+        use crate::violation::Severity;
         self.checks
             .iter()
-            .flat_map(|check| check.check(node, config, ctx))
+            .flat_map(|check| {
+                let severity = if config.is_check_warning(check.name()) {
+                    Severity::Warning
+                } else {
+                    Severity::Error
+                };
+                check
+                    .check(node, config, ctx)
+                    .into_iter()
+                    .map(move |v| v.with_severity(severity))
+            })
             .collect()
     }
 

@@ -107,6 +107,14 @@ pub struct Config {
     #[serde(default)]
     pub enable_checks: Vec<String>,
 
+    /// List of check names to treat as warnings instead of errors.
+    ///
+    /// Warnings are reported in output but do not cause a non-zero exit code.
+    /// Useful for checks like `TruncateTableCheck` that may be acceptable in
+    /// specific contexts (test setup, maintenance windows, seeding data).
+    #[serde(default)]
+    pub warn_checks: Vec<String>,
+
     /// Directory containing custom Rhai check scripts (.rhai files)
     #[serde(default)]
     pub custom_checks_dir: Option<String>,
@@ -167,6 +175,11 @@ impl Config {
         Ok(())
     }
 
+    /// Return true if the given check should produce warnings instead of errors
+    pub fn is_check_warning(&self, check_name: &str) -> bool {
+        self.warn_checks.iter().any(|c| c == check_name)
+    }
+
     /// Check if a specific check is enabled
     pub fn is_check_enabled(&self, check_name: &str) -> bool {
         if !self.enable_checks.is_empty() {
@@ -184,6 +197,7 @@ impl Default for Config {
             check_down: false,
             disable_checks: Vec::new(),
             enable_checks: Vec::new(),
+            warn_checks: Vec::new(),
             custom_checks_dir: None,
             postgres_version: None,
         }
@@ -519,5 +533,38 @@ enable_checks = ["AddIndexCheck", "AddNotNullCheck"]
             help,
             "Use either enable_checks (whitelist) or disable_checks (blacklist), not both."
         );
+    }
+
+    #[test]
+    fn test_is_check_warning() {
+        let config = Config {
+            warn_checks: vec!["TruncateTableCheck".to_string()],
+            ..Default::default()
+        };
+
+        assert!(config.is_check_warning("TruncateTableCheck"));
+        assert!(!config.is_check_warning("DropTableCheck"));
+        assert!(!config.is_check_warning("AddColumnCheck"));
+    }
+
+    #[test]
+    fn test_warn_checks_loads_from_toml() {
+        let config: Config = toml::from_str(
+            r#"
+framework = "diesel"
+warn_checks = ["TruncateTableCheck", "DropTableCheck"]
+            "#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.warn_checks,
+            vec!["TruncateTableCheck".to_string(), "DropTableCheck".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_warn_checks_default_is_empty() {
+        let config = Config::default();
+        assert!(config.warn_checks.is_empty());
     }
 }
