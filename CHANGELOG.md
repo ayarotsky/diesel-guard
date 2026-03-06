@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.8.0 - 2026-03-06
+
+### Added
+
+- **`enable_checks` config option** — Whitelist specific checks to run exclusively. Set `enable_checks` in `diesel-guard.toml` to run only the checks you care about. Cannot be combined with `disable_checks`.
+- **Stdin input** — Pipe SQL directly into diesel-guard with `diesel-guard check -`. Useful for editor integrations and shell pipelines.
+
+### Changed
+
+- **Prebuilt binaries** — Releases now ship prebuilt binaries for all supported platforms (Linux x86_64/ARM64, macOS x86_64/ARM64, Windows x86_64) via GitHub Releases, Homebrew tap (`brew install ayarotsky/tap/diesel-guard`), and shell/PowerShell installers. No Rust toolchain required.
+
 ## 0.7.0 - 2026-02-23
 
 ### Added
