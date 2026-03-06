@@ -1,5 +1,5 @@
 -- Safe: GENERATED STORED in CREATE TABLE is safe (table is empty)
-CREATE TABLE products (
+CREATE TABLE IF NOT EXISTS products (
     id BIGSERIAL PRIMARY KEY,
     price INTEGER NOT NULL,
     quantity INTEGER NOT NULL,

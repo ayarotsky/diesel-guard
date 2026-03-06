@@ -1,2 +1,2 @@
 -- Safe: Drop index with CONCURRENTLY
-DROP INDEX CONCURRENTLY idx_users_email;
+DROP INDEX CONCURRENTLY IF EXISTS idx_users_email;

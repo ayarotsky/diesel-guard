@@ -1,2 +1,2 @@
--- Safe: Using JSONB instead of JSON
-ALTER TABLE users ADD COLUMN properties JSONB;
+-- Safe: Add JSONB column
+ALTER TABLE users ADD COLUMN IF NOT EXISTS properties JSONB;

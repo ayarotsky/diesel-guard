@@ -110,7 +110,11 @@ fn test_disable_builtin_and_custom_checks_simultaneously() {
     // Disable both DropColumnCheck (built-in) and my_check (custom)
     let config = Config {
         custom_checks_dir: Some(checks_dir.path().to_str().unwrap().to_string()),
-        disable_checks: vec!["DropColumnCheck".to_string(), "my_check".to_string()],
+        disable_checks: vec![
+            "DropColumnCheck".to_string(),
+            "IdempotencyCheck".to_string(),
+            "my_check".to_string(),
+        ],
         ..Default::default()
     };
     let checker = SafetyChecker::with_config(config);
@@ -152,7 +156,7 @@ fn test_check_down_with_safety_assured_in_down_sql() {
     // Safe up.sql
     fs::write(
         migration_dir.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN email VARCHAR(255);",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);",
     )
     .unwrap();
 
@@ -162,7 +166,7 @@ fn test_check_down_with_safety_assured_in_down_sql() {
         r#"-- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
-ALTER TABLE users DROP COLUMN phone;
+ALTER TABLE users DROP COLUMN IF EXISTS phone;
 "#,
     )
     .unwrap();

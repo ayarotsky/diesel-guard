@@ -14,6 +14,7 @@ mod drop_index;
 mod drop_primary_key;
 mod drop_table;
 mod generated_column;
+mod idempotency_guard;
 pub mod pg_helpers;
 mod reindex;
 mod rename_column;
@@ -43,6 +44,7 @@ pub use drop_index::DropIndexCheck;
 pub use drop_primary_key::DropPrimaryKeyCheck;
 pub use drop_table::DropTableCheck;
 pub use generated_column::GeneratedColumnCheck;
+pub use idempotency_guard::IdempotencyCheck;
 pub use reindex::ReindexCheck;
 pub use rename_column::RenameColumnCheck;
 pub use rename_table::RenameTableCheck;
@@ -130,6 +132,7 @@ impl Registry {
         self.register_check(config, DropPrimaryKeyCheck);
         self.register_check(config, DropTableCheck);
         self.register_check(config, GeneratedColumnCheck);
+        self.register_check(config, IdempotencyCheck);
         self.register_check(config, ReindexCheck);
         self.register_check(config, RenameColumnCheck);
         self.register_check(config, RenameTableCheck);
@@ -335,7 +338,7 @@ ALTER TABLE users DROP COLUMN email;
     #[test]
     fn test_check_without_safety_assured_block() {
         let registry = Registry::new();
-        let sql = "ALTER TABLE users DROP COLUMN email;";
+        let sql = "ALTER TABLE users DROP COLUMN IF EXISTS email;";
 
         let result = pg_query::parse(sql).unwrap();
         let ignore_ranges = vec![];

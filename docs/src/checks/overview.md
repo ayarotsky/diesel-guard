@@ -1,6 +1,6 @@
 # Checks
 
-diesel-guard ships with 24 built-in safety checks covering the most common Postgres migration hazards.
+diesel-guard ships with 25 built-in safety checks covering the most common Postgres migration hazards.
 
 | Check | Operation | Lock Type |
 |---|---|---|
@@ -17,6 +17,7 @@ diesel-guard ships with 24 built-in safety checks covering the most common Postg
 | [Dropping a Primary Key](dropping-primary-key.md) | `ALTER TABLE ... DROP CONSTRAINT ... pkey` | ACCESS EXCLUSIVE |
 | [Dropping a Table](dropping-table.md) | `DROP TABLE` | ACCESS EXCLUSIVE |
 | [Generated Columns](generated-column.md) | `ADD COLUMN ... GENERATED ALWAYS AS ... STORED` | ACCESS EXCLUSIVE + table rewrite |
+| [Idempotency Guards](idempotency-guards.md) | Missing `IF [NOT] EXISTS` guards on retry-sensitive DDL | — (retry safety) |
 | [JSON Fields](json-field.md) | `ADD COLUMN ... JSON` | — (best practice) |
 | [Wide Indexes](multiple-column-index.md) | `CREATE INDEX` with 4+ columns | — (best practice) |
 | [Renaming a Column](renaming-column.md) | `ALTER TABLE ... RENAME COLUMN` | ACCESS EXCLUSIVE |

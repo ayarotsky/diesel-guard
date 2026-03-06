@@ -28,7 +28,7 @@ fn test_stdin_input_safe() {
     let command_output = Stdio::piped();
 
     // Create test data for the command
-    let test_data = "ALTER TABLE users ADD COLUMN foo TEXT;";
+    let test_data = "ALTER TABLE users ADD COLUMN IF NOT EXISTS foo TEXT;";
 
     // Run check command
     let mut handle = Command::new(diesel_guard_bin())
