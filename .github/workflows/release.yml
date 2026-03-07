@@ -250,6 +250,28 @@ jobs:
           # Overwrite the previous copy
           name: artifacts-dist-manifest
           path: dist-manifest.json
+      - name: "Download GitHub Artifacts"
+        uses: actions/download-artifact@v7
+        with:
+          pattern: artifacts-*
+          path: artifacts
+          merge-multiple: true
+      - name: Create GitHub Release
+        run: |
+          rm -f artifacts/*-dist-manifest.json
+          if [ "$(jq -r '.announcement_is_prerelease' dist-manifest.json)" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          else
+            PRERELEASE_FLAG=""
+          fi
+          jq -r '.announcement_github_body' dist-manifest.json > "$RUNNER_TEMP/notes.txt"
+          gh release create "${{ needs.plan.outputs.tag }}" \
+            $PRERELEASE_FLAG \
+            --title "${{ needs.plan.outputs.tag }}" \
+            --notes-file "$RUNNER_TEMP/notes.txt" \
+            artifacts/*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-homebrew-formula:
     needs:
