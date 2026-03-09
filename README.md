@@ -144,5 +144,3 @@ Inspired by [strong_migrations](https://github.com/ankane/strong_migrations) by 
 ---
 
 If this looks useful, a star helps more developers find it ⭐
-
-[![Star History Chart](https://api.star-history.com/image?repos=ayarotsky/diesel-guard&type=date&legend=top-left)](https://www.star-history.com/)
