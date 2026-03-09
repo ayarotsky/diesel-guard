@@ -1,196 +1,250 @@
-# Contributing to diesel-guard
+# Contributing to Diesel Guard 🐘💨
 
-Thank you for your interest in contributing to **diesel-guard**! We appreciate your help in making Postgres migrations safer for everyone.
+Thank you for your interest in contributing! Whether you're fixing a bug, adding a check, or writing a custom rule, this document is your map.
 
-If you find this project useful, consider starring it. It helps more developers find it.
+## Architecture
 
-## Reporting Bugs
+### System Overview
 
-Before reporting a bug:
-1. Search [existing issues](https://github.com/ayarotsky/diesel-guard/issues) to see if it's already been reported
-2. Test against the latest version from the main branch
-3. Verify the issue is reproducible
+```mermaid
+flowchart TD
+    SQL["SQL file / string"] --> PARSE["parse_with_metadata()"]
+    TOML["diesel-guard.toml"] --> REG["Registry"]
+    RHAI["*.rhai files"] --> REG
 
-When reporting a bug, please include:
-- **Detailed steps to reproduce** - Include the exact SQL statement or migration file
-- **Expected vs actual behavior** - What should happen and what actually happens
-- **Version information** - Output of `diesel-guard --version` and `rustc --version`
-- **Complete error messages** - Include full backtraces for panics or errors
+    PARSE -->|"stmts + ignore_ranges"| EXEC["check_stmts_with_context()"]
+    REG -->|"checks"| EXEC
 
-## Suggesting New Checks
-
-We welcome suggestions for new migration safety checks! Before proposing:
-1. Check the [Coming Soon section](README.md#coming-soon-phase-2) to see if it's already planned
-2. Review `AGENTS.md` to understand the check implementation pattern
-
-When suggesting a new check, please include:
-- **The unsafe operation** - What migration pattern should be detected
-- **Why it's dangerous** - Lock type, blocking behavior, or data integrity issue
-- **Safe alternative** - How developers should do this safely
-- **Postgres version specifics** - If behavior differs across versions
-
-Create an issue with `[Check]` in the title, for example: `[Check] REFRESH MATERIALIZED VIEW without CONCURRENTLY`
-
-## Pull Requests
-
-We love pull requests! Here's how to contribute code:
-
-### Before You Start
-
-1. **Open an issue first** for significant changes to discuss the approach
-2. **Check AGENTS.md** for implementation patterns and conventions
-3. **One check per PR** - Makes review easier and faster
-
-### Development Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/ayarotsky/diesel-guard.git
-cd diesel-guard
-
-# Run tests
-cargo test
-
-# Check code quality
-cargo fmt --check
-cargo clippy --all-targets --all-features -- -D warnings
+    EXEC --> VIO["Vec&lt;Violation&gt;"]
 ```
 
-### Testing
+### Check Execution Loop
 
-The project has comprehensive test coverage with both unit and integration tests.
+```mermaid
+flowchart TD
+    STMTS["Vec&lt;RawStmt&gt;"] --> LOOP
+    IGN["ignore_ranges"] --> LOOP
 
-#### Run All Tests
+    LOOP{"for each RawStmt"}
+    LOOP -->|in ignore_ranges| SKIP["skip statement"]
+    LOOP -->|not ignored| EN["extract_node()<br/>RawStmt → NodeEnum"]
 
-```bash
-cargo test
+    EN --> FAN["for each Check in Registry"]
+    FAN --> BI["BuiltInCheck::check(node, config)"]
+    FAN --> RH["CustomCheck::check(node, config)<br/>(Rhai engine eval)"]
+
+    BI --> COLL["collect Vec&lt;Violation&gt;"]
+    RH --> COLL
 ```
 
-This runs:
-- **Unit tests** - Individual check modules, parser, and safety checker
-- **Integration tests** - Fixture files are automatically verified
+### Custom Check Loading
 
-#### Run Specific Test Suites
-
-```bash
-# Run only unit tests (in src/)
-cargo test --lib
-
-# Run only integration tests (fixtures)
-cargo test --test fixtures_test
-
-# Run tests for a specific check
-cargo test add_column
-cargo test add_index
-cargo test drop_column
+```mermaid
+flowchart LR
+    DIR["custom_checks_dir/"] --> GLOB["glob *.rhai<br/>(alphabetical)"]
+    GLOB --> COMPILE["Engine::compile()"]
+    COMPILE -->|error| WARN["warning to stderr<br/>(non-fatal)"]
+    COMPILE -->|ok| CC["CustomCheck<br/>(Engine + AST)"]
+    CC --> REG["Registry.add_check()"]
+    REG --> EXEC["Check::check()<br/>called per NodeEnum"]
+    EXEC --> RHAI["Rhai script<br/>receives node + config"]
+    RHAI -->|"()"| NONE["no violation"]
+    RHAI -->|"#{ operation, ... }"| ONE["one Violation"]
+    RHAI -->|"[#{ ... }, ...]"| MANY["multiple Violations"]
 ```
 
-#### Test Structure
 
-**Unit Tests** (`src/checks/*.rs`):
-- Each check module has its own test suite
-- Uses shared test utilities from `src/checks/test_utils.rs`
-- Tests individual SQL statement parsing and violation detection
-- Prefer using `assert_detects_violation!` and `assert_allows!` macros
+## How Checks Work
 
-**Integration Tests** (`tests/fixtures_test.rs`):
-- Automatically verifies all fixture files behave correctly
-- Tests both safe and unsafe migrations
-- Validates directory-level scanning
+The Registry calls every check on each parsed SQL statement. A check receives a `NodeEnum` — one variant per SQL statement type — and returns a list of violations (empty means safe).
 
-### Adding a New Check
+The pattern is always the same: bail early if the node is not the type you care about, then inspect the node and return violations.
 
-See `AGENTS.md` for detailed step-by-step instructions. Summary:
+**Simple check** (non-ALTER TABLE):
 
-1. Create `src/checks/your_check.rs` with check implementation
-2. Add unit tests using shared macros
-3. Register in `src/checks/mod.rs`
-4. Create test fixtures in `tests/fixtures/`
-5. Add integration tests in `tests/fixtures_test.rs`
-6. Update `docs/src/checks/<check>.md` with check description and examples, and add the entry to `docs/src/SUMMARY.md`
-7. Ensure all tests pass and code quality checks pass
+```rust
+pub struct AddIndexCheck;
 
-### Code Style
+impl Check for AddIndexCheck {
+    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
+        let NodeEnum::IndexStmt(stmt) = node else {
+            return vec![];  // not a CREATE INDEX — ignore
+        };
 
-- **Follow existing patterns** - Look at similar checks for guidance
-- **Use descriptive names** - `AddNotNullCheck` not `NotNullCheck`
-- **Keep it simple** - Don't over-engineer, solve the specific problem
-- **Document clearly** - Module-level docs (//!) explaining the check
-- **Be accurate** - Specify exact lock types (ACCESS EXCLUSIVE, SHARE, etc.)
-- **No exaggeration** - Say "depends on table size" not "takes hours"
+        if stmt.concurrent {
+            return vec![];  // CONCURRENTLY — safe
+        }
 
-### Commit Messages
+        vec![Violation::new("ADD INDEX without CONCURRENTLY", "...", "...")]
+    }
+}
+```
 
-- Use clear, descriptive commit messages
-- Reference issue numbers when applicable
-- Examples:
-  - `Add FOREIGN KEY constraint check (#42)`
-  - `Fix false positive in ALTER TYPE detection`
-  - `Update README with REINDEX check`
+**ALTER TABLE check** — never match `AlterTableStmt` directly; use `alter_table_cmds()` which extracts the table name and individual commands for you:
 
-### Code Quality
+```rust
+impl Check for AddColumnCheck {
+    fn check(&self, node: &NodeEnum, config: &Config) -> Vec<Violation> {
+        let Some((table_name, cmds)) = alter_table_cmds(node) else {
+            return vec![];
+        };
 
-Before submitting your PR:
+        cmds.iter()
+            .filter_map(|cmd| {
+                let col = cmd_def_as_column_def(cmd)?;  // is this ADD COLUMN?
+
+                if !column_has_constraint(col, ConstrType::ConstrDefault as i32) {
+                    return None;
+                }
+
+                // Version-aware: constant defaults are safe on PG 11+
+                if config.postgres_version >= Some(11) && is_constant_default(col) {
+                    return None;
+                }
+
+                Some(Violation::new("ADD COLUMN with DEFAULT", "...", "..."))
+            })
+            .collect()
+    }
+}
+```
+
+Use `_config` when the check has no version-specific logic; use `config` when it does. Compare `config.postgres_version >= Some(N)` — `None` means unknown, so the safe path is to flag the violation.
+
+**Watch out:** `ALTER TABLE ... RENAME COLUMN/TO` is parsed as `RenameStmt`, not `AlterTableStmt`. It will never appear in `alter_table_cmds()` — match on `NodeEnum::RenameStmt` directly and use `rename_type` to distinguish column from table renames.
+
+**pg_query v6 quirks:** SERIAL/BIGSERIAL/SMALLSERIAL are preserved as type names (not desugared to int+nextval). Protobuf fields with value 0 may be omitted entirely — match on node type presence rather than `subtype == 0`. `use pg_query::protobuf::*` shadows `std::string::String`, so use explicit imports when both are needed.
+
+### pg_helpers
+
+`src/checks/pg_helpers.rs` has helpers for navigating the AST: extracting table names, unwrapping ALTER TABLE commands, inspecting column definitions, testing types, and so on. Before writing raw protobuf traversal in a new check, look here — the helper you need likely already exists.
+
+Use `diesel-guard dump-ast --sql "..."` to inspect what AST a statement produces and find which fields to check.
+
+## Adding a New Check
+
+1. **Create** `src/checks/your_check.rs` — implement the `Check` trait. Use `_config` if unused, `config` if version-aware. Add `#[cfg(test)]` unit tests using the macros above.
+2. **Register** in `src/checks/mod.rs` — add `mod`, `pub use`, and `self.register_check(config, YourCheck)` call inside `Registry::with_config()` (all alphabetically). Check names are derived from struct names automatically. (`register_check` is the private built-in registration path; `add_check` is the public API used only for custom Rhai checks.)
+3. **Create fixtures** — `tests/fixtures/your_operation_{safe,unsafe}/up.sql`. First line MUST be `-- Safe: ...` or `-- Unsafe: ...`.
+4. **Update integration tests** in `tests/fixtures_test.rs` — add to `safe_fixtures` vec, add detection test, update `test_check_entire_fixtures_directory` counts.
+5. **Update docs** — create `docs/src/checks/<check>.md` with bad/good examples and add entry to `docs/src/SUMMARY.md`.
+6. **Verify** — `cargo test && cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings`
+
+### Naming Conventions
+
+- **Check structs**: `YourOperationCheck`
+- **Tests**: `test_detects_*` (violation found), `test_allows_*` (safe variant), `test_ignores_*` (unrelated operation)
+- **Fixtures**: `{operation}_{safe|unsafe}` or `{operation}_{variant}_{safe|unsafe}`
+
+## Custom Rhai Checks
+
+Users place `.rhai` files in a directory and set `custom_checks_dir` in `diesel-guard.toml`.
+
+- Each script receives a `node` variable (pg_query AST node serialized via `rhai::serde::to_dynamic()`) and a `config` variable (current config settings)
+- Scripts access fields like `node.IndexStmt.concurrent`, `node.CreateStmt.relation.relname`; access config like `config.postgres_version` (integer or `()` when unset)
+- Return protocol: `()` = no violation, `#{ operation, problem, safe_alternative }` = one violation, array of maps = multiple
+- Check name = filename stem (e.g., `require_concurrent.rhai` → `require_concurrent`); disableable via `disable_checks`
+- Safety-assured blocks automatically skip custom checks (same `check_stmts_with_context` path)
+- Engine limits: `max_operations(100_000)`, `max_string_size(10_000)`, `max_array_size(1_000)`, `max_map_size(1_000)`
+- Runtime errors and invalid return values are logged as warnings to stderr, never panic
+- `load_custom_checks()` is non-fatal: compilation errors become warnings; scripts load in alphabetical order
+
+Use `diesel-guard dump-ast --sql "..."` to inspect the AST structure for a statement. Output strips the outer `RawStmt`/`Node` wrappers — the JSON starts directly at the concrete node type (e.g. `{"IndexStmt": {...}}`), matching what a Rhai script receives as `node`.
+
+Reference scripts in `examples/`: `no_unlogged_tables.rhai`, `require_concurrent_index.rhai`, `require_if_exists_on_drop.rhai`, `no_truncate_in_production.rhai`, `limit_columns_per_index.rhai`, `require_index_name_prefix.rhai`
+
+### `pg` Constants Module
+
+Scripts can reference pg_query protobuf enum values via the `pg::` prefix (e.g. `pg::OBJECT_INDEX`, `pg::AT_DROP_COLUMN`, `pg::CONSTR_PRIMARY`) instead of raw integers. See `src/scripting.rs` for the full list.
+
+## Configuration Reference (`diesel-guard.toml`)
+
+- **`framework`** (required): `"diesel"` or `"sqlx"`. Case-sensitive. Default (when no config file): `"diesel"`.
+- **`start_after`** (optional): Timestamp to skip older migrations. Accepts `YYYYMMDDHHMMSS`, `YYYY_MM_DD_HHMMSS`, or `YYYY-MM-DD-HHMMSS`. Separators are normalized before comparison.
+- **`check_down`** (optional, default `false`): Include down/rollback migration files in checks.
+- **`disable_checks`** (optional): List of check names to skip. Unknown names produce a warning (not an error). Mutually exclusive with `enable_checks`.
+- **`enable_checks`** (optional): Whitelist — only these checks run. Mutually exclusive with `disable_checks`; setting both is a `ConfigError`.
+- **`postgres_version`** (optional): Target Postgres major version as integer (e.g., `16`). Used by version-aware checks.
+- **`custom_checks_dir`** (optional): Path to directory containing `.rhai` script files for custom checks.
+
+## Testing
 
 ```bash
-# Format code
-cargo fmt
-
-# Run linter (no warnings allowed)
-cargo clippy --all-targets --all-features -- -D warnings
-
 # Run all tests
 cargo test
 
-# Build the project
+# Unit tests only
+cargo test --lib
+
+# Integration tests only (fixtures)
+cargo test --test fixtures_test
+
+# Tests for a specific check
+cargo test add_column
+```
+
+**Unit tests** live in `src/checks/*.rs`. Each check module has its own suite using the macros from `src/checks/test_utils.rs`:
+
+```rust
+assert_detects_violation!(Check, sql, "OPERATION NAME")           // exactly 1 violation
+assert_detects_violation_with_config!(Check, sql, "OP", config)   // same, with explicit config
+assert_detects_violation_containing!(Check, sql, "OP", "substr")  // violation problem contains substring
+assert_detects_n_violations!(Check, sql, n, "OPERATION NAME")     // exactly N violations
+assert_allows!(Check, sql)                                         // no violations
+assert_allows_with_config!(Check, sql, config)                     // no violations with explicit config
+```
+
+**Integration tests** in `tests/fixtures_test.rs` run `SafetyChecker` against real `.sql` files under `tests/fixtures/`. Each fixture is a directory containing an `up.sql` whose first line declares its intent:
+
+```
+-- Safe: Create index with CONCURRENTLY
+CREATE INDEX CONCURRENTLY idx_users_email ON users(email);
+```
+
+```
+-- Unsafe: Create index without CONCURRENTLY
+CREATE INDEX idx_users_email ON users(email);
+```
+
+The test suite has three layers:
+
+1. **`test_safe_fixtures_pass`** — runs all safe fixtures and asserts zero violations. Add your safe fixture name to this list.
+2. **Per-check detection tests** (e.g. `test_add_index_without_concurrently_detected`) — load the unsafe fixture and assert the expected operation name and violation count. Add one test per unsafe fixture.
+3. **`test_check_entire_fixtures_directory`** — scans the whole `tests/fixtures/` directory and asserts exact totals: number of files with violations and total violation count. Update both numbers when adding fixtures. Some fixtures produce multiple violations because multiple checks fire on the same statement (e.g. an unnamed UNIQUE constraint triggers both `AddUniqueConstraintCheck` and `UnnamedConstraintCheck`); the assertion message documents the current breakdown.
+
+## Code Quality
+
+Run before submitting:
+
+```bash
+cargo fmt
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test
 cargo build --release
 ```
 
-All of these must pass for your PR to be merged.
+All four must pass for a PR to merge.
 
-### What Makes a Good PR
+## Contributing Process
 
-- ✅ **Minimal changes** - Only what's necessary for the feature/fix
-- ✅ **Tests included** - Both unit and integration tests
-- ✅ **Documentation updated** - README.md and code comments
-- ✅ **Follows conventions** - Matches existing code patterns
-- ✅ **Clean commit history** - Logical, well-described commits
-- ✅ **No clippy warnings** - All linting passes
-- ✅ **Formatted code** - `cargo fmt` applied
+### Reporting Bugs
 
-### What to Avoid
+Before reporting:
+1. Search [existing issues](https://github.com/ayarotsky/diesel-guard/issues)
+2. Test against the latest version from the main branch
+3. Verify the issue is reproducible
 
-- ❌ Large refactoring mixed with new features
-- ❌ Changing unrelated code
-- ❌ Multiple checks in one PR
-- ❌ Missing tests or documentation
-- ❌ Bypassing code quality checks
+Include: exact SQL or migration file, expected vs actual behavior, `diesel-guard --version` and `rustc --version`, full error messages / backtraces.
 
-## Working with AI Assistants
+### Suggesting New Checks
 
-If you're using an AI coding assistant (like Claude or GitHub Copilot), please refer them to:
-- **AGENTS.md** - Contains detailed implementation patterns and common pitfalls
-- **Existing checks** - Use as reference examples for structure and style
+Check the [open issues tagged `new check`](https://github.com/ayarotsky/diesel-guard/issues?q=is%3Aissue+label%3A%22new+check%22) first to avoid duplicates. Open an issue with `[Check]` in the title (e.g., `[Check] REFRESH MATERIALIZED VIEW without CONCURRENTLY`). Include: the unsafe operation, why it's dangerous, the safe alternative, and any Postgres version specifics.
 
-This helps maintain consistency across contributions.
+### Pull Requests
 
-## Postgres Version Testing
+1. **Open an issue first** for significant changes to discuss the approach
+2. **One check per PR** — makes review faster
+3. Follow existing patterns — look at similar checks for guidance
+4. Use descriptive commit messages referencing issue numbers where applicable
+5. Fill out the PR template checklist before submitting
 
-When implementing checks that behave differently across Postgres versions:
-- Document version-specific behavior in check comments
-- Include version caveats in violation messages
-- Test against multiple Postgres versions if possible
-
-Currently, we target Postgres 9.6+ to match Diesel's requirements.
-
-## Questions?
-
-Feel free to:
-- Comment on relevant issues
-- Ask for clarification in your PR
-
-We're here to help!
-
----
-
-This guide is released under [CC0](https://creativecommons.org/publicdomain/zero/1.0/) (public domain). Use it for your own projects!
