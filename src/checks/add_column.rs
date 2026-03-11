@@ -15,14 +15,14 @@ use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_has_constraint,
     column_type_name,
 };
-use crate::checks::{Check, Config};
+use crate::checks::{Check, Config, MigrationContext};
 use crate::violation::Violation;
 use pg_query::protobuf::ColumnDef;
 
 pub struct AddColumnCheck;
 
 impl Check for AddColumnCheck {
-    fn check(&self, node: &NodeEnum, config: &Config) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };

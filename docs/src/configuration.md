@@ -55,7 +55,7 @@ Use these names in `disable_checks` (blacklist) or `enable_checks` (whitelist):
 | Check Name | Operation |
 |---|---|
 | `AddColumnCheck` | ADD COLUMN with DEFAULT |
-| `AddIndexCheck` | CREATE INDEX without CONCURRENTLY |
+| `AddIndexCheck` | CREATE INDEX without CONCURRENTLY; CONCURRENTLY inside a transaction |
 | `AddJsonColumnCheck` | ADD COLUMN with JSON type |
 | `AddNotNullCheck` | ALTER COLUMN SET NOT NULL |
 | `AddPrimaryKeyCheck` | ADD PRIMARY KEY to existing table |
@@ -66,11 +66,11 @@ Use these names in `disable_checks` (blacklist) or `enable_checks` (whitelist):
 | `CreateExtensionCheck` | CREATE EXTENSION |
 | `DropColumnCheck` | DROP COLUMN |
 | `DropDatabaseCheck` | DROP DATABASE |
-| `DropIndexCheck` | DROP INDEX without CONCURRENTLY |
+| `DropIndexCheck` | DROP INDEX without CONCURRENTLY; CONCURRENTLY inside a transaction |
 | `DropPrimaryKeyCheck` | DROP PRIMARY KEY |
 | `DropTableCheck` | DROP TABLE |
 | `GeneratedColumnCheck` | ADD COLUMN with GENERATED STORED |
-| `ReindexCheck` | REINDEX without CONCURRENTLY |
+| `ReindexCheck` | REINDEX without CONCURRENTLY; CONCURRENTLY inside a transaction |
 | `RenameColumnCheck` | RENAME COLUMN |
 | `RenameTableCheck` | RENAME TABLE |
 | `ShortIntegerPrimaryKeyCheck` | SMALLINT/INT/INTEGER primary keys |

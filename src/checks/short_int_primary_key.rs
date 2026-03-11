@@ -17,7 +17,7 @@ use crate::checks::pg_helpers::{
     cmd_def_as_constraint, column_has_constraint, column_type_name, for_each_column_def,
     is_short_integer, range_var_name,
 };
-use crate::checks::{Check, Config};
+use crate::checks::{Check, Config, MigrationContext};
 use crate::violation::Violation;
 
 const CONSTR_PRIMARY: i32 = ConstrType::ConstrPrimary as i32;
@@ -25,7 +25,7 @@ const CONSTR_PRIMARY: i32 = ConstrType::ConstrPrimary as i32;
 pub struct ShortIntegerPrimaryKeyCheck;
 
 impl Check for ShortIntegerPrimaryKeyCheck {
-    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let mut violations = vec![];
 
         // Inline PRIMARY KEY on column definitions

@@ -14,7 +14,7 @@
 //! connections to verify constraint types with certainty.
 
 use crate::checks::pg_helpers::{AlterTableType, NodeEnum, alter_table_cmds};
-use crate::checks::{Check, Config};
+use crate::checks::{Check, Config, MigrationContext};
 use crate::violation::Violation;
 use regex::Regex;
 use std::sync::LazyLock;
@@ -39,7 +39,7 @@ impl DropPrimaryKeyCheck {
 }
 
 impl Check for DropPrimaryKeyCheck {
-    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };

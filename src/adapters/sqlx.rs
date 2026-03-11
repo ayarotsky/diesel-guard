@@ -6,7 +6,8 @@
 //!
 
 use super::{
-    MigrationAdapter, MigrationFile, Result, collect_and_sort_entries, should_check_migration,
+    MigrationAdapter, MigrationContext, MigrationFile, Result, collect_and_sort_entries,
+    should_check_migration,
 };
 use camino::Utf8Path;
 use regex::Regex;
@@ -19,14 +20,13 @@ use std::sync::LazyLock;
 static SQLX_VERSION_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^(\d+)(_|\.)?").expect("valid regex pattern"));
 
+const NO_TRANSACTION_HINT: &str =
+    "Add `-- no-transaction` as the first line of the migration file.";
+
 /// SQLx migration adapter.
 pub struct SqlxAdapter;
 
 impl MigrationAdapter for SqlxAdapter {
-    fn name(&self) -> &'static str {
-        "SQLx"
-    }
-
     fn collect_migration_files(
         &self,
         dir: &Utf8Path,
@@ -65,6 +65,28 @@ impl MigrationAdapter for SqlxAdapter {
                 timestamp
             )
             .into())
+        }
+    }
+
+    fn extract_migration_metadata(&self, file_path: &Utf8Path) -> MigrationContext {
+        let content = match std::fs::read_to_string(file_path) {
+            Ok(c) => c,
+            Err(_) => {
+                return MigrationContext {
+                    run_in_transaction: true,
+                    no_transaction_hint: NO_TRANSACTION_HINT,
+                };
+            }
+        };
+
+        // Scan every line for `-- no-transaction` (case-insensitive, trimmed)
+        let has_no_transaction = content
+            .lines()
+            .any(|line| line.trim().eq_ignore_ascii_case("-- no-transaction"));
+
+        MigrationContext {
+            run_in_transaction: !has_no_transaction,
+            no_transaction_hint: NO_TRANSACTION_HINT,
         }
     }
 }
@@ -228,6 +250,74 @@ mod tests {
         assert!(should_check_migration(Some("1"), "2"));
         assert!(!should_check_migration(Some("10"), "2"));
         assert!(!should_check_migration(Some("5"), "5"));
+    }
+
+    #[test]
+    fn test_extract_metadata_unreadable_file_defaults_to_in_transaction() {
+        let adapter = SqlxAdapter;
+        let path = Utf8Path::new("/nonexistent/path/migration.sql");
+        let meta = adapter.extract_migration_metadata(path);
+        assert!(meta.run_in_transaction);
+    }
+
+    #[test]
+    fn test_extract_metadata_no_directive_defaults_to_in_transaction() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let sql_file = temp_dir.path().join("20240101000000_add_index.sql");
+        fs::write(&sql_file, "CREATE INDEX idx ON users(email);\n").unwrap();
+
+        let adapter = SqlxAdapter;
+        let path = Utf8Path::from_path(&sql_file).unwrap();
+        let meta = adapter.extract_migration_metadata(path);
+        assert!(meta.run_in_transaction);
+    }
+
+    #[test]
+    fn test_extract_metadata_with_no_transaction_directive() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let sql_file = temp_dir.path().join("20240101000000_add_index.sql");
+        fs::write(
+            &sql_file,
+            "-- no-transaction\nCREATE INDEX CONCURRENTLY idx ON users(email);\n",
+        )
+        .unwrap();
+
+        let adapter = SqlxAdapter;
+        let path = Utf8Path::from_path(&sql_file).unwrap();
+        let meta = adapter.extract_migration_metadata(path);
+        assert!(!meta.run_in_transaction);
+    }
+
+    #[test]
+    fn test_extract_metadata_directive_case_insensitive() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let sql_file = temp_dir.path().join("20240101000000_add_index.sql");
+        fs::write(&sql_file, "-- NO-TRANSACTION\nSELECT 1;\n").unwrap();
+
+        let adapter = SqlxAdapter;
+        let path = Utf8Path::from_path(&sql_file).unwrap();
+        let meta = adapter.extract_migration_metadata(path);
+        assert!(!meta.run_in_transaction);
+    }
+
+    #[test]
+    fn test_extract_metadata_directive_anywhere_in_file() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let sql_file = temp_dir.path().join("20240101000000_add_index.sql");
+        fs::write(&sql_file, "SELECT 1;\n-- no-transaction\nSELECT 2;\n").unwrap();
+
+        let adapter = SqlxAdapter;
+        let path = Utf8Path::from_path(&sql_file).unwrap();
+        let meta = adapter.extract_migration_metadata(path);
+        assert!(!meta.run_in_transaction);
     }
 
     #[test]

@@ -22,13 +22,13 @@ use crate::checks::pg_helpers::{
     ColumnDef, NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_type_name,
     for_each_column_def, is_char_type,
 };
-use crate::checks::{Check, Config};
+use crate::checks::{Check, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct CharTypeCheck;
 
 impl Check for CharTypeCheck {
-    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         // Handle CREATE TABLE via for_each_column_def
         if let NodeEnum::CreateStmt(_) = node {
             return for_each_column_def(node)

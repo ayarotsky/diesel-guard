@@ -1,4 +1,4 @@
-use crate::checks::Check;
+use crate::checks::{Check, MigrationContext};
 use crate::config::Config;
 use crate::violation::Violation;
 use camino::Utf8Path;
@@ -32,7 +32,7 @@ impl Check for CustomCheck {
         self.name
     }
 
-    fn check(&self, node: &NodeEnum, config: &Config) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, config: &Config, ctx: &MigrationContext) -> Vec<Violation> {
         // Serialize the pg_query node to a Rhai Dynamic value via serde
         let dynamic_node = match rhai::serde::to_dynamic(node) {
             Ok(d) => d,
@@ -56,9 +56,12 @@ impl Check for CustomCheck {
             }
         };
 
+        let dynamic_ctx = rhai::serde::to_dynamic(ctx).unwrap();
+
         let mut scope = rhai::Scope::new();
         scope.push("node", dynamic_node);
         scope.push("config", dynamic_config);
+        scope.push("ctx", dynamic_ctx);
 
         match self
             .engine
@@ -320,6 +323,21 @@ mod tests {
         sql: &str,
         config: &crate::config::Config,
     ) -> Vec<Violation> {
+        run_script_with_ctx(
+            script,
+            sql,
+            config,
+            &crate::checks::MigrationContext::default(),
+        )
+    }
+
+    /// Helper: run a script against a node with explicit config and ctx and return violations.
+    fn run_script_with_ctx(
+        script: &str,
+        sql: &str,
+        config: &crate::config::Config,
+        ctx: &crate::checks::MigrationContext,
+    ) -> Vec<Violation> {
         let engine = Arc::new(create_engine());
         let ast = engine.compile(script).expect("script should compile");
         let name: &'static str = Box::leak("test_check".to_string().into_boxed_str());
@@ -329,7 +347,7 @@ mod tests {
         let mut all_violations = Vec::new();
         for raw_stmt in &stmts {
             if let Some(node) = extract_node(raw_stmt) {
-                all_violations.extend(check.check(node, config));
+                all_violations.extend(check.check(node, config, ctx));
             }
         }
         all_violations
@@ -607,6 +625,60 @@ mod tests {
         assert_eq!(checks.len(), 0);
         assert_eq!(errors.len(), 1);
         assert!(errors[0].message.contains("Failed to read directory"));
+    }
+
+    #[test]
+    fn test_ctx_run_in_transaction_false_no_violation() {
+        // CONCURRENTLY outside a transaction — no violation
+        let ctx = crate::checks::MigrationContext {
+            run_in_transaction: false,
+            no_transaction_hint: "",
+        };
+        let violations = run_script_with_ctx(
+            r#"
+            let stmt = node.IndexStmt;
+            if stmt == () { return; }
+            if stmt.concurrent && ctx.run_in_transaction {
+                #{ operation: "CONCURRENTLY in transaction", problem: "will fail", safe_alternative: ctx.no_transaction_hint }
+            }
+            "#,
+            "CREATE INDEX CONCURRENTLY idx ON users(email);",
+            &crate::config::Config::default(),
+            &ctx,
+        );
+        assert!(violations.is_empty());
+    }
+
+    #[test]
+    fn test_ctx_run_in_transaction_true_produces_violation() {
+        // CONCURRENTLY inside a transaction — should flag it
+        let ctx = crate::checks::MigrationContext {
+            run_in_transaction: true,
+            no_transaction_hint: "Add -- diesel:no-transaction to the migration file.",
+        };
+        let violations = run_script_with_ctx(
+            r#"
+            let stmt = node.IndexStmt;
+            if stmt == () { return; }
+            if stmt.concurrent && ctx.run_in_transaction {
+                #{
+                    operation: "CONCURRENTLY in transaction",
+                    problem: "will fail",
+                    safe_alternative: ctx.no_transaction_hint
+                }
+            }
+            "#,
+            "CREATE INDEX CONCURRENTLY idx ON users(email);",
+            &crate::config::Config::default(),
+            &ctx,
+        );
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].operation, "CONCURRENTLY in transaction");
+        assert!(
+            violations[0]
+                .safe_alternative
+                .contains("diesel:no-transaction")
+        );
     }
 
     #[test]

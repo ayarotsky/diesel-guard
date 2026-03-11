@@ -1,5 +1,5 @@
 use crate::adapters::{DieselAdapter, MigrationAdapter, SqlxAdapter};
-use crate::checks::Registry;
+use crate::checks::{MigrationContext, Registry};
 use crate::config::Config;
 use crate::error::Result;
 use crate::parser;
@@ -110,6 +110,7 @@ impl SafetyChecker {
             &parsed.sql,
             &parsed.ignore_ranges,
             &self.config,
+            &MigrationContext::default(),
         ))
     }
 
@@ -117,12 +118,18 @@ impl SafetyChecker {
     pub fn check_file(&self, path: &Utf8Path) -> Result<Vec<Violation>> {
         let sql = fs::read_to_string(path)?;
 
+        let ctx = self
+            .adapter()
+            .map(|a| a.extract_migration_metadata(path))
+            .unwrap_or_default();
+
         match parser::parse_with_metadata(&sql) {
             Ok(parsed) => Ok(self.registry.check_stmts_with_context(
                 &parsed.stmts,
                 &parsed.sql,
                 &parsed.ignore_ranges,
                 &self.config,
+                &ctx,
             )),
             Err(e) => Err(e.with_file_context(path.as_str(), sql)),
         }
@@ -145,6 +152,8 @@ impl SafetyChecker {
         for mig_file in migration_files {
             let sql = fs::read_to_string(&mig_file.path)?;
 
+            let ctx = adapter.extract_migration_metadata(&mig_file.path);
+
             match parser::parse_with_metadata(&sql) {
                 Ok(parsed) => {
                     let violations = self.registry.check_stmts_with_context(
@@ -152,6 +161,7 @@ impl SafetyChecker {
                         &parsed.sql,
                         &parsed.ignore_ranges,
                         &self.config,
+                        &ctx,
                     );
                     if !violations.is_empty() {
                         results.push((mig_file.path.to_string(), violations));
@@ -256,11 +266,17 @@ mod tests {
     }
 
     #[test]
-    fn test_reindex_concurrently_safe() {
+    fn test_reindex_concurrently_in_transaction_detected() {
+        // check_sql uses MigrationContext::default() (run_in_transaction=true),
+        // so REINDEX CONCURRENTLY is flagged as requiring no-transaction context.
         let checker = SafetyChecker::new();
         let sql = "REINDEX INDEX CONCURRENTLY idx_users_email;";
         let violations = checker.check_sql(sql).unwrap();
-        assert_eq!(violations.len(), 0);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(
+            violations[0].operation,
+            "REINDEX CONCURRENTLY inside a transaction"
+        );
     }
 
     #[test]
@@ -383,5 +399,138 @@ mod tests {
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
             .unwrap();
         assert_eq!(violations.len(), 2)
+    }
+
+    // --- Integration tests: metadata-aware CONCURRENTLY detection ---
+
+    #[test]
+    fn test_diesel_concurrently_without_metadata_toml_is_violation() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let migration_dir = temp_dir.path().join("2024_01_01_000000_add_idx");
+        fs::create_dir(&migration_dir).unwrap();
+        fs::write(
+            migration_dir.join("up.sql"),
+            "CREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
+        )
+        .unwrap();
+        // No metadata.toml — defaults to run_in_transaction=true
+
+        let config = Config {
+            framework: "diesel".to_string(),
+            ..Default::default()
+        };
+        let checker = SafetyChecker::with_config(config);
+        let dir_path =
+            camino::Utf8Path::from_path(temp_dir.path()).expect("path should be valid UTF-8");
+
+        let results = checker.check_directory(dir_path).unwrap();
+        let total_violations: usize = results.iter().map(|(_, v)| v.len()).sum();
+        assert_eq!(
+            total_violations, 1,
+            "Expected 1 violation (CONCURRENTLY in transaction)"
+        );
+        assert_eq!(
+            results[0].1[0].operation,
+            "CREATE INDEX CONCURRENTLY inside a transaction"
+        );
+    }
+
+    #[test]
+    fn test_diesel_concurrently_with_metadata_toml_is_safe() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let migration_dir = temp_dir.path().join("2024_01_01_000000_add_idx");
+        fs::create_dir(&migration_dir).unwrap();
+        fs::write(
+            migration_dir.join("up.sql"),
+            "CREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
+        )
+        .unwrap();
+        fs::write(
+            migration_dir.join("metadata.toml"),
+            "run_in_transaction = false\n",
+        )
+        .unwrap();
+
+        let config = Config {
+            framework: "diesel".to_string(),
+            ..Default::default()
+        };
+        let checker = SafetyChecker::with_config(config);
+        let dir_path =
+            camino::Utf8Path::from_path(temp_dir.path()).expect("path should be valid UTF-8");
+
+        let results = checker.check_directory(dir_path).unwrap();
+        let total_violations: usize = results.iter().map(|(_, v)| v.len()).sum();
+        assert_eq!(
+            total_violations, 0,
+            "Expected no violations with metadata.toml"
+        );
+    }
+
+    #[test]
+    fn test_sqlx_concurrently_without_directive_is_violation() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(
+            temp_dir.path().join("20240101000000_add_idx.up.sql"),
+            "CREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
+        )
+        .unwrap();
+        // No -- no-transaction directive
+
+        let config = Config {
+            framework: "sqlx".to_string(),
+            ..Default::default()
+        };
+        let checker = SafetyChecker::with_config(config);
+        let dir_path =
+            camino::Utf8Path::from_path(temp_dir.path()).expect("path should be valid UTF-8");
+
+        let results = checker.check_directory(dir_path).unwrap();
+        let total_violations: usize = results.iter().map(|(_, v)| v.len()).sum();
+        assert_eq!(
+            total_violations, 1,
+            "Expected 1 violation (CONCURRENTLY inside a transaction)"
+        );
+        assert_eq!(
+            results[0].1[0].operation,
+            "CREATE INDEX CONCURRENTLY inside a transaction"
+        );
+    }
+
+    #[test]
+    fn test_sqlx_concurrently_with_directive_is_safe() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(
+            temp_dir.path().join("20240101000000_add_idx.up.sql"),
+            "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
+        )
+        .unwrap();
+
+        let config = Config {
+            framework: "sqlx".to_string(),
+            ..Default::default()
+        };
+        let checker = SafetyChecker::with_config(config);
+        let dir_path =
+            camino::Utf8Path::from_path(temp_dir.path()).expect("path should be valid UTF-8");
+
+        let results = checker.check_directory(dir_path).unwrap();
+        let total_violations: usize = results.iter().map(|(_, v)| v.len()).sum();
+        assert_eq!(
+            total_violations, 0,
+            "Expected no violations with -- no-transaction"
+        );
     }
 }

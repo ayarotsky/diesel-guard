@@ -12,7 +12,7 @@
 //! inside a transaction block.
 
 use crate::checks::pg_helpers::{Node, NodeEnum};
-use crate::checks::{Check, Config};
+use crate::checks::{Check, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct ReindexCheck;
@@ -38,7 +38,7 @@ fn has_concurrently(params: &[Node]) -> bool {
 }
 
 impl Check for ReindexCheck {
-    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config, ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::ReindexStmt(reindex) = node else {
             return vec![];
         };
@@ -47,10 +47,6 @@ impl Check for ReindexCheck {
             // SYSTEM (kind=4) or unknown -- skip
             return vec![];
         };
-
-        if has_concurrently(&reindex.params) {
-            return vec![];
-        }
 
         // Determine target name based on kind
         let target = match reindex.kind {
@@ -69,39 +65,43 @@ impl Check for ReindexCheck {
             _ => String::new(),
         };
 
-        vec![Violation::new(
-            "REINDEX without CONCURRENTLY",
-            format!(
-                "REINDEX {object} '{target}' without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock, \
-                blocking all operations on the {object} '{target}' until complete. Duration depends on index size.",
-            ),
-            format!(
-                r#"Use REINDEX CONCURRENTLY for lock-free reindexing (Postgres 12+):
+        if !has_concurrently(&reindex.params) {
+            // REINDEX without CONCURRENTLY — always a violation
+            return vec![Violation::new(
+                "REINDEX without CONCURRENTLY",
+                format!(
+                    "REINDEX {object} '{target}' without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock, \
+                    blocking all operations on the {object} '{target}' until complete. Duration depends on index size.",
+                ),
+                format!(
+                    r#"Use REINDEX CONCURRENTLY for lock-free reindexing (Postgres 12+):
 
    REINDEX {object} CONCURRENTLY {target};
 
 Note: CONCURRENTLY requires Postgres 12+ and cannot be run inside a transaction block.
-
-For Diesel migrations:
-1. Create metadata.toml in your migration directory:
-   run_in_transaction = false
-
-2. Use REINDEX CONCURRENTLY in your up.sql:
-   REINDEX {object} CONCURRENTLY {target};
-
-For SQLx migrations:
-1. Add the no-transaction directive at the top of your migration file:
-   -- no-transaction
-
-2. Use REINDEX CONCURRENTLY:
-   REINDEX {object} CONCURRENTLY {target};
 
 Considerations:
 - Takes longer to complete than regular REINDEX
 - Allows concurrent read/write operations
 - If it fails, the index may be left in "invalid" state and need manual cleanup
 - Cannot be rolled back (no transaction support)"#,
+                ),
+            )];
+        }
+
+        // REINDEX CONCURRENTLY — safe only if migration runs outside a transaction
+        if !ctx.run_in_transaction {
+            return vec![];
+        }
+
+        // REINDEX CONCURRENTLY inside a transaction — PostgreSQL will error at runtime
+        vec![Violation::new(
+            "REINDEX CONCURRENTLY inside a transaction",
+            format!(
+                "REINDEX {object} CONCURRENTLY '{target}' cannot run inside a transaction block. \
+                PostgreSQL will raise an error at runtime.",
             ),
+            ctx.no_transaction_hint,
         )]
     }
 }
@@ -109,7 +109,8 @@ Considerations:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assert_allows, assert_detects_violation, assert_detects_violation_containing};
+    use crate::checks::test_utils::parse_sql;
+    use crate::{assert_detects_violation, assert_detects_violation_containing};
 
     #[test]
     fn test_detects_reindex_index() {
@@ -148,13 +149,71 @@ mod tests {
     }
 
     #[test]
-    fn test_allows_reindex_index_concurrently() {
-        assert_allows!(ReindexCheck, "REINDEX INDEX CONCURRENTLY idx_users_email;");
+    fn test_allows_reindex_index_concurrently_outside_transaction() {
+        let stmt = parse_sql("REINDEX INDEX CONCURRENTLY idx_users_email;");
+        let violations = ReindexCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: false,
+                ..MigrationContext::default()
+            },
+        );
+        assert_eq!(
+            violations.len(),
+            0,
+            "Expected no violations outside transaction"
+        );
     }
 
     #[test]
-    fn test_allows_reindex_table_concurrently() {
-        assert_allows!(ReindexCheck, "REINDEX TABLE CONCURRENTLY users;");
+    fn test_allows_reindex_table_concurrently_outside_transaction() {
+        let stmt = parse_sql("REINDEX TABLE CONCURRENTLY users;");
+        let violations = ReindexCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: false,
+                ..MigrationContext::default()
+            },
+        );
+        assert_eq!(
+            violations.len(),
+            0,
+            "Expected no violations outside transaction"
+        );
+    }
+
+    #[test]
+    fn test_detects_concurrent_in_transaction() {
+        let stmt = parse_sql("REINDEX INDEX CONCURRENTLY idx_users_email;");
+        let violations = ReindexCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: true,
+                ..MigrationContext::default()
+            },
+        );
+        assert_eq!(violations.len(), 1, "Expected 1 violation");
+        assert_eq!(
+            violations[0].operation,
+            "REINDEX CONCURRENTLY inside a transaction"
+        );
+    }
+
+    #[test]
+    fn test_allows_concurrent_outside_transaction() {
+        let stmt = parse_sql("REINDEX INDEX CONCURRENTLY idx_users_email;");
+        let violations = ReindexCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: false,
+                ..MigrationContext::default()
+            },
+        );
+        assert_eq!(violations.len(), 0, "Expected no violations");
     }
 
     #[test]
@@ -181,8 +240,52 @@ mod tests {
 
     #[test]
     fn test_ignores_other_statements() {
-        assert_allows!(ReindexCheck, "CREATE INDEX idx_test ON users(email);");
-        assert_allows!(ReindexCheck, "DROP INDEX idx_test;");
-        assert_allows!(ReindexCheck, "ALTER TABLE users ADD COLUMN email TEXT;");
+        let ctx = MigrationContext::default();
+        let config = Config::default();
+
+        let stmt = parse_sql("CREATE INDEX idx_test ON users(email);");
+        assert_eq!(ReindexCheck.check(&stmt, &config, &ctx).len(), 0);
+
+        let stmt = parse_sql("DROP INDEX idx_test;");
+        assert_eq!(ReindexCheck.check(&stmt, &config, &ctx).len(), 0);
+
+        let stmt = parse_sql("ALTER TABLE users ADD COLUMN email TEXT;");
+        assert_eq!(ReindexCheck.check(&stmt, &config, &ctx).len(), 0);
+    }
+
+    #[test]
+    fn test_sqlx_framework_safe_alternative_message() {
+        let stmt = parse_sql("REINDEX INDEX CONCURRENTLY idx_users_email;");
+        let violations = ReindexCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: true,
+                no_transaction_hint: "Add `-- no-transaction` as the first line of the migration file.",
+            },
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(
+            violations[0].safe_alternative.contains("-- no-transaction"),
+            "Expected SQLx safe alternative message"
+        );
+    }
+
+    #[test]
+    fn test_diesel_framework_safe_alternative_message() {
+        let stmt = parse_sql("REINDEX INDEX CONCURRENTLY idx_users_email;");
+        let violations = ReindexCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: true,
+                no_transaction_hint: "Create `metadata.toml` in the migration directory with `run_in_transaction = false`.",
+            },
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(
+            violations[0].safe_alternative.contains("metadata.toml"),
+            "Expected Diesel safe alternative message"
+        );
     }
 }

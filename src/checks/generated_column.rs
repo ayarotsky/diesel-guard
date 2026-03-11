@@ -18,13 +18,13 @@ use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_has_constraint,
     column_type_name,
 };
-use crate::checks::{Check, Config};
+use crate::checks::{Check, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct GeneratedColumnCheck;
 
 impl Check for GeneratedColumnCheck {
-    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };

@@ -224,8 +224,8 @@ ALTER TABLE users ADD COLUMN email VARCHAR(255);
 ALTER TABLE users DROP COLUMN deprecated_field;
 -- safety-assured:end
 
--- Another safe operation
-CREATE INDEX CONCURRENTLY users_email_idx ON users(email);
+-- Another safe operation (no default, no lock)
+ALTER TABLE users ADD COLUMN name VARCHAR(255);
     "#;
 
     let violations = checker.check_sql(sql).unwrap();

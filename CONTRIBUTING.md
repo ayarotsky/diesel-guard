@@ -30,8 +30,8 @@ flowchart TD
     LOOP -->|not ignored| EN["extract_node()<br/>RawStmt → NodeEnum"]
 
     EN --> FAN["for each Check in Registry"]
-    FAN --> BI["BuiltInCheck::check(node, config)"]
-    FAN --> RH["CustomCheck::check(node, config)<br/>(Rhai engine eval)"]
+    FAN --> BI["BuiltInCheck::check(node, config, ctx)"]
+    FAN --> RH["CustomCheck::check(node, config, ctx)<br/>(Rhai engine eval)"]
 
     BI --> COLL["collect Vec&lt;Violation&gt;"]
     RH --> COLL
@@ -47,7 +47,7 @@ flowchart LR
     COMPILE -->|ok| CC["CustomCheck<br/>(Engine + AST)"]
     CC --> REG["Registry.add_check()"]
     REG --> EXEC["Check::check()<br/>called per NodeEnum"]
-    EXEC --> RHAI["Rhai script<br/>receives node + config"]
+    EXEC --> RHAI["Rhai script<br/>receives node, config, ctx"]
     RHAI -->|"()"| NONE["no violation"]
     RHAI -->|"#{ operation, ... }"| ONE["one Violation"]
     RHAI -->|"[#{ ... }, ...]"| MANY["multiple Violations"]
@@ -66,7 +66,7 @@ The pattern is always the same: bail early if the node is not the type you care 
 pub struct AddIndexCheck;
 
 impl Check for AddIndexCheck {
-    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::IndexStmt(stmt) = node else {
             return vec![];  // not a CREATE INDEX — ignore
         };
@@ -84,7 +84,7 @@ impl Check for AddIndexCheck {
 
 ```rust
 impl Check for AddColumnCheck {
-    fn check(&self, node: &NodeEnum, config: &Config) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
@@ -109,7 +109,7 @@ impl Check for AddColumnCheck {
 }
 ```
 
-Use `_config` when the check has no version-specific logic; use `config` when it does. Compare `config.postgres_version >= Some(N)` — `None` means unknown, so the safe path is to flag the violation.
+Use `_config` when the check has no version-specific logic; use `config` when it does. Use `_ctx` when the check does not inspect transaction context; use `ctx` when it does (currently only `AddIndexCheck`, `DropIndexCheck`, `ReindexCheck`). Compare `config.postgres_version >= Some(N)` — `None` means unknown, so the safe path is to flag the violation.
 
 **Watch out:** `ALTER TABLE ... RENAME COLUMN/TO` is parsed as `RenameStmt`, not `AlterTableStmt`. It will never appear in `alter_table_cmds()` — match on `NodeEnum::RenameStmt` directly and use `rename_type` to distinguish column from table renames.
 
@@ -123,7 +123,7 @@ Use `diesel-guard dump-ast --sql "..."` to inspect what AST a statement produces
 
 ## Adding a New Check
 
-1. **Create** `src/checks/your_check.rs` — implement the `Check` trait. Use `_config` if unused, `config` if version-aware. Add `#[cfg(test)]` unit tests using the macros above.
+1. **Create** `src/checks/your_check.rs` — implement the `Check` trait. Use `_config` if unused, `config` if version-aware. Use `_ctx` if unused, `ctx` if the check needs to know whether the migration runs inside a transaction (e.g. for CONCURRENTLY operations). Add `#[cfg(test)]` unit tests using the macros above.
 2. **Register** in `src/checks/mod.rs` — add `mod`, `pub use`, and `self.register_check(config, YourCheck)` call inside `Registry::with_config()` (all alphabetically). Check names are derived from struct names automatically. (`register_check` is the private built-in registration path; `add_check` is the public API used only for custom Rhai checks.)
 3. **Create fixtures** — `tests/fixtures/your_operation_{safe,unsafe}/up.sql`. First line MUST be `-- Safe: ...` or `-- Unsafe: ...`.
 4. **Update integration tests** in `tests/fixtures_test.rs` — add to `safe_fixtures` vec, add detection test, update `test_check_entire_fixtures_directory` counts.
@@ -140,8 +140,8 @@ Use `diesel-guard dump-ast --sql "..."` to inspect what AST a statement produces
 
 Users place `.rhai` files in a directory and set `custom_checks_dir` in `diesel-guard.toml`.
 
-- Each script receives a `node` variable (pg_query AST node serialized via `rhai::serde::to_dynamic()`) and a `config` variable (current config settings)
-- Scripts access fields like `node.IndexStmt.concurrent`, `node.CreateStmt.relation.relname`; access config like `config.postgres_version` (integer or `()` when unset)
+- Each script receives a `node` variable (pg_query AST node serialized via `rhai::serde::to_dynamic()`), a `config` variable (current config settings), and a `ctx` variable (per-migration metadata: `ctx.run_in_transaction`, `ctx.no_transaction_hint`).
+- Scripts access fields like `node.IndexStmt.concurrent`, `node.CreateStmt.relation.relname`; access config like `config.postgres_version` (integer or `()` when unset); access migration context like `ctx.run_in_transaction` (bool) and `ctx.no_transaction_hint` (string)
 - Return protocol: `()` = no violation, `#{ operation, problem, safe_alternative }` = one violation, array of maps = multiple
 - Check name = filename stem (e.g., `require_concurrent.rhai` → `require_concurrent`); disableable via `disable_checks`
 - Safety-assured blocks automatically skip custom checks (same `check_stmts_with_context` path)
@@ -192,6 +192,14 @@ assert_detects_violation_containing!(Check, sql, "OP", "substr")  // violation p
 assert_detects_n_violations!(Check, sql, n, "OPERATION NAME")     // exactly N violations
 assert_allows!(Check, sql)                                         // no violations
 assert_allows_with_config!(Check, sql, config)                     // no violations with explicit config
+```
+
+All macros pass `MigrationContext::default()` (`run_in_transaction: true`). For checks that are context-aware (currently `AddIndexCheck`, `DropIndexCheck`, `ReindexCheck`), call `check()` directly with an explicit `MigrationContext` when testing the no-transaction path:
+
+```rust
+let ctx = MigrationContext { run_in_transaction: false, no_transaction_hint: "" };
+let violations = AddIndexCheck.check(&node, &Config::default(), &ctx);
+assert!(violations.is_empty());
 ```
 
 **Integration tests** in `tests/fixtures_test.rs` run `SafetyChecker` against real `.sql` files under `tests/fixtures/`. Each fixture is a directory containing an `up.sql` whose first line declares its intent:

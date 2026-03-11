@@ -10,7 +10,11 @@ macro_rules! assert_detects_violation {
     ($check:expr, $sql:expr, $operation:expr) => {{
         use $crate::checks::test_utils::parse_sql;
         let stmt = parse_sql($sql);
-        let violations = $check.check(&stmt, &$crate::config::Config::default());
+        let violations = $check.check(
+            &stmt,
+            &$crate::config::Config::default(),
+            &$crate::checks::MigrationContext::default(),
+        );
         assert_eq!(violations.len(), 1, "Expected exactly 1 violation");
         assert_eq!(
             violations[0].operation, $operation,
@@ -27,7 +31,7 @@ macro_rules! assert_detects_violation_with_config {
     ($check:expr, $sql:expr, $operation:expr, $config:expr) => {{
         use $crate::checks::test_utils::parse_sql;
         let stmt = parse_sql($sql);
-        let violations = $check.check(&stmt, $config);
+        let violations = $check.check(&stmt, $config, &$crate::checks::MigrationContext::default());
         assert_eq!(violations.len(), 1, "Expected exactly 1 violation");
         assert_eq!(
             violations[0].operation, $operation,
@@ -44,7 +48,7 @@ macro_rules! assert_allows_with_config {
     ($check:expr, $sql:expr, $config:expr) => {{
         use $crate::checks::test_utils::parse_sql;
         let stmt = parse_sql($sql);
-        let violations = $check.check(&stmt, $config);
+        let violations = $check.check(&stmt, $config, &$crate::checks::MigrationContext::default());
         assert_eq!(
             violations.len(),
             0,
@@ -61,7 +65,11 @@ macro_rules! assert_allows {
     ($check:expr, $sql:expr) => {{
         use $crate::checks::test_utils::parse_sql;
         let stmt = parse_sql($sql);
-        let violations = $check.check(&stmt, &$crate::config::Config::default());
+        let violations = $check.check(
+            &stmt,
+            &$crate::config::Config::default(),
+            &$crate::checks::MigrationContext::default(),
+        );
         assert_eq!(
             violations.len(),
             0,
@@ -79,7 +87,11 @@ macro_rules! assert_detects_violation_containing {
     ($check:expr, $sql:expr, $operation:expr, $($substring:expr),+) => {{
         use $crate::checks::test_utils::parse_sql;
         let stmt = parse_sql($sql);
-        let violations = $check.check(&stmt, &$crate::config::Config::default());
+        let violations = $check.check(
+            &stmt,
+            &$crate::config::Config::default(),
+            &$crate::checks::MigrationContext::default(),
+        );
         assert_eq!(violations.len(), 1, "Expected exactly 1 violation");
         assert_eq!(
             violations[0].operation, $operation,
@@ -104,7 +116,11 @@ macro_rules! assert_detects_n_violations_any_containing {
     ($check:expr, $sql:expr, $n:expr, $($substring:expr),+) => {{
         use $crate::checks::test_utils::parse_sql;
         let stmt = parse_sql($sql);
-        let violations = $check.check(&stmt, &$crate::config::Config::default());
+        let violations = $check.check(
+            &stmt,
+            &$crate::config::Config::default(),
+            &$crate::checks::MigrationContext::default(),
+        );
         assert_eq!(violations.len(), $n, "Expected exactly {} violations", $n);
         $(
             assert!(
@@ -123,7 +139,11 @@ macro_rules! assert_detects_n_violations {
     ($check:expr, $sql:expr, $n:expr, $operation:expr) => {{
         use $crate::checks::test_utils::parse_sql;
         let stmt = parse_sql($sql);
-        let violations = $check.check(&stmt, &$crate::config::Config::default());
+        let violations = $check.check(
+            &stmt,
+            &$crate::config::Config::default(),
+            &$crate::checks::MigrationContext::default(),
+        );
         assert_eq!(violations.len(), $n, "Expected exactly {} violations", $n);
         for v in &violations {
             assert_eq!(
