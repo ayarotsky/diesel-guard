@@ -3,9 +3,11 @@ coverage:
     project:
       default:
         informational: false
+        threshold: 0%
     patch:
       default:
         informational: false
+        threshold: 0%
 
 comment:
   layout: "reach,diff,flags,files"

@@ -10,7 +10,7 @@
 //! query patterns instead.
 
 use crate::checks::pg_helpers::{NodeEnum, range_var_name};
-use crate::checks::{Check, Config};
+use crate::checks::{Check, Config, MigrationContext};
 use crate::violation::Violation;
 
 const MAX_COLUMNS: usize = 3;
@@ -18,7 +18,7 @@ const MAX_COLUMNS: usize = 3;
 pub struct WideIndexCheck;
 
 impl Check for WideIndexCheck {
-    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::IndexStmt(index_stmt) = node else {
             return vec![];
         };

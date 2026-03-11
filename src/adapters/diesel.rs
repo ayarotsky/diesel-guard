@@ -9,11 +9,12 @@
 //! ```
 
 use super::{
-    MigrationAdapter, MigrationFile, Result, collect_and_sort_entries, is_single_migration_dir,
-    should_check_migration,
+    MigrationAdapter, MigrationContext, MigrationFile, Result, collect_and_sort_entries,
+    is_single_migration_dir, should_check_migration,
 };
 use camino::Utf8Path;
 use regex::Regex;
+use serde::Deserialize;
 use std::sync::LazyLock;
 
 /// Regex pattern for Diesel timestamp formats.
@@ -23,14 +24,19 @@ static DIESEL_TIMESTAMP_REGEX: LazyLock<Regex> = LazyLock::new(|| {
         .expect("valid regex pattern")
 });
 
+const NO_TRANSACTION_HINT: &str =
+    "Create `metadata.toml` in the migration directory with `run_in_transaction = false`.";
+
 /// Diesel migration adapter.
 pub struct DieselAdapter;
 
-impl MigrationAdapter for DieselAdapter {
-    fn name(&self) -> &'static str {
-        "Diesel"
-    }
+/// Diesel metadata.toml deserialization target.
+#[derive(Deserialize, Default)]
+struct MetadataFile {
+    run_in_transaction: Option<bool>,
+}
 
+impl MigrationAdapter for DieselAdapter {
     fn collect_migration_files(
         &self,
         dir: &Utf8Path,
@@ -38,8 +44,6 @@ impl MigrationAdapter for DieselAdapter {
         check_down: bool,
     ) -> Result<Vec<MigrationFile>> {
         if is_single_migration_dir(dir) {
-            // When the user targets a specific migration directory, skip the
-            // start_after filter — they explicitly chose this migration.
             return self.process_migration_directory(dir, None, check_down);
         }
 
@@ -57,8 +61,6 @@ impl MigrationAdapter for DieselAdapter {
                 let filename = path.file_name().unwrap_or("");
                 let parsed_timestamp = self.parse_timestamp(filename);
 
-                // Apply start_after filter when the file has a valid timestamp.
-                // Files without timestamps (e.g., "migration.sql") are always checked.
                 if let Some(ref ts) = parsed_timestamp
                     && !should_check_migration(start_after, ts)
                 {
@@ -77,10 +79,7 @@ impl MigrationAdapter for DieselAdapter {
         DIESEL_TIMESTAMP_REGEX
             .captures(name)
             .and_then(|cap| cap.get(1))
-            .map(|m| {
-                // Normalize by removing separators
-                m.as_str().replace(['_', '-'], "")
-            })
+            .map(|m| m.as_str().replace(['_', '-'], ""))
     }
 
     fn validate_timestamp(&self, timestamp: &str) -> Result<()> {
@@ -91,7 +90,6 @@ impl MigrationAdapter for DieselAdapter {
             ).into());
         };
 
-        // Check if the matched part is the entire string
         if captures.get(0).unwrap().as_str() == timestamp {
             Ok(())
         } else {
@@ -99,6 +97,36 @@ impl MigrationAdapter for DieselAdapter {
                 "Invalid Diesel timestamp format: {}. Expected: YYYYMMDDHHMMSS, YYYY_MM_DD_HHMMSS, or YYYY-MM-DD-HHMMSS",
                 timestamp
             ).into())
+        }
+    }
+
+    fn extract_migration_metadata(&self, file_path: &Utf8Path) -> MigrationContext {
+        // metadata.toml lives in the same directory as the SQL file
+        let metadata_path = match file_path.parent() {
+            Some(parent) => parent.join("metadata.toml"),
+            None => {
+                return MigrationContext {
+                    run_in_transaction: true,
+                    no_transaction_hint: NO_TRANSACTION_HINT,
+                };
+            }
+        };
+
+        let content = match std::fs::read_to_string(&metadata_path) {
+            Ok(c) => c,
+            Err(_) => {
+                return MigrationContext {
+                    run_in_transaction: true,
+                    no_transaction_hint: NO_TRANSACTION_HINT,
+                };
+            }
+        };
+
+        let parsed: MetadataFile = toml::from_str(&content).unwrap_or_default();
+
+        MigrationContext {
+            run_in_transaction: parsed.run_in_transaction.unwrap_or(true),
+            no_transaction_hint: NO_TRANSACTION_HINT,
         }
     }
 }
@@ -251,6 +279,100 @@ mod tests {
             Some("20240101000000"),
             "2024-01-01-000000"
         ));
+    }
+
+    #[test]
+    fn test_extract_metadata_no_parent_defaults_to_in_transaction() {
+        let adapter = DieselAdapter;
+        let meta = adapter.extract_migration_metadata(Utf8Path::new(""));
+        assert!(meta.run_in_transaction);
+    }
+
+    #[test]
+    fn test_extract_metadata_no_file_defaults_to_in_transaction() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let sql_file = temp_dir.path().join("up.sql");
+        std::fs::write(&sql_file, "SELECT 1;").unwrap();
+        // No metadata.toml written
+
+        let adapter = DieselAdapter;
+        let path = Utf8Path::from_path(&sql_file).unwrap();
+        let meta = adapter.extract_migration_metadata(path);
+        assert!(meta.run_in_transaction);
+    }
+
+    #[test]
+    fn test_extract_metadata_run_in_transaction_false() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let sql_file = temp_dir.path().join("up.sql");
+        std::fs::write(&sql_file, "SELECT 1;").unwrap();
+        std::fs::write(
+            temp_dir.path().join("metadata.toml"),
+            "run_in_transaction = false\n",
+        )
+        .unwrap();
+
+        let adapter = DieselAdapter;
+        let path = Utf8Path::from_path(&sql_file).unwrap();
+        let meta = adapter.extract_migration_metadata(path);
+        assert!(!meta.run_in_transaction);
+    }
+
+    #[test]
+    fn test_extract_metadata_run_in_transaction_true_explicit() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let sql_file = temp_dir.path().join("up.sql");
+        std::fs::write(&sql_file, "SELECT 1;").unwrap();
+        std::fs::write(
+            temp_dir.path().join("metadata.toml"),
+            "run_in_transaction = true\n",
+        )
+        .unwrap();
+
+        let adapter = DieselAdapter;
+        let path = Utf8Path::from_path(&sql_file).unwrap();
+        let meta = adapter.extract_migration_metadata(path);
+        assert!(meta.run_in_transaction);
+    }
+
+    #[test]
+    fn test_extract_metadata_empty_toml_defaults_to_in_transaction() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let sql_file = temp_dir.path().join("up.sql");
+        std::fs::write(&sql_file, "SELECT 1;").unwrap();
+        std::fs::write(temp_dir.path().join("metadata.toml"), "").unwrap();
+
+        let adapter = DieselAdapter;
+        let path = Utf8Path::from_path(&sql_file).unwrap();
+        let meta = adapter.extract_migration_metadata(path);
+        assert!(meta.run_in_transaction);
+    }
+
+    #[test]
+    fn test_extract_metadata_malformed_toml_defaults_to_in_transaction() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let sql_file = temp_dir.path().join("up.sql");
+        std::fs::write(&sql_file, "SELECT 1;").unwrap();
+        std::fs::write(
+            temp_dir.path().join("metadata.toml"),
+            "this is not valid toml ][[\n",
+        )
+        .unwrap();
+
+        let adapter = DieselAdapter;
+        let path = Utf8Path::from_path(&sql_file).unwrap();
+        let meta = adapter.extract_migration_metadata(path);
+        assert!(meta.run_in_transaction);
     }
 
     #[test]

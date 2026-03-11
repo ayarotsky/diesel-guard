@@ -20,10 +20,21 @@ if stmt == () { return; }
 
 if !stmt.concurrent {
     let idx_name = if stmt.idxname != "" { stmt.idxname } else { "(unnamed)" };
-    #{
+    return #{
         operation: "INDEX without CONCURRENTLY: " + idx_name,
         problem: "Creating index '" + idx_name + "' without CONCURRENTLY blocks writes on the table.",
         safe_alternative: "Use CREATE INDEX CONCURRENTLY:\n  CREATE INDEX CONCURRENTLY " + idx_name + " ON ...;"
+    };
+}
+
+// CONCURRENTLY cannot run inside a transaction block
+if ctx.run_in_transaction {
+    let idx_name = if stmt.idxname != "" { stmt.idxname } else { "(unnamed)" };
+    let hint = if ctx.no_transaction_hint != "" { ctx.no_transaction_hint } else { "Run this migration outside a transaction block." };
+    #{
+        operation: "INDEX CONCURRENTLY inside a transaction: " + idx_name,
+        problem: "CREATE INDEX CONCURRENTLY cannot run inside a transaction block. PostgreSQL will raise an error at runtime.",
+        safe_alternative: hint
     }
 }
 ```
@@ -45,6 +56,7 @@ diesel-guard check migrations/
 - Each `.rhai` script is called **once per SQL statement** in the migration
 - The `node` variable contains the pg_query AST for that statement (a nested map)
 - The `config` variable exposes the current `diesel-guard.toml` settings (e.g., `config.postgres_version`)
+- The `ctx` variable exposes per-migration metadata (e.g., `ctx.run_in_transaction`)
 - Scripts match on a specific node type: `let stmt = node.IndexStmt;`
 - If the node doesn't match, `node.IndexStmt` returns `()` — early-return with `if stmt == () { return; }`
 - Return `()` for no violation, a map for one, or an array of maps for multiple
@@ -66,6 +78,39 @@ Available fields:
 | `config.postgres_version` | integer or `()` | Target PG major version, or `()` if unset |
 | `config.check_down` | bool | Whether down migrations are checked |
 | `config.disable_checks` | array | Check names that are disabled |
+
+## The `ctx` Variable
+
+`ctx` gives scripts access to per-migration metadata extracted by the framework adapter. Use it to condition on whether a migration runs inside a transaction:
+
+```rhai
+// Flag CONCURRENTLY inside a transaction — PostgreSQL will error at runtime
+if stmt.concurrent && ctx.run_in_transaction {
+    let hint = if ctx.no_transaction_hint != "" {
+        ctx.no_transaction_hint
+    } else {
+        "Run this migration outside a transaction block."
+    };
+    return #{
+        operation: "INDEX CONCURRENTLY inside a transaction",
+        problem: "CREATE INDEX CONCURRENTLY cannot run inside a transaction block.",
+        safe_alternative: hint
+    };
+}
+```
+
+Available fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ctx.run_in_transaction` | bool | Whether the migration runs inside a transaction. Defaults to `true`. |
+| `ctx.no_transaction_hint` | string | Framework-specific instruction for opting out of transactions (empty string when unavailable). |
+
+The hint is framework-specific:
+
+- **Diesel:** `"Add run_in_transaction = false to the migration's metadata.toml."`
+- **SQLx:** `"Add -- no-transaction at the top of the migration file."`
+- **`check_sql` / no framework:** empty string — provide your own fallback.
 
 ## Using `dump-ast`
 

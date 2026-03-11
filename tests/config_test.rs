@@ -577,8 +577,9 @@ disable_checks = ["DropColumnCheck"]
 
 #[test]
 fn test_diesel_concurrently_without_metadata_warns() {
-    // CONCURRENTLY used without metadata.toml should still collect the file
-    // (warning is printed to stderr, verified by the file being in results)
+    // CONCURRENTLY used without metadata.toml is now a violation:
+    // the migration defaults to run_in_transaction=true, so CONCURRENTLY will
+    // fail at runtime because PostgreSQL doesn't allow it inside a transaction.
     let temp_dir = TempDir::new().unwrap();
     let migration_dir = temp_dir.path().join("2024_01_01_000000_add_index");
     fs::create_dir(&migration_dir).unwrap();
@@ -596,9 +597,13 @@ fn test_diesel_concurrently_without_metadata_warns() {
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
 
-    // The file should still be collected and checked (no violations from the SQL itself
-    // since CREATE INDEX CONCURRENTLY is safe)
-    assert_eq!(results.len(), 0);
+    // The file should have 1 violation: CONCURRENTLY inside a transaction
+    assert_eq!(results.len(), 1, "Expected 1 file with violations");
+    assert_eq!(results[0].1.len(), 1, "Expected 1 violation");
+    assert_eq!(
+        results[0].1[0].operation,
+        "CREATE INDEX CONCURRENTLY inside a transaction"
+    );
 }
 
 #[test]

@@ -74,6 +74,8 @@ use pg_helpers::{NodeEnum, extract_node};
 use pg_query::protobuf::RawStmt;
 use std::sync::LazyLock;
 
+pub use crate::adapters::MigrationContext;
+
 /// Lazily-derived list of all built-in check names from an unfiltered registry.
 /// This avoids maintaining a manual list that can drift from the actual checks.
 static BUILTIN_CHECK_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
@@ -91,7 +93,7 @@ pub trait Check: Send + Sync {
     }
 
     /// Run the check on a pg_query AST node and return any violations found
-    fn check(&self, node: &NodeEnum, config: &Config) -> Vec<Violation>;
+    fn check(&self, node: &NodeEnum, config: &Config, ctx: &MigrationContext) -> Vec<Violation>;
 }
 
 /// Registry of all available checks
@@ -159,10 +161,15 @@ impl Registry {
     }
 
     /// Check a single AST node against all registered checks
-    pub fn check_node(&self, node: &NodeEnum, config: &Config) -> Vec<Violation> {
+    pub fn check_node(
+        &self,
+        node: &NodeEnum,
+        config: &Config,
+        ctx: &MigrationContext,
+    ) -> Vec<Violation> {
         self.checks
             .iter()
-            .flat_map(|check| check.check(node, config))
+            .flat_map(|check| check.check(node, config, ctx))
             .collect()
     }
 
@@ -176,6 +183,7 @@ impl Registry {
         sql: &str,
         ignore_ranges: &[IgnoreRange],
         config: &Config,
+        ctx: &MigrationContext,
     ) -> Vec<Violation> {
         // Build set of all ignored line numbers for fast lookup
         let ignored_lines: std::collections::HashSet<usize> = ignore_ranges
@@ -199,7 +207,7 @@ impl Registry {
             let stmt_line = byte_offset_to_line(sql, offset);
 
             if !ignored_lines.contains(&stmt_line) {
-                violations.extend(self.check_node(node, config));
+                violations.extend(self.check_node(node, config, ctx));
             }
         }
 
@@ -328,6 +336,7 @@ ALTER TABLE users DROP COLUMN email;
             sql,
             &ignore_ranges,
             &Config::default(),
+            &MigrationContext::default(),
         );
         assert_eq!(violations.len(), 0);
     }
@@ -345,6 +354,7 @@ ALTER TABLE users DROP COLUMN email;
             sql,
             &ignore_ranges,
             &Config::default(),
+            &MigrationContext::default(),
         );
         assert_eq!(violations.len(), 1);
     }

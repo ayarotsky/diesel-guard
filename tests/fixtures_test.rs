@@ -517,10 +517,19 @@ fn test_sqlx_suffix_format_detected() {
 
 #[test]
 fn test_safe_sqlx_fixtures_pass() {
-    let checker = SafetyChecker::new();
+    use diesel_guard::Config;
 
+    // Use the SQLx adapter so that the `-- no-transaction` directive is recognized.
+    let config = Config {
+        framework: "sqlx".to_string(),
+        ..Default::default()
+    };
+    let checker = SafetyChecker::with_config(config);
+
+    // Note: sqlx_concurrently_missing_directive is intentionally excluded here —
+    // it contains CREATE INDEX CONCURRENTLY without a no-transaction directive,
+    // which is now correctly detected as a violation.
     let safe_sqlx_fixtures = vec![
-        "tests/fixtures_sqlx/sqlx_concurrently_missing_directive",
         "tests/fixtures_sqlx/sqlx_concurrently_with_directive",
         "tests/fixtures_sqlx/sqlx_reindex_safe",
     ];
@@ -537,6 +546,30 @@ fn test_safe_sqlx_fixtures_pass() {
             fixture, total_violations
         );
     }
+}
+
+#[test]
+fn test_sqlx_concurrently_without_no_transaction_detected() {
+    use diesel_guard::Config;
+
+    let config = Config {
+        framework: "sqlx".to_string(),
+        ..Default::default()
+    };
+    let checker = SafetyChecker::with_config(config);
+
+    let results = checker
+        .check_directory(Utf8Path::new(
+            "tests/fixtures_sqlx/sqlx_concurrently_missing_directive",
+        ))
+        .unwrap();
+
+    assert_eq!(results.len(), 1, "Expected 1 file with violations");
+    assert_eq!(results[0].1.len(), 1, "Expected 1 violation");
+    assert_eq!(
+        results[0].1[0].operation,
+        "CREATE INDEX CONCURRENTLY inside a transaction"
+    );
 }
 
 #[test]
@@ -574,16 +607,17 @@ fn test_check_all_sqlx_fixtures() {
 
     // Expected violations (with check_down = false):
     // 1. sqlx_suffix_add_column_unsafe/.up.sql - 1 violation (ADD COLUMN with DEFAULT)
-    // 2. sqlx_reindex_unsafe - 1 violation (REINDEX without CONCURRENTLY)
-    // Note: .down.sql correctly skipped, CONCURRENTLY and safe fixtures have 0 violations
+    // 2. sqlx_concurrently_missing_directive - 1 violation (CREATE INDEX CONCURRENTLY inside a transaction)
+    // 3. sqlx_reindex_unsafe - 1 violation (REINDEX without CONCURRENTLY)
+    // Note: .down.sql correctly skipped, with-directive and safe fixtures have 0 violations
     assert_eq!(
-        files_with_violations, 2,
-        "Expected 2 files with violations, got {}",
+        files_with_violations, 3,
+        "Expected 3 files with violations, got {}",
         files_with_violations
     );
     assert_eq!(
-        all_violations, 2,
-        "Expected 2 total violations, got {}",
+        all_violations, 3,
+        "Expected 3 total violations, got {}",
         all_violations
     );
 }

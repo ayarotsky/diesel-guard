@@ -11,13 +11,13 @@
 //! allowing concurrent access to the table.
 
 use crate::checks::pg_helpers::{NodeEnum, range_var_name};
-use crate::checks::{Check, Config};
+use crate::checks::{Check, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct TruncateTableCheck;
 
 impl Check for TruncateTableCheck {
-    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::TruncateStmt(truncate) = node else {
             return vec![];
         };

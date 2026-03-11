@@ -19,6 +19,26 @@ pub use sqlx::SqlxAdapter;
 /// Result type for adapter operations.
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
+/// Per-migration context extracted by the adapter and passed to each check.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct MigrationContext {
+    /// Whether the migration runs inside a transaction.
+    /// Defaults to `true` (most migrations run in a transaction).
+    pub run_in_transaction: bool,
+    /// Framework-specific hint for how to opt out of transactions.
+    /// Empty string when no framework context is available (e.g. `check_sql`).
+    pub no_transaction_hint: &'static str,
+}
+
+impl Default for MigrationContext {
+    fn default() -> Self {
+        Self {
+            run_in_transaction: true,
+            no_transaction_hint: "",
+        }
+    }
+}
+
 /// Represents a single migration file to check.
 #[derive(Debug, Clone)]
 pub struct MigrationFile {
@@ -39,9 +59,6 @@ impl MigrationFile {
 /// Each framework (Diesel, SQLx, etc.) implements this trait to provide
 /// framework-specific behavior for discovering, parsing, and validating migrations.
 pub trait MigrationAdapter: Send + Sync {
-    /// Framework name for display/logging.
-    fn name(&self) -> &'static str;
-
     /// Collect migration files from a directory.
     ///
     /// # Arguments
@@ -69,6 +86,13 @@ pub trait MigrationAdapter: Send + Sync {
     /// Returns an error if the timestamp doesn't match the framework's
     /// expected format.
     fn validate_timestamp(&self, timestamp: &str) -> Result<()>;
+
+    /// Extract migration context for a specific SQL file.
+    ///
+    /// Implementations read framework-specific metadata (e.g., `metadata.toml`
+    /// for Diesel, `-- no-transaction` directive for SQLx) and return it as
+    /// a `MigrationContext`.
+    fn extract_migration_metadata(&self, file_path: &Utf8Path) -> MigrationContext;
 }
 
 /// Check if migration should be checked based on start_after filter.

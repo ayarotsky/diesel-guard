@@ -12,13 +12,13 @@
 //! backups exist, and check for foreign key dependencies before dropping.
 
 use crate::checks::pg_helpers::{DropBehavior, NodeEnum, ObjectType, drop_object_names};
-use crate::checks::{Check, Config, if_exists_clause};
+use crate::checks::{Check, Config, MigrationContext, if_exists_clause};
 use crate::violation::Violation;
 
 pub struct DropTableCheck;
 
 impl Check for DropTableCheck {
-    fn check(&self, node: &NodeEnum, _config: &Config) -> Vec<Violation> {
+    fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::DropStmt(drop_stmt) = node else {
             return vec![];
         };
