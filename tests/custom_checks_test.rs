@@ -363,6 +363,7 @@ fn check_with_examples(sql: &str) -> Vec<Violation> {
             "AlterColumnTypeCheck".into(),
             "CharTypeCheck".into(),
             "CreateExtensionCheck".into(),
+            "DomainCheckConstraintCheck".into(),
             "DropColumnCheck".into(),
             "DropDatabaseCheck".into(),
             "DropIndexCheck".into(),
