@@ -2,12 +2,11 @@ use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use diesel_guard::ast_dump;
 use diesel_guard::output::OutputFormatter;
+use diesel_guard::wizard;
 use diesel_guard::{Config, SafetyChecker};
 use miette::{IntoDiagnostic, Result};
 use std::fs;
 use std::process::exit;
-
-const CONFIG_TEMPLATE: &str = include_str!("../diesel-guard.toml.example");
 
 #[derive(Parser)]
 #[command(
@@ -68,19 +67,26 @@ EXAMPLES:
     /// Initialize diesel-guard configuration file
     #[command(long_about = "Initialize diesel-guard configuration file.
 
-Creates diesel-guard.toml in the current directory with all available options
-documented. Edit the file to set your migration framework (\"diesel\" or \"sqlx\")
-and any other options.
+Runs an interactive wizard that auto-detects your framework, migrations path,
+and Postgres version, then writes a tailored diesel-guard.toml.
 
-Use --force to regenerate the config file and reset it to defaults.
+Use --auto to skip all prompts and use auto-detected defaults —
+suitable for CI environments and scripted setup.
+
+Use --force to overwrite an existing config file.
 
 EXAMPLES:
   diesel-guard init
+  diesel-guard init --auto
   diesel-guard init --force")]
     Init {
         /// Overwrite existing config file if it exists
         #[arg(long)]
         force: bool,
+
+        /// Skip all prompts and use auto-detected defaults (for CI)
+        #[arg(long)]
+        auto: bool,
     },
 
     /// Dump the pg_query AST for SQL as JSON
@@ -180,34 +186,8 @@ fn main() -> Result<()> {
             println!("{json}");
         }
 
-        Commands::Init { force } => {
-            let config_path = Utf8PathBuf::from("diesel-guard.toml");
-
-            // Check if config file already exists
-            let file_existed = config_path.exists();
-            if file_existed && !force {
-                eprintln!("Error: diesel-guard.toml already exists in current directory");
-                eprintln!("Use --force to overwrite the existing file");
-                exit(1);
-            }
-
-            // Write config template to file
-            fs::write(&config_path, CONFIG_TEMPLATE)
-                .into_diagnostic()
-                .map_err(|e| miette::miette!("Failed to write config file: {}", e))?;
-
-            if file_existed {
-                println!("✓ Overwrote diesel-guard.toml");
-            } else {
-                println!("✓ Created diesel-guard.toml");
-            }
-            println!();
-            println!("Next steps:");
-            println!(
-                "1. Edit diesel-guard.toml and set the 'framework' field to \"diesel\" or \"sqlx\""
-            );
-            println!("2. Customize other configuration options as needed");
-            println!("3. Run 'diesel-guard check <path>' to check your migrations");
+        Commands::Init { force, auto } => {
+            wizard::run(force, auto)?;
         }
     }
 

@@ -25,59 +25,53 @@ fn test_init_creates_config() {
     let temp_dir = TempDir::new().unwrap();
     let config_path = temp_dir.path().join("diesel-guard.toml");
 
-    // Run init command
     let output = Command::new(diesel_guard_bin())
         .current_dir(temp_dir.path())
-        .arg("init")
+        .args(["init", "--auto"])
         .output()
         .expect("Failed to execute init command");
 
-    // Verify command succeeded
     assert!(
         output.status.success(),
         "Init command failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
-    // Verify file was created
     assert!(config_path.exists(), "Config file was not created");
 
-    // Verify output message
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert_eq!(
-        stdout,
-        "✓ Created diesel-guard.toml\n\nNext steps:\n\
-         1. Edit diesel-guard.toml and set the 'framework' field to \"diesel\" or \"sqlx\"\n\
-         2. Customize other configuration options as needed\n\
-         3. Run 'diesel-guard check <path>' to check your migrations\n"
+    assert!(
+        stdout.contains("Auto-detected:"),
+        "Expected auto-summary in output, got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("✓ Created diesel-guard.toml"),
+        "Expected creation message, got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("To add diesel-guard to CI:"),
+        "Expected CI hint, got:\n{stdout}"
     );
 }
 
 #[test]
-fn test_init_content_matches_example() {
+fn test_init_auto_minimal_config() {
     let temp_dir = TempDir::new().unwrap();
     let config_path = temp_dir.path().join("diesel-guard.toml");
 
-    // Run init command
     let output = Command::new(diesel_guard_bin())
         .current_dir(temp_dir.path())
-        .arg("init")
+        .args(["init", "--auto"])
         .output()
         .expect("Failed to execute init command");
 
     assert!(output.status.success());
 
-    // Read created config
-    let created_content = fs::read_to_string(&config_path).unwrap();
-
-    // Read example config
-    let example_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("diesel-guard.toml.example");
-    let example_content = fs::read_to_string(example_path).unwrap();
-
-    // Verify content matches exactly
-    assert_eq!(
-        created_content, example_content,
-        "Created config does not match example"
+    let content = fs::read_to_string(&config_path).unwrap();
+    assert!(
+        content.contains("framework = \"diesel\""),
+        "Expected framework = \"diesel\" in config, got:\n{}",
+        content
     );
 }
 
@@ -86,23 +80,19 @@ fn test_init_fails_when_config_exists() {
     let temp_dir = TempDir::new().unwrap();
     let config_path = temp_dir.path().join("diesel-guard.toml");
 
-    // Create existing config file
     fs::write(&config_path, "# existing config").unwrap();
 
-    // Run init command (should fail)
     let output = Command::new(diesel_guard_bin())
         .current_dir(temp_dir.path())
-        .arg("init")
+        .args(["init", "--auto"])
         .output()
         .expect("Failed to execute init command");
 
-    // Verify command failed
     assert!(
         !output.status.success(),
         "Init should fail when config exists"
     );
 
-    // Verify error message
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(
         stderr,
@@ -110,7 +100,6 @@ fn test_init_fails_when_config_exists() {
          Use --force to overwrite the existing file\n"
     );
 
-    // Verify original file was not modified
     let content = fs::read_to_string(&config_path).unwrap();
     assert_eq!(content, "# existing config");
 }
@@ -120,58 +109,53 @@ fn test_init_force_overwrites_existing() {
     let temp_dir = TempDir::new().unwrap();
     let config_path = temp_dir.path().join("diesel-guard.toml");
 
-    // Create existing config file
     fs::write(&config_path, "# old config").unwrap();
 
-    // Run init command with --force
     let output = Command::new(diesel_guard_bin())
         .current_dir(temp_dir.path())
-        .args(["init", "--force"])
+        .args(["init", "--force", "--auto"])
         .output()
         .expect("Failed to execute init command");
 
-    // Verify command succeeded
     assert!(
         output.status.success(),
         "Init --force failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 
-    // Verify output message indicates overwrite
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert_eq!(
-        stdout,
-        "✓ Overwrote diesel-guard.toml\n\nNext steps:\n\
-         1. Edit diesel-guard.toml and set the 'framework' field to \"diesel\" or \"sqlx\"\n\
-         2. Customize other configuration options as needed\n\
-         3. Run 'diesel-guard check <path>' to check your migrations\n"
+    assert!(
+        stdout.contains("Auto-detected:"),
+        "Expected auto-summary in output, got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("✓ Overwrote diesel-guard.toml"),
+        "Expected overwrite message, got:\n{stdout}"
     );
 
-    // Verify file was overwritten with template
-    let created_content = fs::read_to_string(&config_path).unwrap();
-    let example_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("diesel-guard.toml.example");
-    let example_content = fs::read_to_string(example_path).unwrap();
-    assert_eq!(created_content, example_content);
+    let content = fs::read_to_string(&config_path).unwrap();
+    assert!(
+        content.contains("framework = \"diesel\""),
+        "Expected framework in overwritten config, got:\n{}",
+        content
+    );
 }
 
 #[test]
 fn test_init_in_empty_directory() {
     let temp_dir = TempDir::new().unwrap();
 
-    // Verify directory is empty
     let entries: Vec<_> = fs::read_dir(temp_dir.path()).unwrap().collect();
     assert_eq!(entries.len(), 0, "Temp directory should be empty");
 
-    // Run init
     let output = Command::new(diesel_guard_bin())
         .current_dir(temp_dir.path())
-        .arg("init")
+        .args(["init", "--auto"])
         .output()
         .expect("Failed to execute init command");
 
     assert!(output.status.success());
 
-    // Verify only config file was created
     let config_path = temp_dir.path().join("diesel-guard.toml");
     assert!(config_path.exists());
 }
@@ -180,21 +164,172 @@ fn test_init_in_empty_directory() {
 fn test_init_preserves_other_files() {
     let temp_dir = TempDir::new().unwrap();
 
-    // Create some other files
     fs::write(temp_dir.path().join("README.md"), "test").unwrap();
     fs::create_dir(temp_dir.path().join("migrations")).unwrap();
 
-    // Run init
     let output = Command::new(diesel_guard_bin())
         .current_dir(temp_dir.path())
-        .arg("init")
+        .args(["init", "--auto"])
         .output()
         .expect("Failed to execute init command");
 
     assert!(output.status.success());
 
-    // Verify other files still exist
     assert!(temp_dir.path().join("README.md").exists());
     assert!(temp_dir.path().join("migrations").exists());
     assert!(temp_dir.path().join("diesel-guard.toml").exists());
 }
+
+// ─── New integration tests ────────────────────────────────────────────────────
+
+#[test]
+fn test_init_auto_detects_diesel_from_cargo_toml() {
+    let temp_dir = TempDir::new().unwrap();
+    fs::write(
+        temp_dir.path().join("Cargo.toml"),
+        "[package]\nname = \"myapp\"\n[dependencies]\ndiesel = \"2.0\"\n",
+    )
+    .unwrap();
+
+    let output = Command::new(diesel_guard_bin())
+        .current_dir(temp_dir.path())
+        .args(["init", "--auto"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+
+    let content = fs::read_to_string(temp_dir.path().join("diesel-guard.toml")).unwrap();
+    assert!(
+        content.contains("framework = \"diesel\""),
+        "Expected framework = \"diesel\", got:\n{}",
+        content
+    );
+}
+
+#[test]
+fn test_init_auto_detects_sqlx_from_cargo_toml() {
+    let temp_dir = TempDir::new().unwrap();
+    fs::write(
+        temp_dir.path().join("Cargo.toml"),
+        "[package]\nname = \"myapp\"\n[dependencies]\nsqlx = \"0.7\"\n",
+    )
+    .unwrap();
+
+    let output = Command::new(diesel_guard_bin())
+        .current_dir(temp_dir.path())
+        .args(["init", "--auto"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+
+    let content = fs::read_to_string(temp_dir.path().join("diesel-guard.toml")).unwrap();
+    assert!(
+        content.contains("framework = \"sqlx\""),
+        "Expected framework = \"sqlx\", got:\n{}",
+        content
+    );
+}
+
+#[test]
+fn test_init_auto_detects_postgres_version() {
+    let temp_dir = TempDir::new().unwrap();
+    fs::write(
+        temp_dir.path().join("docker-compose.yml"),
+        "services:\n  db:\n    image: postgres:16\n",
+    )
+    .unwrap();
+
+    let output = Command::new(diesel_guard_bin())
+        .current_dir(temp_dir.path())
+        .args(["init", "--auto"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+
+    let content = fs::read_to_string(temp_dir.path().join("diesel-guard.toml")).unwrap();
+    assert!(
+        content.contains("postgres_version = 16"),
+        "Expected postgres_version = 16, got:\n{}",
+        content
+    );
+}
+
+#[test]
+fn test_init_auto_sets_start_after_with_existing_migrations() {
+    let temp_dir = TempDir::new().unwrap();
+
+    // Framework detection
+    fs::write(
+        temp_dir.path().join("Cargo.toml"),
+        "[package]\nname = \"myapp\"\n[dependencies]\ndiesel = \"2.0\"\n",
+    )
+    .unwrap();
+
+    // Diesel-style migration directory
+    let migrations = temp_dir.path().join("migrations");
+    fs::create_dir(&migrations).unwrap();
+    let mig_dir = migrations.join("20241130120000_create_users");
+    fs::create_dir(&mig_dir).unwrap();
+    fs::write(
+        mig_dir.join("up.sql"),
+        "CREATE TABLE users (id SERIAL PRIMARY KEY);",
+    )
+    .unwrap();
+
+    let output = Command::new(diesel_guard_bin())
+        .current_dir(temp_dir.path())
+        .args(["init", "--auto"])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "Command failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let content = fs::read_to_string(temp_dir.path().join("diesel-guard.toml")).unwrap();
+    assert!(
+        content.contains("start_after"),
+        "Expected start_after in config, got:\n{}",
+        content
+    );
+    assert!(
+        content.contains("20241130120000"),
+        "Expected timestamp 20241130120000, got:\n{}",
+        content
+    );
+}
+
+#[test]
+fn test_init_auto_no_start_after_when_no_migrations() {
+    let temp_dir = TempDir::new().unwrap();
+
+    fs::write(
+        temp_dir.path().join("Cargo.toml"),
+        "[package]\nname = \"myapp\"\n[dependencies]\ndiesel = \"2.0\"\n",
+    )
+    .unwrap();
+
+    // Empty migrations directory
+    fs::create_dir(temp_dir.path().join("migrations")).unwrap();
+
+    let output = Command::new(diesel_guard_bin())
+        .current_dir(temp_dir.path())
+        .args(["init", "--auto"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+
+    let content = fs::read_to_string(temp_dir.path().join("diesel-guard.toml")).unwrap();
+    assert!(
+        !content.contains("start_after"),
+        "Expected no start_after in config, got:\n{}",
+        content
+    );
+}
+

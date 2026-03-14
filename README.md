@@ -52,7 +52,7 @@ powershell -ExecutionPolicy Bypass -c "irm https://github.com/ayarotsky/diesel-g
 ## Quick Start
 
 ```sh
-diesel-guard init          # creates diesel-guard.toml
+diesel-guard init          # interactive wizard — creates diesel-guard.toml (use --auto to skip prompts)
 diesel-guard check migrations/
 ```
 

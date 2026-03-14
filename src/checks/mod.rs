@@ -169,7 +169,13 @@ impl Registry {
     ) -> Vec<Violation> {
         self.checks
             .iter()
-            .flat_map(|check| check.check(node, config, ctx))
+            .flat_map(|check| {
+                let name = check.name();
+                check
+                    .check(node, config, ctx)
+                    .into_iter()
+                    .map(move |v| v.with_check_name(name))
+            })
             .collect()
     }
 

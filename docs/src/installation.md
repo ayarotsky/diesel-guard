@@ -31,10 +31,10 @@ diesel-guard --version
 
 ## Initialize Configuration
 
-Generate a documented configuration file in your project root:
+Run the interactive setup wizard to create `diesel-guard.toml`:
 
 ```sh
 diesel-guard init
 ```
 
-This creates a `diesel-guard.toml` with all available options and their descriptions. See [Configuration](configuration.md) for full details.
+The wizard auto-detects your framework, migrations path, and Postgres version, then confirms each value before writing a minimal config. See [Configuration](configuration.md) for full details.

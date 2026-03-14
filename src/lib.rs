@@ -8,6 +8,7 @@ pub mod parser;
 pub mod safety_checker;
 pub mod scripting;
 pub mod violation;
+pub mod wizard;
 
 pub use adapters::{MigrationAdapter, MigrationContext, MigrationFile};
 pub use config::{Config, ConfigError};
