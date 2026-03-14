@@ -55,7 +55,13 @@ pub fn detect_postgres_version(dir: &Path) -> Option<u32> {
 /// Detect the Postgres major version and the source file it was found in.
 fn detect_postgres_version_with_source(dir: &Path) -> Option<(u32, String)> {
     // Try docker-compose / Dockerfile first with the image-tag regex.
-    for filename in &["compose.yml", "compose.yaml", "docker-compose.yml", "docker-compose.yaml", "Dockerfile"] {
+    for filename in &[
+        "compose.yml",
+        "compose.yaml",
+        "docker-compose.yml",
+        "docker-compose.yaml",
+        "Dockerfile",
+    ] {
         let path = dir.join(filename);
         if let Ok(content) = std::fs::read_to_string(&path)
             && let Some(cap) = POSTGRES_VERSION_REGEX.captures(&content)
@@ -255,7 +261,11 @@ impl WizardAnswers {
                         count,
                         if count == 1 { "" } else { "s" }
                     ),
-                    vec!["Skip all existing migrations (recommended)", "Start after a specific migration", "Check all migrations"],
+                    vec![
+                        "Skip all existing migrations (recommended)",
+                        "Start after a specific migration",
+                        "Check all migrations",
+                    ],
                 )
                 .prompt()
                 .map_err(inquire_err)?;
@@ -266,8 +276,7 @@ impl WizardAnswers {
                         Some(ts)
                     }
                     "Start after a specific migration" => {
-                        let timestamps =
-                            detect_all_migration_timestamps(mp, &framework);
+                        let timestamps = detect_all_migration_timestamps(mp, &framework);
                         if timestamps.is_empty() {
                             None
                         } else {
@@ -518,7 +527,10 @@ fn print_auto_summary(detections: &Detections, answers: &WizardAnswers) {
         None => println!("  migrations:  (none detected)"),
     }
 
-    match (answers.postgres_version, &detections.postgres_version_source) {
+    match (
+        answers.postgres_version,
+        &detections.postgres_version_source,
+    ) {
         (Some(v), Some(src)) => println!("  postgres:    {}   (from {})", v, src),
         (Some(v), None) => println!("  postgres:    {}", v),
         _ => println!("  postgres:    (not detected)"),
@@ -734,8 +746,11 @@ mod tests {
     #[test]
     fn test_detect_postgres_version_env_file() {
         let dir = TempDir::new().unwrap();
-        fs::write(dir.path().join(".env"), "DATABASE_URL=postgres://...\nPOSTGRES_VERSION=16\n")
-            .unwrap();
+        fs::write(
+            dir.path().join(".env"),
+            "DATABASE_URL=postgres://...\nPOSTGRES_VERSION=16\n",
+        )
+        .unwrap();
         assert_eq!(detect_postgres_version(dir.path()), Some(16));
     }
 

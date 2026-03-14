@@ -332,4 +332,3 @@ fn test_init_auto_no_start_after_when_no_migrations() {
         content
     );
 }
-
