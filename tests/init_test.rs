@@ -49,7 +49,7 @@ fn test_init_creates_config() {
         "✓ Created diesel-guard.toml\n\nNext steps:\n\
          1. Edit diesel-guard.toml and set the 'framework' field to \"diesel\" or \"sqlx\"\n\
          2. Customize other configuration options as needed\n\
-         3. Run 'diesel-guard check <path>' to check your migrations\n"
+         3. Run 'diesel-guard check' to check your migrations\n"
     );
 }
 
@@ -144,7 +144,7 @@ fn test_init_force_overwrites_existing() {
         "✓ Overwrote diesel-guard.toml\n\nNext steps:\n\
          1. Edit diesel-guard.toml and set the 'framework' field to \"diesel\" or \"sqlx\"\n\
          2. Customize other configuration options as needed\n\
-         3. Run 'diesel-guard check <path>' to check your migrations\n"
+         3. Run 'diesel-guard check' to check your migrations\n"
     );
 
     // Verify file was overwritten with template

@@ -52,8 +52,8 @@ powershell -ExecutionPolicy Bypass -c "irm https://github.com/ayarotsky/diesel-g
 ## Quick Start
 
 ```sh
-diesel-guard init          # creates diesel-guard.toml
-diesel-guard check migrations/
+diesel-guard init   # creates diesel-guard.toml
+diesel-guard check  # checks ./migrations/ by default
 ```
 
 When it finds an unsafe migration:
@@ -132,6 +132,12 @@ ALTER TABLE users DROP COLUMN legacy_field;
 ## Further Reading
 
 - [Your Diesel Migrations Might Be Ticking Time Bombs](https://dev.to/ayarotsky/your-diesel-migrations-might-be-ticking-time-bombs-30g7)
+- [Zero-downtime Postgres migrations: the hard parts](https://gocardless.com/blog/zero-downtime-postgres-migrations-the-hard-parts/)
+- [Zero-downtime Postgres migrations: a little help](https://gocardless.com/blog/zero-downtime-postgres-migrations-a-little-help/)
+- [Seven tips for dealing with Postgres locks](https://www.citusdata.com/blog/2018/02/22/seven-tips-for-dealing-with-postgres-locks/)
+- [Move fast and migrate things: how we automated migrations in Postgres](https://benchling.engineering/move-fast-and-migrate-things-how-we-automated-migrations-in-postgres-d60aba0fc3d4)
+- [PostgreSQL at scale: database schema changes without downtime](https://medium.com/paypal-tech/postgresql-at-scale-database-schema-changes-without-downtime-20d3749ed680)
+- [SQL Style Guide](https://www.sqlstyle.guide/)
 
 ## Credits
 

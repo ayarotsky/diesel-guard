@@ -9,7 +9,8 @@ diesel-guard check migrations/2024_01_01_create_users/up.sql
 ## Check All Migrations in a Directory
 
 ```sh
-diesel-guard check migrations/
+diesel-guard check              # defaults to ./migrations/
+diesel-guard check migrations/  # or specify an explicit path
 ```
 
 ## Pipe SQL Directly

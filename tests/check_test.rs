@@ -1,4 +1,5 @@
 use std::{
+    fs,
     io::Write,
     path::PathBuf,
     process::{Command, Stdio},
@@ -19,6 +20,33 @@ fn diesel_guard_bin() -> PathBuf {
     path.push("debug");
     path.push("diesel-guard");
     path
+}
+
+#[test]
+fn test_default_migrations_dir() {
+    let bin = diesel_guard_bin();
+    let tempdir = tempfile::tempdir().expect("Failed to create tempdir");
+    let migrations_dir = tempdir.path().join("migrations");
+    fs::create_dir(&migrations_dir).expect("Failed to create migrations dir");
+    fs::write(
+        migrations_dir.join("up.sql"),
+        "ALTER TABLE users ADD COLUMN foo TEXT;",
+    )
+    .expect("Failed to write migration");
+
+    let output = Command::new(&bin)
+        .arg("check")
+        .current_dir(tempdir.path())
+        .output()
+        .expect("Failed to execute check command");
+
+    assert!(
+        output.status.success(),
+        "Check command failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("✅ No unsafe migrations detected!\n"));
 }
 
 #[test]

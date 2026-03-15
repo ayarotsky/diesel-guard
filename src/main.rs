@@ -21,7 +21,7 @@ that acquire dangerous locks or cause table rewrites.
 
 QUICK START:
   diesel-guard init              Create diesel-guard.toml in the current directory
-  diesel-guard check migrations/ Check all migration files in a directory
+  diesel-guard check             Check all migrations in ./migrations/
   diesel-guard check up.sql      Check a single file
   diesel-guard check -           Read SQL from stdin
 
@@ -44,6 +44,8 @@ PATH can be:
   - A single .sql file
   - \"-\" to read from stdin
 
+If PATH is omitted, defaults to \"migrations/\".
+
 diesel-guard looks for diesel-guard.toml in the current directory. If no config
 file is found, default settings are used with a warning.
 
@@ -52,13 +54,14 @@ Exit codes:
   1  One or more violations found
 
 EXAMPLES:
+  diesel-guard check
   diesel-guard check migrations/
   diesel-guard check db/migrate/20240101_add_users/up.sql
   cat migration.sql | diesel-guard check -
   diesel-guard check migrations/ --format json")]
     Check {
-        /// Path to migration file or directory, or "-" for stdin
-        path: Utf8PathBuf,
+        /// Path to migration file or directory, or "-" for stdin (default: "migrations/")
+        path: Option<Utf8PathBuf>,
 
         /// Output format: "text" (default) or "json"
         #[arg(long, default_value = "text")]
@@ -119,6 +122,7 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Check { path, format } => {
+            let path = path.unwrap_or_else(|| Utf8PathBuf::from("migrations"));
             // Load configuration with explicit error handling
             let config = match Config::load() {
                 Ok(config) => config,
@@ -207,7 +211,7 @@ fn main() -> Result<()> {
                 "1. Edit diesel-guard.toml and set the 'framework' field to \"diesel\" or \"sqlx\""
             );
             println!("2. Customize other configuration options as needed");
-            println!("3. Run 'diesel-guard check <path>' to check your migrations");
+            println!("3. Run 'diesel-guard check' to check your migrations");
         }
     }
 

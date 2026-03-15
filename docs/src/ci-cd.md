@@ -67,5 +67,5 @@ jobs:
         run: cargo install diesel-guard
 
       - name: Check DB migrations
-        run: diesel-guard check migrations/
+        run: diesel-guard check
 ```

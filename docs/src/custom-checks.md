@@ -48,7 +48,7 @@ custom_checks_dir = "checks"
 4. Run as usual:
 
 ```sh
-diesel-guard check migrations/
+diesel-guard check
 ```
 
 ## How It Works
