@@ -1,4 +1,5 @@
 mod add_column;
+mod add_foreign_key;
 mod add_index;
 mod add_json_column;
 mod add_not_null;
@@ -28,6 +29,7 @@ mod wide_index;
 mod test_utils;
 
 pub use add_column::AddColumnCheck;
+pub use add_foreign_key::AddForeignKeyCheck;
 pub use add_index::AddIndexCheck;
 pub use add_json_column::AddJsonColumnCheck;
 pub use add_not_null::AddNotNullCheck;
@@ -117,6 +119,7 @@ impl Registry {
     /// Register all enabled checks based on configuration
     fn register_enabled_checks(&mut self, config: &Config) {
         self.register_check(config, AddColumnCheck);
+        self.register_check(config, AddForeignKeyCheck);
         self.register_check(config, AddIndexCheck);
         self.register_check(config, AddJsonColumnCheck);
         self.register_check(config, AddNotNullCheck);

@@ -215,3 +215,32 @@ pub fn for_each_column_def(node: &NodeEnum) -> Vec<(String, &ColumnDef)> {
         _ => vec![],
     }
 }
+
+/// Get foreign key columns as a comma-separated string
+pub fn fk_cols_constraint(c: &Constraint) -> String {
+    c.fk_attrs
+        .iter()
+        .filter_map(|n| match &n.node {
+            Some(NodeEnum::String(s)) => Some(s.sval.clone()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Get table referenced in foreign key
+pub fn ref_table_constraint(c: &Constraint) -> String {
+    c.pktable.as_ref().map(range_var_name).unwrap_or_default()
+}
+
+/// Get columns referenced in foreign key
+pub fn ref_columns_constraint(c: &Constraint) -> String {
+    c.pk_attrs
+        .iter()
+        .filter_map(|n| match &n.node {
+            Some(NodeEnum::String(s)) => Some(s.sval.clone()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}

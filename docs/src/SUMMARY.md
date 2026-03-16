@@ -7,6 +7,7 @@
 - [Framework Adapters](frameworks.md)
 - [Checks](checks/overview.md)
   - [ADD COLUMN with DEFAULT](checks/add-column-default.md)
+  - [Add Foreign Key](checks/add_foreign_key.md)
   - [Adding an Index](checks/adding-index.md)
   - [Adding a UNIQUE Constraint](checks/adding-unique-constraint.md)
   - [Changing Column Type](checks/changing-column-type.md)

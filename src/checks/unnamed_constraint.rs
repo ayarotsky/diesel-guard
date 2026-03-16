@@ -11,7 +11,7 @@
 
 use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_constraint, constraint_columns_str,
-    range_var_name,
+    fk_cols_constraint, ref_columns_constraint, ref_table_constraint,
 };
 use crate::checks::{Check, Config, MigrationContext};
 use crate::violation::Violation;
@@ -39,31 +39,11 @@ impl Check for UnnamedConstraintCheck {
                     }
                     x if x == ConstrType::ConstrForeign as i32 => {
                         // FK columns are in fk_attrs, not keys
-                        let fk_cols = c
-                            .fk_attrs
-                            .iter()
-                            .filter_map(|n| match &n.node {
-                                Some(NodeEnum::String(s)) => Some(s.sval.clone()),
-                                _ => None,
-                            })
-                            .collect::<Vec<_>>()
-                            .join(", ");
+                        let fk_cols = fk_cols_constraint(c);
 
-                        let ref_table = c
-                            .pktable
-                            .as_ref()
-                            .map(range_var_name)
-                            .unwrap_or_default();
+                        let ref_table = ref_table_constraint(c);
 
-                        let ref_cols = c
-                            .pk_attrs
-                            .iter()
-                            .filter_map(|n| match &n.node {
-                                Some(NodeEnum::String(s)) => Some(s.sval.clone()),
-                                _ => None,
-                            })
-                            .collect::<Vec<_>>()
-                            .join(", ");
+                        let ref_cols = ref_columns_constraint(c);
 
                         (
                             "FOREIGN KEY",
