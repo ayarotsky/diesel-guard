@@ -58,4 +58,4 @@ panic = "abort"
 inherits = "release"
 
 [dev-dependencies]
-tempfile = "3.26"
+tempfile = "3.27"
