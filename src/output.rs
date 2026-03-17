@@ -18,9 +18,10 @@ impl OutputFormatter {
         };
 
         output.push_str(&format!(
-            "{} {}\n\n",
+            "{} {} {}\n\n",
             header_icon,
-            format!("{} {}", header_label, file_path.yellow())
+            header_label,
+            file_path.yellow()
         ));
 
         for violation in violations {
