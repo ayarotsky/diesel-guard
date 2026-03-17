@@ -152,14 +152,20 @@ fn test_format_summary_with_errors() {
 fn test_format_summary_with_warnings_only() {
     colored::control::set_override(false);
     let output = OutputFormatter::format_summary(0, 2);
-    assert_eq!(output, "
-⚠️  2 migration warning(s) detected (not blocking)");
+    assert_eq!(
+        output,
+        "
+⚠️  2 migration warning(s) detected (not blocking)"
+    );
 }
 
 #[test]
 fn test_format_summary_with_errors_and_warnings() {
     colored::control::set_override(false);
     let output = OutputFormatter::format_summary(1, 2);
-    assert_eq!(output, "
-❌ 1 unsafe migration(s) and 2 warning(s) detected");
+    assert_eq!(
+        output,
+        "
+❌ 1 unsafe migration(s) and 2 warning(s) detected"
+    );
 }

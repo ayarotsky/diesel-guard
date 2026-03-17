@@ -558,7 +558,10 @@ warn_checks = ["TruncateTableCheck", "DropTableCheck"]
         .unwrap();
         assert_eq!(
             config.warn_checks,
-            vec!["TruncateTableCheck".to_string(), "DropTableCheck".to_string()]
+            vec![
+                "TruncateTableCheck".to_string(),
+                "DropTableCheck".to_string()
+            ]
         );
     }
 
