@@ -69,6 +69,7 @@ Use these names in `disable_checks` (blacklist), `enable_checks` (whitelist), or
 | `AlterColumnTypeCheck` | ALTER COLUMN TYPE |
 | `CharTypeCheck` | CHAR/CHARACTER column types |
 | `CreateExtensionCheck` | CREATE EXTENSION |
+| `DomainCheckConstraintCheck` | Domain CHECK constraints |
 | `DropColumnCheck` | DROP COLUMN |
 | `DropDatabaseCheck` | DROP DATABASE |
 | `DropIndexCheck` | DROP INDEX without CONCURRENTLY; CONCURRENTLY inside a transaction |

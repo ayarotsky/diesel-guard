@@ -23,6 +23,7 @@ fn test_safe_fixtures_pass() {
         "add_serial_column_safe",
         "add_unique_constraint_safe",
         "char_type_safe",
+        "domain_check_constraint_safe",
         "drop_index_safe",
         "drop_not_null_safe",
         "generated_column_safe",
@@ -152,6 +153,18 @@ fn test_create_extension_detected() {
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
     assert_eq!(violations[0].operation, "CREATE EXTENSION");
+}
+
+#[test]
+fn test_domain_check_constraint_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("domain_check_constraint_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 2, "Expected 2 violations");
+    assert_eq!(violations[0].operation, "DOMAIN CHECK constraint");
+    assert_eq!(violations[1].operation, "DOMAIN CHECK constraint");
 }
 
 #[test]
@@ -457,14 +470,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        28,
-        "Expected violations in 28 files, got {}",
+        29,
+        "Expected violations in 29 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 36,
-        "Expected 36 total violations: 25 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
+        total_violations, 38,
+        "Expected 38 total violations: 26 files with 1 each, domain_check_constraint_unsafe with 2, drop_multiple_columns with 2, unnamed_constraint_unsafe with 4, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
         total_violations
     );
 }

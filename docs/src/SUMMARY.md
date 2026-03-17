@@ -12,6 +12,7 @@
   - [Changing Column Type](checks/changing-column-type.md)
   - [CHAR Fields](checks/char-field.md)
   - [Creating an Extension](checks/creating-extension.md)
+  - [Domain CHECK Constraints](checks/domain-check-constraint.md)
   - [Dropping a Column](checks/dropping-column.md)
   - [Dropping a Constraint](checks/dropping-constraint.md)
   - [Dropping a Database](checks/dropping-database.md)

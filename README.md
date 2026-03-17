@@ -88,7 +88,7 @@ Add to your GitHub Actions workflow:
 
 ## What It Detects
 
-24 built-in checks across locking, rewrites, and schema safety:
+25 built-in checks across locking, rewrites, and schema safety:
 
 | Check | Risk |
 |-------|------|
@@ -114,6 +114,7 @@ Add to your GitHub Actions workflow:
 | ADD COLUMN with TIMESTAMP | DST/timezone hazards |
 | PRIMARY KEY with INT/SMALLINT | ID exhaustion risk |
 | CREATE EXTENSION | Requires superuser |
+| DOMAIN CHECK constraint | Global validation across all columns using the domain |
 | CONSTRAINT without name | Auto-names break future migrations |
 | CREATE INDEX with 4+ columns | Ineffective, high storage overhead |
 
