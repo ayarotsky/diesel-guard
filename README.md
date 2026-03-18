@@ -133,6 +133,7 @@ ALTER TABLE users DROP COLUMN legacy_field;
 ## Further Reading
 
 - [Your Diesel Migrations Might Be Ticking Time Bombs](https://dev.to/ayarotsky/your-diesel-migrations-might-be-ticking-time-bombs-30g7)
+- [Postgres Locks Explained](https://postgreslocksexplained.com/)
 - [Zero-downtime Postgres migrations: the hard parts](https://gocardless.com/blog/zero-downtime-postgres-migrations-the-hard-parts/)
 - [Zero-downtime Postgres migrations: a little help](https://gocardless.com/blog/zero-downtime-postgres-migrations-a-little-help/)
 - [Seven tips for dealing with Postgres locks](https://www.citusdata.com/blog/2018/02/22/seven-tips-for-dealing-with-postgres-locks/)
