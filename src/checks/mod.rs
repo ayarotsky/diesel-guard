@@ -1,3 +1,4 @@
+mod add_check_constraint;
 mod add_column;
 mod add_foreign_key;
 mod add_index;
@@ -77,6 +78,7 @@ use pg_query::protobuf::RawStmt;
 use std::sync::LazyLock;
 
 pub use crate::adapters::MigrationContext;
+use crate::checks::add_check_constraint::AddCheckConstraintCheck;
 
 /// Lazily-derived list of all built-in check names from an unfiltered registry.
 /// This avoids maintaining a manual list that can drift from the actual checks.
@@ -118,6 +120,7 @@ impl Registry {
 
     /// Register all enabled checks based on configuration
     fn register_enabled_checks(&mut self, config: &Config) {
+        self.register_check(config, AddCheckConstraintCheck);
         self.register_check(config, AddColumnCheck);
         self.register_check(config, AddForeignKeyCheck);
         self.register_check(config, AddIndexCheck);
