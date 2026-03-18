@@ -16,6 +16,7 @@ fn fixture_path(name: &str) -> String {
 fn test_safe_fixtures_pass() {
     let checker = SafetyChecker::new();
     let safe_fixtures = vec![
+        "add_check_constraint_safe",
         "add_column_safe",
         "add_foreign_key_safe",
         "add_index_safe",
@@ -72,6 +73,17 @@ fn test_add_foreign_key_unsafe_detected() {
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
     assert_eq!(violations[0].operation, "ADD FOREIGN KEY");
+}
+
+#[test]
+fn test_add_check_constraint_unsafe_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("add_check_constraint_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(violations[0].operation, "ADD CHECK CONSTRAINT");
 }
 
 #[test]
@@ -201,12 +213,13 @@ fn test_unnamed_constraint_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     // Note: Unnamed UNIQUE is caught by both AddUniqueConstraintCheck and UnnamedConstraintCheck
-    assert_eq!(violations.len(), 5, "Expected 5 violations");
+    assert_eq!(violations.len(), 6, "Expected 6 violations");
     assert_eq!(violations[0].operation, "ADD UNIQUE constraint");
     assert_eq!(violations[1].operation, "CONSTRAINT without name");
-    assert_eq!(violations[2].operation, "CONSTRAINT without name");
-    assert_eq!(violations[3].operation, "ADD FOREIGN KEY");
-    assert_eq!(violations[4].operation, "CONSTRAINT without name");
+    assert_eq!(violations[2].operation, "ADD CHECK CONSTRAINT");
+    assert_eq!(violations[3].operation, "CONSTRAINT without name");
+    assert_eq!(violations[4].operation, "ADD FOREIGN KEY");
+    assert_eq!(violations[5].operation, "CONSTRAINT without name");
 }
 
 #[test]
@@ -470,14 +483,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        29,
-        "Expected violations in 29 files, got {}",
+        30,
+        "Expected violations in 30 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 38,
-        "Expected 38 total violations: 26 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 5, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
+        total_violations, 40,
+        "Expected 40 total violations: 27 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 6, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
         total_violations
     );
 }

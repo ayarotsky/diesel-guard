@@ -88,12 +88,13 @@ Add to your GitHub Actions workflow:
 
 ## What It Detects
 
-25 built-in checks across locking, rewrites, and schema safety:
+26 built-in checks across locking, rewrites, and schema safety:
 
 | Check                             | Risk                                              |
 |-----------------------------------|---------------------------------------------------|
+| ADD CHECK without NOT VALID       | Full table scan (ACCESS EXCLUSIVE)                |
 | ADD COLUMN with DEFAULT           | Table rewrite on Postgres < 11 (ACCESS EXCLUSIVE) |
-| ADD FOREIGN KEY without NOT VALID | Blocks writes (ShareRowExclusiveLock lock)                             |
+| ADD FOREIGN KEY without NOT VALID | Blocks writes (ShareRowExclusiveLock lock)        |
 | ADD INDEX without CONCURRENTLY    | Blocks writes (SHARE lock)                        |
 | ADD NOT NULL constraint           | Full table scan (ACCESS EXCLUSIVE)                |
 | ADD PRIMARY KEY                   | Blocks all operations during index creation       |
