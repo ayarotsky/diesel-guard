@@ -1,22 +1,26 @@
-# Add Foreign Key
+# Adding Foreign Key without NOT VALID
 
-## Description
+**Check Name**: `AddForeignKeyCheck`
 
-The `add_foreign_key` check flags foreign keys added without the `NOT VALID` option. Adding a foreign key with validation requires a `ShareRowExclusiveLock`, which blocks writes on the table. On large tables, this can cause outages.
+**Lock Type**: ShareRowExclusiveLock
 
-## Examples
+## Bad
 
-### Bad
+Adding a foreign key with validation requires a `ShareRowExclusiveLock`, which blocks writes on the table.
+On large tables, this can cause outages.
+
 ```sql
--- Unsafe Adding foreign key without NOT VALID
 ALTER TABLE orders ADD CONSTRAINT fk_user_id
     FOREIGN KEY (user_id) REFERENCES users(id);
 ```
 
 ### Good
+
+Add the foreign key first without validation using the `NOT VALID` clause. Validate the foreign key later in a separate
+migration.
+
 ```sql
--- Safe
--- Step 1 (no table scan, no lock)
+-- Step 1 (no validation scan; short metadata lock)
 ALTER TABLE orders ADD CONSTRAINT fk_user_id
     FOREIGN KEY (user_id) REFERENCES users(id) NOT VALID;
 

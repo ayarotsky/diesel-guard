@@ -88,34 +88,35 @@ Add to your GitHub Actions workflow:
 
 ## What It Detects
 
-24 built-in checks across locking, rewrites, and schema safety:
+25 built-in checks across locking, rewrites, and schema safety:
 
-| Check | Risk |
-|-------|------|
-| ADD COLUMN with DEFAULT | Table rewrite on Postgres < 11 (ACCESS EXCLUSIVE) |
-| ADD INDEX without CONCURRENTLY | Blocks writes (SHARE lock) |
-| ADD NOT NULL constraint | Full table scan (ACCESS EXCLUSIVE) |
-| ADD PRIMARY KEY | Blocks all operations during index creation |
-| ADD UNIQUE constraint | ACCESS EXCLUSIVE during index build |
-| ALTER COLUMN TYPE | Table rewrite (ACCESS EXCLUSIVE) |
-| ADD COLUMN with SERIAL | Table rewrite to populate sequence |
-| ADD COLUMN with GENERATED STORED | Table rewrite to compute expressions |
-| DROP COLUMN | ACCESS EXCLUSIVE lock |
-| DROP INDEX without CONCURRENTLY | ACCESS EXCLUSIVE lock |
-| DROP PRIMARY KEY | Breaks FK relationships |
-| DROP TABLE | Irreversible, ACCESS EXCLUSIVE |
-| DROP DATABASE | Irreversible |
-| REINDEX without CONCURRENTLY | ACCESS EXCLUSIVE lock |
-| RENAME COLUMN | Breaks running app references immediately |
-| RENAME TABLE | Breaks running app references, ACCESS EXCLUSIVE |
-| TRUNCATE TABLE | ACCESS EXCLUSIVE, cannot be batched |
-| ADD COLUMN with JSON | Breaks DISTINCT/GROUP BY |
-| ADD COLUMN with CHAR | Storage waste, comparison bugs |
-| ADD COLUMN with TIMESTAMP | DST/timezone hazards |
-| PRIMARY KEY with INT/SMALLINT | ID exhaustion risk |
-| CREATE EXTENSION | Requires superuser |
-| CONSTRAINT without name | Auto-names break future migrations |
-| CREATE INDEX with 4+ columns | Ineffective, high storage overhead |
+| Check                             | Risk                                              |
+|-----------------------------------|---------------------------------------------------|
+| ADD COLUMN with DEFAULT           | Table rewrite on Postgres < 11 (ACCESS EXCLUSIVE) |
+| ADD FOREIGN KEY without NOT VALID | Blocks writes (ShareRowExclusiveLock lock)                             |
+| ADD INDEX without CONCURRENTLY    | Blocks writes (SHARE lock)                        |
+| ADD NOT NULL constraint           | Full table scan (ACCESS EXCLUSIVE)                |
+| ADD PRIMARY KEY                   | Blocks all operations during index creation       |
+| ADD UNIQUE constraint             | ACCESS EXCLUSIVE during index build               |
+| ALTER COLUMN TYPE                 | Table rewrite (ACCESS EXCLUSIVE)                  |
+| ADD COLUMN with SERIAL            | Table rewrite to populate sequence                |
+| ADD COLUMN with GENERATED STORED  | Table rewrite to compute expressions              |
+| DROP COLUMN                       | ACCESS EXCLUSIVE lock                             |
+| DROP INDEX without CONCURRENTLY   | ACCESS EXCLUSIVE lock                             |
+| DROP PRIMARY KEY                  | Breaks FK relationships                           |
+| DROP TABLE                        | Irreversible, ACCESS EXCLUSIVE                    |
+| DROP DATABASE                     | Irreversible                                      |
+| REINDEX without CONCURRENTLY      | ACCESS EXCLUSIVE lock                             |
+| RENAME COLUMN                     | Breaks running app references immediately         |
+| RENAME TABLE                      | Breaks running app references, ACCESS EXCLUSIVE   |
+| TRUNCATE TABLE                    | ACCESS EXCLUSIVE, cannot be batched               |
+| ADD COLUMN with JSON              | Breaks DISTINCT/GROUP BY                          |
+| ADD COLUMN with CHAR              | Storage waste, comparison bugs                    |
+| ADD COLUMN with TIMESTAMP         | DST/timezone hazards                              |
+| PRIMARY KEY with INT/SMALLINT     | ID exhaustion risk                                |
+| CREATE EXTENSION                  | Requires superuser                                |
+| CONSTRAINT without name           | Auto-names break future migrations                |
+| CREATE INDEX with 4+ columns      | Ineffective, high storage overhead                |
 
 Plus [custom checks via Rhai scripting](https://ayarotsky.github.io/diesel-guard/custom-checks.html).
 
