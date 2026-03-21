@@ -67,25 +67,36 @@ impl Check for ReindexCheck {
 
         if !has_concurrently(&reindex.params) {
             // REINDEX without CONCURRENTLY — always a violation
-            return vec![Violation::new(
-                "REINDEX without CONCURRENTLY",
-                format!(
-                    "REINDEX {object} '{target}' without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock, \
-                    blocking all operations on the {object} '{target}' until complete. Duration depends on index size.",
-                ),
-                format!(
-                    r#"Use REINDEX CONCURRENTLY for lock-free reindexing (Postgres 12+):
+            let suggestion = format!(
+                r#"Use REINDEX CONCURRENTLY for lock-free reindexing (Postgres 12+):
 
    REINDEX {object} CONCURRENTLY {target};
 
-Note: CONCURRENTLY requires Postgres 12+ and cannot be run inside a transaction block.
+Note: CONCURRENTLY requires Postgres 12+.
 
 Considerations:
 - Takes longer to complete than regular REINDEX
 - Allows concurrent read/write operations
 - If it fails, the index may be left in "invalid" state and need manual cleanup
 - Cannot be rolled back (no transaction support)"#,
+            );
+
+            let safe_alternative = if ctx.run_in_transaction {
+                format!(
+                    "{suggestion}\n\nNote: CONCURRENTLY cannot run inside a transaction block.\n{hint}",
+                    hint = ctx.no_transaction_hint
+                )
+            } else {
+                suggestion
+            };
+
+            return vec![Violation::new(
+                "REINDEX without CONCURRENTLY",
+                format!(
+                    "REINDEX {object} '{target}' without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock, \
+                    blocking all operations on the {object} '{target}' until complete. Duration depends on index size.",
                 ),
+                safe_alternative,
             )];
         }
 
@@ -235,6 +246,52 @@ mod tests {
             "REINDEX without CONCURRENTLY",
             "users",
             "TABLE"
+        );
+    }
+
+    #[test]
+    fn test_safe_alternative_includes_transaction_hint_when_in_transaction() {
+        let stmt = parse_sql("REINDEX INDEX idx_users_email;");
+        let violations = ReindexCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: true,
+                no_transaction_hint: "Create `metadata.toml` with `run_in_transaction = false`.",
+            },
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(
+            violations[0]
+                .safe_alternative
+                .contains("Create `metadata.toml` with `run_in_transaction = false`."),
+            "Expected transaction hint in safe_alternative"
+        );
+        assert!(
+            violations[0]
+                .safe_alternative
+                .contains("CONCURRENTLY cannot run inside a transaction block"),
+            "Expected transaction note in safe_alternative"
+        );
+    }
+
+    #[test]
+    fn test_safe_alternative_omits_transaction_hint_when_outside_transaction() {
+        let stmt = parse_sql("REINDEX INDEX idx_users_email;");
+        let violations = ReindexCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: false,
+                no_transaction_hint: "Create `metadata.toml` with `run_in_transaction = false`.",
+            },
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(
+            !violations[0]
+                .safe_alternative
+                .contains("Create `metadata.toml` with `run_in_transaction = false`."),
+            "Expected no transaction hint in safe_alternative"
         );
     }
 

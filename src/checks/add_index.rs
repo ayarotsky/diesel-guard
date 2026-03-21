@@ -36,6 +36,29 @@ impl Check for AddIndexCheck {
 
         if !index_stmt.concurrent {
             // CREATE INDEX without CONCURRENTLY — always a violation
+            let suggestion = format!(
+                r#"Use CONCURRENTLY to build the index without blocking writes:
+   CREATE {unique}INDEX CONCURRENTLY {index} ON {table};
+
+Note: CONCURRENTLY takes longer and uses more resources, but allows concurrent INSERT, UPDATE, and DELETE operations. The index build may fail if there are deadlocks or unique constraint violations.
+
+Considerations:
+- Requires more total work and takes longer to complete
+- If it fails, it leaves behind an "invalid" index that should be dropped"#,
+                unique = unique_str,
+                index = index_name,
+                table = table_name,
+            );
+
+            let safe_alternative = if ctx.run_in_transaction {
+                format!(
+                    "{suggestion}\n\nNote: CONCURRENTLY cannot run inside a transaction block.\n{hint}",
+                    hint = ctx.no_transaction_hint
+                )
+            } else {
+                suggestion
+            };
+
             return vec![Violation::new(
                 "ADD INDEX without CONCURRENTLY",
                 format!(
@@ -45,19 +68,7 @@ impl Check for AddIndexCheck {
                     index = index_name,
                     table = table_name
                 ),
-                format!(
-                    r#"Use CONCURRENTLY to build the index without blocking writes:
-   CREATE {unique}INDEX CONCURRENTLY {index} ON {table};
-
-Note: CONCURRENTLY takes longer and uses more resources, but allows concurrent INSERT, UPDATE, and DELETE operations. The index build may fail if there are deadlocks or unique constraint violations.
-
-Considerations:
-- Requires more total work and takes longer to complete
-- If it fails, it leaves behind an "invalid" index that should be dropped"#,
-                    unique = unique_str,
-                    index = index_name,
-                    table = table_name,
-                ),
+                safe_alternative,
             )];
         }
 
@@ -180,6 +191,52 @@ mod tests {
         let violations =
             AddIndexCheck.check(&stmt, &Config::default(), &MigrationContext::default());
         assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_safe_alternative_includes_transaction_hint_when_in_transaction() {
+        let stmt = parse_sql("CREATE INDEX idx_users_email ON users(email);");
+        let violations = AddIndexCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: true,
+                no_transaction_hint: "Create `metadata.toml` with `run_in_transaction = false`.",
+            },
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(
+            violations[0]
+                .safe_alternative
+                .contains("Create `metadata.toml` with `run_in_transaction = false`."),
+            "Expected transaction hint in safe_alternative"
+        );
+        assert!(
+            violations[0]
+                .safe_alternative
+                .contains("CONCURRENTLY cannot run inside a transaction block"),
+            "Expected transaction note in safe_alternative"
+        );
+    }
+
+    #[test]
+    fn test_safe_alternative_omits_transaction_hint_when_outside_transaction() {
+        let stmt = parse_sql("CREATE INDEX idx_users_email ON users(email);");
+        let violations = AddIndexCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: false,
+                no_transaction_hint: "Create `metadata.toml` with `run_in_transaction = false`.",
+            },
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(
+            !violations[0]
+                .safe_alternative
+                .contains("Create `metadata.toml` with `run_in_transaction = false`."),
+            "Expected no transaction hint in safe_alternative"
+        );
     }
 
     #[test]
