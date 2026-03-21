@@ -4,6 +4,48 @@ use std::fs;
 use tempfile::TempDir;
 
 #[test]
+fn test_concurrently_violations_include_sqlx_transaction_hint() {
+    // No `-- no-transaction` directive → run_in_transaction = true; all three
+    // "without CONCURRENTLY" violations should carry the SQLx-specific hint in safe_alternative.
+    let temp_dir = TempDir::new().unwrap();
+    fs::write(
+        temp_dir.path().join("1_indexes.up.sql"),
+        "CREATE INDEX idx_a ON users(email);\nDROP INDEX idx_b;\nREINDEX INDEX idx_a;",
+    )
+    .unwrap();
+
+    let config = Config {
+        framework: "sqlx".to_string(),
+        ..Default::default()
+    };
+    let results = SafetyChecker::with_config(config)
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
+
+    assert_eq!(results.len(), 1);
+    let violations = &results[0].1;
+    assert_eq!(violations.len(), 3);
+
+    assert_eq!(violations[0].operation, "ADD INDEX without CONCURRENTLY");
+    assert_eq!(
+        violations[0].safe_alternative,
+        "Use CONCURRENTLY to build the index without blocking writes:\n   CREATE INDEX CONCURRENTLY idx_a ON users;\n\nNote: CONCURRENTLY takes longer and uses more resources, but allows concurrent INSERT, UPDATE, and DELETE operations. The index build may fail if there are deadlocks or unique constraint violations.\n\nConsiderations:\n- Requires more total work and takes longer to complete\n- If it fails, it leaves behind an \"invalid\" index that should be dropped\n\nNote: CONCURRENTLY cannot run inside a transaction block.\nAdd `-- no-transaction` as the first line of the migration file."
+    );
+
+    assert_eq!(violations[1].operation, "DROP INDEX without CONCURRENTLY");
+    assert_eq!(
+        violations[1].safe_alternative,
+        "Use CONCURRENTLY to drop the index without blocking queries:\n   DROP INDEX CONCURRENTLY idx_b;\n\nNote: CONCURRENTLY requires Postgres 9.2+.\n\nConsiderations:\n- Takes longer to complete than regular DROP INDEX\n- Allows concurrent SELECT, INSERT, UPDATE, DELETE operations\n- If it fails, the index may be marked \"invalid\" and should be dropped again\n- Cannot be rolled back (no transaction support)\n\nNote: CONCURRENTLY cannot run inside a transaction block.\nAdd `-- no-transaction` as the first line of the migration file."
+    );
+
+    assert_eq!(violations[2].operation, "REINDEX without CONCURRENTLY");
+    assert_eq!(
+        violations[2].safe_alternative,
+        "Use REINDEX CONCURRENTLY for lock-free reindexing (Postgres 12+):\n\n   REINDEX INDEX CONCURRENTLY idx_a;\n\nNote: CONCURRENTLY requires Postgres 12+.\n\nConsiderations:\n- Takes longer to complete than regular REINDEX\n- Allows concurrent read/write operations\n- If it fails, the index may be left in \"invalid\" state and need manual cleanup\n- Cannot be rolled back (no transaction support)\n\nNote: CONCURRENTLY cannot run inside a transaction block.\nAdd `-- no-transaction` as the first line of the migration file."
+    );
+}
+
+#[test]
 fn test_sqlx_numeric_version_comparison() {
     let temp_dir = TempDir::new().unwrap();
 

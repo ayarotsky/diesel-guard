@@ -33,6 +33,30 @@ impl Check for DropIndexCheck {
             return drop_object_names(&drop_stmt.objects)
                 .into_iter()
                 .map(|name| {
+                    let suggestion = format!(
+                        r#"Use CONCURRENTLY to drop the index without blocking queries:
+   DROP INDEX CONCURRENTLY{if_exists} {index};
+
+Note: CONCURRENTLY requires Postgres 9.2+.
+
+Considerations:
+- Takes longer to complete than regular DROP INDEX
+- Allows concurrent SELECT, INSERT, UPDATE, DELETE operations
+- If it fails, the index may be marked "invalid" and should be dropped again
+- Cannot be rolled back (no transaction support)"#,
+                        if_exists = if_exists_str,
+                        index = name,
+                    );
+
+                    let safe_alternative = if ctx.run_in_transaction {
+                        format!(
+                            "{suggestion}\n\nNote: CONCURRENTLY cannot run inside a transaction block.\n{hint}",
+                            hint = ctx.no_transaction_hint
+                        )
+                    } else {
+                        suggestion
+                    };
+
                     Violation::new(
                         "DROP INDEX without CONCURRENTLY",
                         format!(
@@ -41,19 +65,7 @@ impl Check for DropIndexCheck {
                             index = name,
                             if_exists = if_exists_str
                         ),
-                        format!(r#"Use CONCURRENTLY to drop the index without blocking queries:
-   DROP INDEX CONCURRENTLY{if_exists} {index};
-
-Note: CONCURRENTLY requires Postgres 9.2+ and cannot be run inside a transaction block.
-
-Considerations:
-- Takes longer to complete than regular DROP INDEX
-- Allows concurrent SELECT, INSERT, UPDATE, DELETE operations
-- If it fails, the index may be marked "invalid" and should be dropped again
-- Cannot be rolled back (no transaction support)"#,
-                            if_exists = if_exists_str,
-                            index = name,
-                        ),
+                        safe_alternative,
                     )
                 })
                 .collect();
@@ -192,6 +204,52 @@ mod tests {
             },
         );
         assert_eq!(violations.len(), 0, "Expected no violations");
+    }
+
+    #[test]
+    fn test_safe_alternative_includes_transaction_hint_when_in_transaction() {
+        let stmt = parse_sql("DROP INDEX idx_users_email;");
+        let violations = DropIndexCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: true,
+                no_transaction_hint: "Create `metadata.toml` with `run_in_transaction = false`.",
+            },
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(
+            violations[0]
+                .safe_alternative
+                .contains("Create `metadata.toml` with `run_in_transaction = false`."),
+            "Expected transaction hint in safe_alternative"
+        );
+        assert!(
+            violations[0]
+                .safe_alternative
+                .contains("CONCURRENTLY cannot run inside a transaction block"),
+            "Expected transaction note in safe_alternative"
+        );
+    }
+
+    #[test]
+    fn test_safe_alternative_omits_transaction_hint_when_outside_transaction() {
+        let stmt = parse_sql("DROP INDEX idx_users_email;");
+        let violations = DropIndexCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: false,
+                no_transaction_hint: "Create `metadata.toml` with `run_in_transaction = false`.",
+            },
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(
+            !violations[0]
+                .safe_alternative
+                .contains("Create `metadata.toml` with `run_in_transaction = false`."),
+            "Expected no transaction hint in safe_alternative"
+        );
     }
 
     #[test]
