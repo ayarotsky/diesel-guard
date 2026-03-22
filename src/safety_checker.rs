@@ -370,6 +370,37 @@ mod tests {
     }
 
     #[test]
+    fn test_check_file_parse_error_points_to_failing_statement_line() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("bad_migration.sql");
+        // Line 1: "CREATE TABLE a ();\n"
+        // Line 2: "CREATE TABLE b ();\n"
+        // Line 3: "CREATE TABLE @bad;"    ← this one fails
+        let sql = "CREATE TABLE a ();\nCREATE TABLE b ();\nCREATE TABLE @bad;";
+        fs::write(&file_path, sql).unwrap();
+
+        let checker = SafetyChecker::new();
+        let path = camino::Utf8Path::from_path(&file_path).unwrap();
+        let err = checker.check_file(path).unwrap_err();
+
+        let mut rendered = String::new();
+        miette::NarratableReportHandler::new()
+            .render_report(&mut rendered, &err)
+            .unwrap();
+
+        // Normalize the temp path so the assertion is stable across runs.
+        let rendered = rendered.replace(file_path.to_str().unwrap(), "bad_migration.sql");
+
+        assert_eq!(
+            rendered,
+            "Failed to parse SQL: Invalid statement: syntax error at or near \"@\"\n    Diagnostic severity: error\nBegin snippet for bad_migration.sql starting at line 2, column 1\n\nsnippet line 2: CREATE TABLE b ();\nsnippet line 3: CREATE TABLE @bad;\n    label at line 3, column 1: problematic SQL\ndiagnostic help: Check that your SQL syntax is valid\n"
+        );
+    }
+
+    #[test]
     fn test_unknown_check_name_in_disable_checks_warns() {
         let config = Config {
             disable_checks: vec!["NonExistentCheck".to_string()],
