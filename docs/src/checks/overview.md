@@ -1,6 +1,6 @@
 # Checks
 
-diesel-guard ships with 27 built-in safety checks covering the most common Postgres migration hazards.
+diesel-guard ships with 28 built-in safety checks covering the most common Postgres migration hazards.
 
 | Check | Operation | Lock Type |
 |---|---|---|
@@ -23,6 +23,7 @@ diesel-guard ships with 27 built-in safety checks covering the most common Postg
 | [Wide Indexes](multiple-column-index.md) | `CREATE INDEX` with 4+ columns | — (best practice) |
 | [REFRESH MATERIALIZED VIEW](refresh-materialized-view.md) | `REFRESH MATERIALIZED VIEW` without `CONCURRENTLY`; `REFRESH MATERIALIZED VIEW CONCURRENTLY` inside a transaction | ACCESS EXCLUSIVE |
 | [Renaming a Column](renaming-column.md) | `ALTER TABLE ... RENAME COLUMN` | ACCESS EXCLUSIVE |
+| [Renaming a Schema](renaming-schema.md) | `ALTER SCHEMA ... RENAME TO` | ACCESS EXCLUSIVE |
 | [Renaming a Table](renaming-table.md) | `ALTER TABLE ... RENAME TO` | ACCESS EXCLUSIVE |
 | [REINDEX](reindexing.md) | `REINDEX` without `CONCURRENTLY`; `REINDEX CONCURRENTLY` inside a transaction | ACCESS EXCLUSIVE |
 | [SERIAL Primary Keys](serial-primary-key.md) | `ADD COLUMN ... SERIAL/BIGSERIAL` | ACCESS EXCLUSIVE + table rewrite |
