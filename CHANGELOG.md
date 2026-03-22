@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.9.0 - 2026-03-21
+
+### Added
+
+- `AddCheckConstraintCheck` - Detects `ADD CHECK` without `NOT VALID`, which causes a full table scan (ACCESS EXCLUSIVE lock).
+- `AddForeignKeyCheck` - Detects `ADD FOREIGN KEY` without `NOT VALID`, which acquires a ShareRowExclusiveLock and blocks writes.
+- **`warn_checks` config option** — Downgrade specific checks from errors to warnings. Violations still appear in output but do not cause a non-zero exit code. Mutually exclusive with `disable_checks` and `enable_checks`.
+- **Pre-commit hook support** — diesel-guard can now be used as a [pre-commit](https://pre-commit.com/) hook.
+- **Migration metadata parsing** — Diesel and SQLx migration metadata (`-- no-transaction`) is now parsed and exposed to checks as context. Context-aware checks (`AddIndexCheck`, `DropIndexCheck`, `ReindexCheck`) use this to permit CONCURRENTLY outside transactions.
+
+### Changed
+
+- **Default check path** — `diesel-guard check` now defaults to `./migrations` when no path is given.
+- **Improved parse error messages** — SQL parse failures now show the offending SQL with a highlighted span.
+- **Improved CONCURRENTLY hint messages** — Hints for operations requiring CONCURRENTLY are now clearer about when and why to use it.
+
 ## 0.8.0 - 2026-03-06
 
 ### Added
