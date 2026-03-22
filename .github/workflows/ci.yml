@@ -45,9 +45,9 @@ jobs:
 
       - name: Install cargo tools
         run: |
-          cargo install cargo-deny || true
-          cargo install cargo-audit || true
-          cargo install cargo-auditable || true
+          command -v cargo-deny   || cargo install cargo-deny --locked
+          command -v cargo-audit  || cargo install cargo-audit --locked
+          command -v cargo-auditable || cargo install cargo-auditable --locked
 
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
