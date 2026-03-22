@@ -33,28 +33,25 @@ impl Check for AddNotNullCheck {
                 Some(Violation::new(
                     "ADD NOT NULL constraint",
                     format!(
-                        "Adding NOT NULL constraint to column '{column}' on table '{table}' requires a full table scan to verify \
+                        "Adding NOT NULL constraint to column '{column_name}' on table '{table_name}' requires a full table scan to verify \
                         all values are non-null, acquiring an ACCESS EXCLUSIVE lock and blocking all operations. \
-                        Duration depends on table size.",
-                        column = column_name, table = table_name
+                        Duration depends on table size."
                     ),
-                    format!(r#"For safer constraint addition on large tables:
+                    format!(r"For safer constraint addition on large tables:
 
 1. Add a CHECK constraint without validating existing rows:
-   ALTER TABLE {table} ADD CONSTRAINT {column}_not_null CHECK ({column} IS NOT NULL) NOT VALID;
+   ALTER TABLE {table_name} ADD CONSTRAINT {column_name}_not_null CHECK ({column_name} IS NOT NULL) NOT VALID;
 
 2. Validate the constraint separately (uses SHARE UPDATE EXCLUSIVE lock):
-   ALTER TABLE {table} VALIDATE CONSTRAINT {column}_not_null;
+   ALTER TABLE {table_name} VALIDATE CONSTRAINT {column_name}_not_null;
 
 3. Add the NOT NULL constraint (instant if CHECK constraint exists):
-   ALTER TABLE {table} ALTER COLUMN {column} SET NOT NULL;
+   ALTER TABLE {table_name} ALTER COLUMN {column_name} SET NOT NULL;
 
 4. Optionally drop the redundant CHECK constraint:
-   ALTER TABLE {table} DROP CONSTRAINT {column}_not_null;
+   ALTER TABLE {table_name} DROP CONSTRAINT {column_name}_not_null;
 
-Note: The VALIDATE step allows concurrent reads and writes, only blocking other schema changes. On Postgres 12+, NOT NULL constraints are more efficient, but the CHECK approach still provides better control over large migrations."#,
-                        table = table_name,
-                        column = column_name
+Note: The VALIDATE step allows concurrent reads and writes, only blocking other schema changes. On Postgres 12+, NOT NULL constraints are more efficient, but the CHECK approach still provides better control over large migrations."
                     ),
                 ))
             })

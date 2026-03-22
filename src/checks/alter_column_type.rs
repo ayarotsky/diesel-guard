@@ -39,35 +39,31 @@ impl Check for AlterColumnTypeCheck {
                 Some(Violation::new(
                     "ALTER COLUMN TYPE",
                     format!(
-                        "Changing column '{column}' type to '{new_type}' on table '{table}' typically requires an ACCESS EXCLUSIVE lock and \
-                        may trigger a full table rewrite, blocking all operations. Duration depends on table size and the specific type change.",
-                        column = column_name, new_type = new_type, table = table_name
+                        "Changing column '{column_name}' type to '{new_type}' on table '{table_name}' typically requires an ACCESS EXCLUSIVE lock and \
+                        may trigger a full table rewrite, blocking all operations. Duration depends on table size and the specific type change."
                     ),
-                    format!(r#"For safer type changes, consider a multi-step approach:
+                    format!(r"For safer type changes, consider a multi-step approach:
 
 1. Add a new column with the desired type:
-   ALTER TABLE {table} ADD COLUMN {column}_new {new_type};
+   ALTER TABLE {table_name} ADD COLUMN {column_name}_new {new_type};
 
 2. Backfill data in batches (outside migration):
-   UPDATE {table} SET {column}_new = {column}::{new_type};
+   UPDATE {table_name} SET {column_name}_new = {column_name}::{new_type};
 
 3. Deploy application code to use the new column.
 
 4. Drop the old column in a later migration:
-   ALTER TABLE {table} DROP COLUMN {column};
+   ALTER TABLE {table_name} DROP COLUMN {column_name};
 
 5. Rename the new column:
-   ALTER TABLE {table} RENAME COLUMN {column}_new TO {column};
+   ALTER TABLE {table_name} RENAME COLUMN {column_name}_new TO {column_name};
 
 Note: Some type changes are safe:
 - VARCHAR(n) to VARCHAR(m) where m > n (Postgres 9.2+)
 - VARCHAR to TEXT
 - Numeric precision increases
 
-Always test on a production-sized dataset to verify the impact."#,
-                        table = table_name,
-                        column = column_name,
-                        new_type = new_type
+Always test on a production-sized dataset to verify the impact."
                     ),
                 ))
             })

@@ -19,7 +19,7 @@ impl SafetyChecker {
     /// Falls back to defaults if config file doesn't exist or has errors
     pub fn new() -> Self {
         let config = Config::load().unwrap_or_else(|e| {
-            eprintln!("Warning: Failed to load config: {}. Using defaults.", e);
+            eprintln!("Warning: Failed to load config: {e}. Using defaults.");
             Config::default()
         });
         Self::with_config(config)
@@ -65,7 +65,7 @@ impl SafetyChecker {
                 if path.extension().and_then(|e| e.to_str()) == Some("rhai") {
                     path.file_stem()
                         .and_then(|s| s.to_str())
-                        .map(|s| s.to_string())
+                        .map(std::string::ToString::to_string)
                 } else {
                     None
                 }
@@ -296,10 +296,10 @@ mod tests {
     #[test]
     fn test_multiple_reindex_violations() {
         let checker = SafetyChecker::new();
-        let sql = r#"
+        let sql = r"
             REINDEX INDEX idx_users_email;
             REINDEX TABLE posts;
-        "#;
+        ";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 2);
     }
@@ -325,7 +325,7 @@ mod tests {
         let violations = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
             .unwrap();
-        assert_eq!(violations.len(), 0)
+        assert_eq!(violations.len(), 0);
     }
 
     #[test]
@@ -335,7 +335,7 @@ mod tests {
         let violations = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
             .unwrap();
-        assert_eq!(violations.len(), 1)
+        assert_eq!(violations.len(), 1);
     }
 
     #[test]
@@ -417,20 +417,20 @@ mod tests {
         let violations = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
             .unwrap();
-        assert_eq!(violations.len(), 0)
+        assert_eq!(violations.len(), 0);
     }
 
     #[test]
     fn test_buffer_input_multiple_lines() {
         let checker: SafetyChecker = SafetyChecker::new();
-        let input_data = r#"
+        let input_data = r"
             REINDEX INDEX idx_users_email;
             REINDEX TABLE posts;
-        "#;
+        ";
         let violations = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
             .unwrap();
-        assert_eq!(violations.len(), 2)
+        assert_eq!(violations.len(), 2);
     }
 
     // --- Integration tests: metadata-aware CONCURRENTLY detection ---

@@ -47,7 +47,7 @@ impl Check for UnnamedConstraintCheck {
 
                         (
                             "FOREIGN KEY",
-                            format!("({}) REFERENCES {}({})", fk_cols, ref_table, ref_cols),
+                            format!("({fk_cols}) REFERENCES {ref_table}({ref_cols})"),
                         )
                     }
                     x if x == ConstrType::ConstrCheck as i32 => {
@@ -59,14 +59,12 @@ impl Check for UnnamedConstraintCheck {
                 Some(Violation::new(
                     "CONSTRAINT without name",
                     format!(
-                        "Adding unnamed {constraint_type} constraint on table '{table}' will receive an auto-generated name from Postgres. \
+                        "Adding unnamed {constraint_type} constraint on table '{table_name}' will receive an auto-generated name from Postgres. \
                         This makes future migrations difficult, as the generated name varies between databases and requires querying \
-                        the database to find the constraint name before modifying or dropping it.",
-                        constraint_type = constraint_type,
-                        table = table_name
+                        the database to find the constraint name before modifying or dropping it."
                     ),
                     format!(
-                        r#"Always name constraints explicitly using the CONSTRAINT keyword:
+                        r"Always name constraints explicitly using the CONSTRAINT keyword:
 
 Instead of:
    ALTER TABLE {table} ADD {constraint_type} {columns};
@@ -82,7 +80,7 @@ Note: Choose descriptive names that indicate the table, columns, and constraint 
 Common patterns:
   - UNIQUE: {table}_<column>_key or {table}_<column1>_<column2>_key
   - FOREIGN KEY: {table}_<column>_fkey
-  - CHECK: {table}_<column>_check or {table}_<description>_check"#,
+  - CHECK: {table}_<column>_check or {table}_<description>_check",
                         table = table_name,
                         constraint_type = constraint_type,
                         columns = columns_desc,

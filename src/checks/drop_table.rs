@@ -41,11 +41,10 @@ impl Check for DropTableCheck {
                 Violation::new(
                     "DROP TABLE",
                     format!(
-                        "Dropping table '{table}' permanently deletes all data and acquires an ACCESS EXCLUSIVE lock. \
-                        This operation cannot be undone after the transaction commits.",
-                        table = name
+                        "Dropping table '{name}' permanently deletes all data and acquires an ACCESS EXCLUSIVE lock. \
+                        This operation cannot be undone after the transaction commits."
                     ),
-                    format!(r#"Before dropping a table in production:
+                    format!(r"Before dropping a table in production:
 
 1. Verify this is intentional and the table is no longer in use
 2. Ensure a backup exists or data has been migrated
@@ -53,13 +52,10 @@ impl Check for DropTableCheck {
 
 If this drop is intentional, wrap it in a safety-assured block:
    -- safety-assured:start
-   DROP TABLE{if_exists} {table}{modifiers};
+   DROP TABLE{if_exists_str} {name}{modifiers};
    -- safety-assured:end
 
-Note: DROP TABLE acquires ACCESS EXCLUSIVE lock, blocking all operations until complete."#,
-                        if_exists = if_exists_str,
-                        table = name,
-                        modifiers = modifiers
+Note: DROP TABLE acquires ACCESS EXCLUSIVE lock, blocking all operations until complete."
                     ),
                 )
             })

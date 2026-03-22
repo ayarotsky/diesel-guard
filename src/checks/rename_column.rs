@@ -40,33 +40,27 @@ impl Check for RenameColumnCheck {
         vec![Violation::new(
             "RENAME COLUMN",
             format!(
-                "Renaming column '{old}' to '{new}' in table '{table}' will cause immediate errors in running application instances. \
-                Any code referencing the old column name will fail after the rename is applied, causing downtime.",
-                old = old_name,
-                new = new_name,
-                table = table_name
+                "Renaming column '{old_name}' to '{new_name}' in table '{table_name}' will cause immediate errors in running application instances. \
+                Any code referencing the old column name will fail after the rename is applied, causing downtime."
             ),
             format!(
-                r#"1. Add a new column with the desired name (allows NULL initially):
-   ALTER TABLE {table} ADD COLUMN {new} <data_type>;
+                r"1. Add a new column with the desired name (allows NULL initially):
+   ALTER TABLE {table_name} ADD COLUMN {new_name} <data_type>;
 
 2. Backfill the new column with data from the old column:
-   UPDATE {table} SET {new} = {old};
+   UPDATE {table_name} SET {new_name} = {old_name};
 
 3. Add NOT NULL constraint if needed (after backfill):
-   ALTER TABLE {table} ALTER COLUMN {new} SET NOT NULL;
+   ALTER TABLE {table_name} ALTER COLUMN {new_name} SET NOT NULL;
 
 4. Update your application code to reference the new column name.
 
 5. Deploy the updated application code.
 
 6. Drop the old column in a subsequent migration:
-   ALTER TABLE {table} DROP COLUMN {old};
+   ALTER TABLE {table_name} DROP COLUMN {old_name};
 
-This approach maintains compatibility with running instances during the transition."#,
-                table = table_name,
-                old = old_name,
-                new = new_name
+This approach maintains compatibility with running instances during the transition."
             ),
         )]
     }

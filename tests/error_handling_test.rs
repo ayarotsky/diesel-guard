@@ -34,8 +34,7 @@ fn test_invalid_sql_in_migration_file_has_file_context() {
     let err_msg = format!("{:?}", result.unwrap_err());
     assert!(
         err_msg.contains(utf8_path.as_str()),
-        "Error should contain the file path '{}', got: {err_msg}",
-        utf8_path
+        "Error should contain the file path '{utf8_path}', got: {err_msg}"
     );
 }
 

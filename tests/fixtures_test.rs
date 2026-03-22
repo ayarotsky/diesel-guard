@@ -9,7 +9,7 @@ use diesel_guard::SafetyChecker;
 
 /// Helper to get fixture path
 fn fixture_path(name: &str) -> String {
-    format!("tests/fixtures/{}/up.sql", name)
+    format!("tests/fixtures/{name}/up.sql")
 }
 
 #[test]
@@ -41,7 +41,7 @@ fn test_safe_fixtures_pass() {
         let path = fixture_path(fixture);
         let violations = checker
             .check_file(Utf8Path::new(&path))
-            .unwrap_or_else(|e| panic!("Failed to check {}: {}", fixture, e));
+            .unwrap_or_else(|e| panic!("Failed to check {fixture}: {e}"));
 
         assert_eq!(
             violations.len(),
@@ -490,8 +490,7 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         total_violations, 40,
-        "Expected 40 total violations: 27 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 6, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {}",
-        total_violations
+        "Expected 40 total violations: 27 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 6, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {total_violations}"
     );
 }
 
@@ -563,13 +562,12 @@ fn test_safe_sqlx_fixtures_pass() {
     for fixture in safe_sqlx_fixtures {
         let results = checker
             .check_directory(Utf8Path::new(fixture))
-            .unwrap_or_else(|e| panic!("Failed to check {}: {}", fixture, e));
+            .unwrap_or_else(|e| panic!("Failed to check {fixture}: {e}"));
 
         let total_violations: usize = results.iter().map(|(_, v)| v.len()).sum();
         assert_eq!(
             total_violations, 0,
-            "Expected {} to be safe but found {} violation(s)",
-            fixture, total_violations
+            "Expected {fixture} to be safe but found {total_violations} violation(s)"
         );
     }
 }
@@ -638,12 +636,10 @@ fn test_check_all_sqlx_fixtures() {
     // Note: .down.sql correctly skipped, with-directive and safe fixtures have 0 violations
     assert_eq!(
         files_with_violations, 3,
-        "Expected 3 files with violations, got {}",
-        files_with_violations
+        "Expected 3 files with violations, got {files_with_violations}"
     );
     assert_eq!(
         all_violations, 3,
-        "Expected 3 total violations, got {}",
-        all_violations
+        "Expected 3 total violations, got {all_violations}"
     );
 }

@@ -44,7 +44,7 @@ impl MigrationAdapter for DieselAdapter {
         check_down: bool,
     ) -> Result<Vec<MigrationFile>> {
         if is_single_migration_dir(dir) {
-            return self.process_migration_directory(dir, None, check_down);
+            return Ok(self.process_migration_directory(dir, None, check_down));
         }
 
         let entries = collect_and_sort_entries(dir);
@@ -56,7 +56,7 @@ impl MigrationAdapter for DieselAdapter {
             };
 
             if entry.file_type().is_dir() {
-                files.extend(self.process_migration_directory(path, start_after, check_down)?);
+                files.extend(self.process_migration_directory(path, start_after, check_down));
             } else if path.extension() == Some("sql") {
                 let filename = path.file_name().unwrap_or("");
                 let parsed_timestamp = self.parse_timestamp(filename);
@@ -85,8 +85,7 @@ impl MigrationAdapter for DieselAdapter {
     fn validate_timestamp(&self, timestamp: &str) -> Result<()> {
         let Some(captures) = DIESEL_TIMESTAMP_REGEX.captures(timestamp) else {
             return Err(format!(
-                "Invalid Diesel timestamp format: {}. Expected: YYYYMMDDHHMMSS, YYYY_MM_DD_HHMMSS, or YYYY-MM-DD-HHMMSS",
-                timestamp
+                "Invalid Diesel timestamp format: {timestamp}. Expected: YYYYMMDDHHMMSS, YYYY_MM_DD_HHMMSS, or YYYY-MM-DD-HHMMSS"
             ).into());
         };
 
@@ -94,32 +93,26 @@ impl MigrationAdapter for DieselAdapter {
             Ok(())
         } else {
             Err(format!(
-                "Invalid Diesel timestamp format: {}. Expected: YYYYMMDDHHMMSS, YYYY_MM_DD_HHMMSS, or YYYY-MM-DD-HHMMSS",
-                timestamp
+                "Invalid Diesel timestamp format: {timestamp}. Expected: YYYYMMDDHHMMSS, YYYY_MM_DD_HHMMSS, or YYYY-MM-DD-HHMMSS"
             ).into())
         }
     }
 
     fn extract_migration_metadata(&self, file_path: &Utf8Path) -> MigrationContext {
         // metadata.toml lives in the same directory as the SQL file
-        let metadata_path = match file_path.parent() {
-            Some(parent) => parent.join("metadata.toml"),
-            None => {
-                return MigrationContext {
-                    run_in_transaction: true,
-                    no_transaction_hint: NO_TRANSACTION_HINT,
-                };
-            }
+        let Some(parent) = file_path.parent() else {
+            return MigrationContext {
+                run_in_transaction: true,
+                no_transaction_hint: NO_TRANSACTION_HINT,
+            };
         };
+        let metadata_path = parent.join("metadata.toml");
 
-        let content = match std::fs::read_to_string(&metadata_path) {
-            Ok(c) => c,
-            Err(_) => {
-                return MigrationContext {
-                    run_in_transaction: true,
-                    no_transaction_hint: NO_TRANSACTION_HINT,
-                };
-            }
+        let Ok(content) = std::fs::read_to_string(&metadata_path) else {
+            return MigrationContext {
+                run_in_transaction: true,
+                no_transaction_hint: NO_TRANSACTION_HINT,
+            };
         };
 
         let parsed: MetadataFile = toml::from_str(&content).unwrap_or_default();
@@ -138,10 +131,9 @@ impl DieselAdapter {
         path: &Utf8Path,
         start_after: Option<&str>,
         check_down: bool,
-    ) -> Result<Vec<MigrationFile>> {
-        let dir_name = match path.file_name() {
-            Some(name) => name,
-            None => return Ok(vec![]),
+    ) -> Vec<MigrationFile> {
+        let Some(dir_name) = path.file_name() else {
+            return vec![];
         };
 
         // Parse timestamp from directory name (if present)
@@ -153,7 +145,7 @@ impl DieselAdapter {
 
         // Skip if migration is before start_after threshold (only if start_after is set)
         if !should_check_migration(start_after, &timestamp) {
-            return Ok(vec![]);
+            return vec![];
         }
 
         let mut files = vec![];
@@ -172,7 +164,7 @@ impl DieselAdapter {
             }
         }
 
-        Ok(files)
+        files
     }
 }
 

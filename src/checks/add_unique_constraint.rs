@@ -44,23 +44,20 @@ impl Check for AddUniqueConstraintCheck {
                     c.conname.clone()
                 };
 
-                let suggested_index_name = if !c.conname.is_empty() {
-                    c.conname.clone()
+                let suggested_index_name = if c.conname.is_empty() {
+                    format!("{table_name}_unique_idx")
                 } else {
-                    format!("{}_unique_idx", table_name)
+                    c.conname.clone()
                 };
 
                 Some(Violation::new(
                     "ADD UNIQUE constraint",
                     format!(
-                        "Adding UNIQUE constraint '{constraint}' on table '{table}' ({columns}) via ALTER TABLE acquires an ACCESS EXCLUSIVE lock, \
-                        blocking all reads and writes during index creation. Duration depends on table size.",
-                        constraint = constraint_name,
-                        table = table_name,
-                        columns = cols
+                        "Adding UNIQUE constraint '{constraint_name}' on table '{table_name}' ({cols}) via ALTER TABLE acquires an ACCESS EXCLUSIVE lock, \
+                        blocking all reads and writes during index creation. Duration depends on table size."
                     ),
                     format!(
-                        r#"Use CREATE UNIQUE INDEX CONCURRENTLY instead:
+                        r"Use CREATE UNIQUE INDEX CONCURRENTLY instead:
 
 1. Create the unique index concurrently:
    CREATE UNIQUE INDEX CONCURRENTLY {index_name} ON {table} ({columns});
@@ -78,14 +75,14 @@ Considerations:
   For Diesel migrations: Create metadata.toml with run_in_transaction = false
   For SQLx migrations: Add -- no-transaction directive at the top of the file
 - Takes longer than non-concurrent creation
-- May fail if duplicate values exist (leaves behind invalid index that should be dropped)"#,
+- May fail if duplicate values exist (leaves behind invalid index that should be dropped)",
                         index_name = suggested_index_name,
                         table = table_name,
                         columns = cols,
-                        constraint_name = if !c.conname.is_empty() {
-                            constraint_name
+                        constraint_name = if c.conname.is_empty() {
+                            format!("{table_name}_unique_constraint")
                         } else {
-                            format!("{}_unique_constraint", table_name)
+                            constraint_name
                         }
                     ),
                 ))

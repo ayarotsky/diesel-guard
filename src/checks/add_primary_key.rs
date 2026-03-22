@@ -41,30 +41,27 @@ impl Check for AddPrimaryKeyCheck {
                 let cols = constraint_columns_str(c);
 
                 let constraint_name = if c.conname.is_empty() {
-                    format!("{}_pkey", table_name)
+                    format!("{table_name}_pkey")
                 } else {
                     c.conname.clone()
                 };
 
-                let suggested_index_name = format!("{}_pkey", table_name);
+                let suggested_index_name = format!("{table_name}_pkey");
 
                 Some(Violation::new(
                     "ADD PRIMARY KEY",
                     format!(
-                        "Adding PRIMARY KEY constraint '{constraint}' on table '{table}' ({columns}) via ALTER TABLE acquires an ACCESS EXCLUSIVE lock, \
-                        blocking all reads and writes. This also implicitly creates a unique index (blocking operation) and validates all rows for uniqueness.",
-                        constraint = constraint_name,
-                        table = table_name,
-                        columns = cols
+                        "Adding PRIMARY KEY constraint '{constraint_name}' on table '{table_name}' ({cols}) via ALTER TABLE acquires an ACCESS EXCLUSIVE lock, \
+                        blocking all reads and writes. This also implicitly creates a unique index (blocking operation) and validates all rows for uniqueness."
                     ),
                     format!(
-                        r#"Use CREATE UNIQUE INDEX CONCURRENTLY first, then add the constraint:
+                        r"Use CREATE UNIQUE INDEX CONCURRENTLY first, then add the constraint:
 
 1. Create the unique index concurrently (no blocking):
-   CREATE UNIQUE INDEX CONCURRENTLY {index_name} ON {table} ({columns});
+   CREATE UNIQUE INDEX CONCURRENTLY {suggested_index_name} ON {table_name} ({cols});
 
 2. Add PRIMARY KEY constraint using the existing index (fast, minimal blocking):
-   ALTER TABLE {table} ADD CONSTRAINT {constraint_name} PRIMARY KEY USING INDEX {index_name};
+   ALTER TABLE {table_name} ADD CONSTRAINT {constraint_name} PRIMARY KEY USING INDEX {suggested_index_name};
 
 Benefits:
 - Table remains readable and writable during index creation
@@ -80,11 +77,7 @@ Considerations:
 - Takes longer than non-concurrent creation
 - May fail if duplicate or NULL values exist (leaves behind invalid index that should be dropped)
 
-Note: Ensure all columns in the primary key have NOT NULL constraints before creating the index."#,
-                        index_name = suggested_index_name,
-                        table = table_name,
-                        columns = cols,
-                        constraint_name = constraint_name
+Note: Ensure all columns in the primary key have NOT NULL constraints before creating the index."
                     ),
                 ))
             })

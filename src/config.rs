@@ -256,9 +256,7 @@ mod tests {
         for &check_name in crate::checks::Registry::builtin_check_names() {
             assert!(
                 help.contains(check_name),
-                "Help text should include '{}', got: {}",
-                check_name,
-                help
+                "Help text should include '{check_name}', got: {help}"
             );
         }
 

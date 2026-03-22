@@ -118,11 +118,11 @@ fn test_safety_assured_blocks_skip_custom_checks() {
     };
     let checker = SafetyChecker::with_config(config);
 
-    let sql = r#"
+    let sql = r"
 -- safety-assured:start
 CREATE INDEX idx ON users(email);
 -- safety-assured:end
-    "#;
+    ";
 
     let violations = checker.check_sql(sql).unwrap();
 
@@ -236,8 +236,7 @@ fn test_registry_check_names_includes_custom_checks() {
     let names_after = registry.active_check_names();
     assert!(
         names_after.contains(&"my_custom"),
-        "Custom check 'my_custom' should appear in check_names after loading, got: {:?}",
-        names_after
+        "Custom check 'my_custom' should appear in check_names after loading, got: {names_after:?}"
     );
 }
 
@@ -321,7 +320,7 @@ fn test_unknown_check_name_detected_after_custom_checks_loaded() {
             if path.extension().and_then(|e| e.to_str()) == Some("rhai") {
                 path.file_stem()
                     .and_then(|s| s.to_str())
-                    .map(|s| s.to_string())
+                    .map(std::string::ToString::to_string)
             } else {
                 None
             }
@@ -420,8 +419,7 @@ fn test_example_no_truncate_detects_single() {
     assert_eq!(
         truncate_violations.len(),
         1,
-        "Expected 1 TRUNCATE violation, got {:?}",
-        truncate_violations
+        "Expected 1 TRUNCATE violation, got {truncate_violations:?}"
     );
 }
 
@@ -435,8 +433,7 @@ fn test_example_no_truncate_detects_multiple() {
     assert_eq!(
         truncate_violations.len(),
         2,
-        "Expected 2 TRUNCATE violations (one per table), got {:?}",
-        truncate_violations
+        "Expected 2 TRUNCATE violations (one per table), got {truncate_violations:?}"
     );
 }
 

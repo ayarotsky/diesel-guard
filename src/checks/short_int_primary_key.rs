@@ -117,8 +117,8 @@ fn check_column_type(table_name: &str, col: &ColumnDef) -> Option<Violation> {
 
     let (display_name, limit) = short_integer_info(&type_name)?;
     Some(create_violation(
-        table_name.to_string(),
-        col.colname.clone(),
+        table_name,
+        &col.colname,
         display_name,
         limit,
     ))
@@ -135,43 +135,36 @@ fn short_integer_info(type_name: &str) -> Option<(&'static str, &'static str)> {
 
 /// Create a violation for a short integer primary key
 fn create_violation(
-    table_name: String,
-    column_name: String,
+    table_name: &str,
+    column_name: &str,
     type_name: &str,
     limit: &str,
 ) -> Violation {
     Violation::new(
         "PRIMARY KEY with short integer type",
         format!(
-            "Using {type_name} for primary key column '{column}' on table '{table}' risks ID exhaustion at {limit} records. \
+            "Using {type_name} for primary key column '{column_name}' on table '{table_name}' risks ID exhaustion at {limit} records. \
             {type_name} can be quickly exhausted in production applications. \
             Changing the type later requires an ALTER COLUMN TYPE operation that triggers a full table rewrite with an \
-            ACCESS EXCLUSIVE lock, blocking all operations. Duration depends on table size.",
-            type_name = type_name,
-            column = column_name,
-            table = table_name,
-            limit = limit
+            ACCESS EXCLUSIVE lock, blocking all operations. Duration depends on table size."
         ),
         format!(
-            r#"Use BIGINT for primary keys to avoid ID exhaustion:
+            r"Use BIGINT for primary keys to avoid ID exhaustion:
 
 Instead of:
-   CREATE TABLE {table} ({column} {type_name} PRIMARY KEY);
+   CREATE TABLE {table_name} ({column_name} {type_name} PRIMARY KEY);
 
 Use:
-   CREATE TABLE {table} ({column} BIGINT PRIMARY KEY);
+   CREATE TABLE {table_name} ({column_name} BIGINT PRIMARY KEY);
 
 BIGINT provides 8 bytes (range: -9.2 quintillion to 9.2 quintillion), which is effectively unlimited
 for auto-incrementing IDs. The minimal storage overhead (4 extra bytes per row) is negligible.
 
 If using SERIAL/SMALLSERIAL, use BIGSERIAL instead:
-   {column} BIGSERIAL PRIMARY KEY
+   {column_name} BIGSERIAL PRIMARY KEY
 
 Note: If this is an intentionally small table (e.g., lookup table with <100 entries),
-use 'safety-assured' to bypass this check."#,
-            table = table_name,
-            column = column_name,
-            type_name = type_name
+use 'safety-assured' to bypass this check."
         ),
     )
 }

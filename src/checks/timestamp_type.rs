@@ -73,28 +73,25 @@ fn create_alter_table_violation(table_name: &str, column_name: &str) -> Violatio
     Violation::new(
         "ADD COLUMN with TIMESTAMP",
         format!(
-            "Column '{column}' uses TIMESTAMP without time zone. \
+            "Column '{column_name}' uses TIMESTAMP without time zone. \
             This stores values without timezone context, which can cause issues in \
             multi-timezone applications, during DST transitions, and makes it difficult \
             to determine the actual point in time. \
-            This is a best practice warning (no locking impact).",
-            column = column_name
+            This is a best practice warning (no locking impact)."
         ),
         format!(
-            r#"Use TIMESTAMPTZ instead of TIMESTAMP:
+            r"Use TIMESTAMPTZ instead of TIMESTAMP:
 
 1. Replace TIMESTAMP with TIMESTAMPTZ:
-   ALTER TABLE {table} ADD COLUMN {column} TIMESTAMPTZ;
+   ALTER TABLE {table_name} ADD COLUMN {column_name} TIMESTAMPTZ;
 
 TIMESTAMPTZ stores values in UTC internally and converts on input/output based
 on the session's timezone setting, providing consistent behavior across timezones.
 
 2. If you intentionally need timezone-naive timestamps, use a safety-assured block:
    -- safety-assured:start
-   ALTER TABLE {table} ADD COLUMN {column} TIMESTAMP;
-   -- safety-assured:end"#,
-            table = table_name,
-            column = column_name
+   ALTER TABLE {table_name} ADD COLUMN {column_name} TIMESTAMP;
+   -- safety-assured:end"
         ),
     )
 }
@@ -104,19 +101,18 @@ fn create_create_table_violation(table_name: &str, column_name: &str) -> Violati
     Violation::new(
         "CREATE TABLE with TIMESTAMP",
         format!(
-            "Column '{column}' uses TIMESTAMP without time zone. \
+            "Column '{column_name}' uses TIMESTAMP without time zone. \
             This stores values without timezone context, which can cause issues in \
             multi-timezone applications, during DST transitions, and makes it difficult \
             to determine the actual point in time. \
-            This is a best practice warning (no locking impact).",
-            column = column_name
+            This is a best practice warning (no locking impact)."
         ),
         format!(
-            r#"Use TIMESTAMPTZ instead of TIMESTAMP:
+            r"Use TIMESTAMPTZ instead of TIMESTAMP:
 
 1. Replace TIMESTAMP with TIMESTAMPTZ:
-   CREATE TABLE {table} (
-       {column} TIMESTAMPTZ
+   CREATE TABLE {table_name} (
+       {column_name} TIMESTAMPTZ
    );
 
 TIMESTAMPTZ stores values in UTC internally and converts on input/output based
@@ -124,12 +120,10 @@ on the session's timezone setting, providing consistent behavior across timezone
 
 2. If you intentionally need timezone-naive timestamps, use a safety-assured block:
    -- safety-assured:start
-   CREATE TABLE {table} (
-       {column} TIMESTAMP
+   CREATE TABLE {table_name} (
+       {column_name} TIMESTAMP
    );
-   -- safety-assured:end"#,
-            table = table_name,
-            column = column_name
+   -- safety-assured:end"
         ),
     )
 }

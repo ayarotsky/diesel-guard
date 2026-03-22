@@ -35,11 +35,11 @@ fn test_start_after_plus_custom_checks_plus_safety_assured() {
     fs::create_dir(&new_dir).unwrap();
     fs::write(
         new_dir.join("up.sql"),
-        r#"-- safety-assured:start
+        r"-- safety-assured:start
 DROP TABLE protected_table;
 -- safety-assured:end
 DROP TABLE unprotected_table;
-"#,
+",
     )
     .unwrap();
 
@@ -159,11 +159,11 @@ fn test_check_down_with_safety_assured_in_down_sql() {
     // down.sql with safety-assured block and unprotected statement
     fs::write(
         migration_dir.join("down.sql"),
-        r#"-- safety-assured:start
+        r"-- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
 ALTER TABLE users DROP COLUMN phone;
-"#,
+",
     )
     .unwrap();
 
@@ -192,7 +192,6 @@ ALTER TABLE users DROP COLUMN phone;
     assert_eq!(
         violations.len(),
         1,
-        "Only the unprotected DROP COLUMN should produce a violation, got {:?}",
-        violations
+        "Only the unprotected DROP COLUMN should produce a violation, got {violations:?}"
     );
 }

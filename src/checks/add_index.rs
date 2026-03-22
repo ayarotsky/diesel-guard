@@ -38,16 +38,13 @@ impl Check for AddIndexCheck {
             // CREATE INDEX without CONCURRENTLY — always a violation
             let suggestion = format!(
                 r#"Use CONCURRENTLY to build the index without blocking writes:
-   CREATE {unique}INDEX CONCURRENTLY {index} ON {table};
+   CREATE {unique_str}INDEX CONCURRENTLY {index_name} ON {table_name};
 
 Note: CONCURRENTLY takes longer and uses more resources, but allows concurrent INSERT, UPDATE, and DELETE operations. The index build may fail if there are deadlocks or unique constraint violations.
 
 Considerations:
 - Requires more total work and takes longer to complete
 - If it fails, it leaves behind an "invalid" index that should be dropped"#,
-                unique = unique_str,
-                index = index_name,
-                table = table_name,
             );
 
             let safe_alternative = if ctx.run_in_transaction {
@@ -62,11 +59,8 @@ Considerations:
             return vec![Violation::new(
                 "ADD INDEX without CONCURRENTLY",
                 format!(
-                    "Creating {unique}index '{index}' on table '{table}' without CONCURRENTLY acquires a SHARE lock, blocking writes \
-                    (INSERT, UPDATE, DELETE). Duration depends on table size. Reads are still allowed.",
-                    unique = unique_str,
-                    index = index_name,
-                    table = table_name
+                    "Creating {unique_str}index '{index_name}' on table '{table_name}' without CONCURRENTLY acquires a SHARE lock, blocking writes \
+                    (INSERT, UPDATE, DELETE). Duration depends on table size. Reads are still allowed."
                 ),
                 safe_alternative,
             )];
@@ -81,11 +75,8 @@ Considerations:
         vec![Violation::new(
             "CREATE INDEX CONCURRENTLY inside a transaction",
             format!(
-                "Creating {unique}index '{index}' on table '{table}' with CONCURRENTLY cannot run inside a transaction block. \
-                PostgreSQL will raise an error at runtime.",
-                unique = unique_str,
-                index = index_name,
-                table = table_name
+                "Creating {unique_str}index '{index_name}' on table '{table_name}' with CONCURRENTLY cannot run inside a transaction block. \
+                PostgreSQL will raise an error at runtime."
             ),
             ctx.no_transaction_hint,
         )]

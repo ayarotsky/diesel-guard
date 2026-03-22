@@ -37,22 +37,20 @@ impl Check for RenameTableCheck {
         vec![Violation::new(
             "RENAME TABLE",
             format!(
-                "Renaming table '{old}' to '{new}' will cause immediate errors in running application instances. \
+                "Renaming table '{old_table_name}' to '{new_table_name}' will cause immediate errors in running application instances. \
                 Any code referencing the old table name will fail after the rename is applied. \
-                Additionally, this operation requires an ACCESS EXCLUSIVE lock which can block on busy tables.",
-                old = old_table_name,
-                new = new_table_name
+                Additionally, this operation requires an ACCESS EXCLUSIVE lock which can block on busy tables."
             ),
             format!(
-                r#"Use a multi-step migration to safely rename the table:
+                r"Use a multi-step migration to safely rename the table:
 
 1. Create the new table with the same structure:
-   CREATE TABLE {new} (LIKE {old} INCLUDING ALL);
+   CREATE TABLE {new_table_name} (LIKE {old_table_name} INCLUDING ALL);
 
 2. Update your application code to write to both tables.
 
 3. Backfill data from the old table to the new table in batches:
-   INSERT INTO {new} SELECT * FROM {old} WHERE id > last_id LIMIT 10000;
+   INSERT INTO {new_table_name} SELECT * FROM {old_table_name} WHERE id > last_id LIMIT 10000;
 
 4. Update your application code to read from the new table.
 
@@ -61,11 +59,9 @@ impl Check for RenameTableCheck {
 6. Update your application code to stop writing to the old table.
 
 7. Drop the old table in a later migration:
-   DROP TABLE {old};
+   DROP TABLE {old_table_name};
 
-This approach avoids dangerous locks and maintains compatibility with running instances throughout the migration."#,
-                old = old_table_name,
-                new = new_table_name
+This approach avoids dangerous locks and maintains compatibility with running instances throughout the migration."
             ),
         )]
     }

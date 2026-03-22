@@ -42,7 +42,7 @@ impl MigrationAdapter for SqlxAdapter {
             };
 
             if entry.file_type().is_file() && path.extension() == Some("sql") {
-                files.extend(self.process_migration_file(path, start_after, check_down)?);
+                files.extend(self.process_migration_file(path, start_after, check_down));
             }
         }
 
@@ -60,23 +60,19 @@ impl MigrationAdapter for SqlxAdapter {
         if !timestamp.is_empty() && timestamp.chars().all(|c| c.is_ascii_digit()) {
             Ok(())
         } else {
-            Err(format!(
-                "Invalid SQLx version format: {}. Expected: one or more digits",
-                timestamp
+            Err(
+                format!("Invalid SQLx version format: {timestamp}. Expected: one or more digits")
+                    .into(),
             )
-            .into())
         }
     }
 
     fn extract_migration_metadata(&self, file_path: &Utf8Path) -> MigrationContext {
-        let content = match std::fs::read_to_string(file_path) {
-            Ok(c) => c,
-            Err(_) => {
-                return MigrationContext {
-                    run_in_transaction: true,
-                    no_transaction_hint: NO_TRANSACTION_HINT,
-                };
-            }
+        let Ok(content) = std::fs::read_to_string(file_path) else {
+            return MigrationContext {
+                run_in_transaction: true,
+                no_transaction_hint: NO_TRANSACTION_HINT,
+            };
         };
 
         // Scan every line for `-- no-transaction` (case-insensitive, trimmed)
@@ -98,29 +94,29 @@ impl SqlxAdapter {
         path: &Utf8Path,
         start_after: Option<&str>,
         check_down: bool,
-    ) -> Result<Vec<MigrationFile>> {
+    ) -> Vec<MigrationFile> {
         let filename = path.file_name().unwrap_or("");
 
         // Skip .down.sql files early when check_down is disabled,
         // before any format detection can match and include them
         if !check_down {
             let file_stem = path.file_stem().unwrap_or("");
-            if file_stem.ends_with(".down") {
-                return Ok(vec![]);
+            if file_stem.to_ascii_lowercase().ends_with(".down") {
+                return vec![];
             }
         }
 
         // Check for suffix format (.up.sql / .down.sql)
-        if let Some(mig_file) = self.try_suffix_format(path, start_after)? {
-            return Ok(vec![mig_file]);
+        if let Some(mig_file) = self.try_suffix_format(path, start_after) {
+            return vec![mig_file];
         }
 
         // Check for single file format
-        if let Some(mig_file) = self.try_single_file_format(path, filename, start_after)? {
-            return Ok(vec![mig_file]);
+        if let Some(mig_file) = self.try_single_file_format(path, filename, start_after) {
+            return vec![mig_file];
         }
 
-        Ok(vec![])
+        vec![]
     }
 
     /// Try to parse as suffix format (.up.sql / .down.sql).
@@ -132,7 +128,7 @@ impl SqlxAdapter {
         &self,
         path: &Utf8Path,
         start_after: Option<&str>,
-    ) -> Result<Option<MigrationFile>> {
+    ) -> Option<MigrationFile> {
         let file_stem = path.file_stem().unwrap_or("");
 
         let timestamp_part = if let Some(part) = file_stem.strip_suffix(".up") {
@@ -140,18 +136,16 @@ impl SqlxAdapter {
         } else if let Some(part) = file_stem.strip_suffix(".down") {
             part
         } else {
-            return Ok(None);
+            return None;
         };
 
-        let Some(timestamp) = self.parse_timestamp(timestamp_part) else {
-            return Ok(None);
-        };
+        let timestamp = self.parse_timestamp(timestamp_part)?;
 
         if !should_check_migration(start_after, &timestamp) {
-            return Ok(None);
+            return None;
         }
 
-        Ok(Some(MigrationFile::new(path.to_owned(), timestamp)))
+        Some(MigrationFile::new(path.to_owned(), timestamp))
     }
 
     /// Try to parse as single file format (format 2: up-only).
@@ -160,16 +154,14 @@ impl SqlxAdapter {
         path: &Utf8Path,
         filename: &str,
         start_after: Option<&str>,
-    ) -> Result<Option<MigrationFile>> {
-        let Some(timestamp) = self.parse_timestamp(filename) else {
-            return Ok(None);
-        };
+    ) -> Option<MigrationFile> {
+        let timestamp = self.parse_timestamp(filename)?;
 
         if !should_check_migration(start_after, &timestamp) {
-            return Ok(None);
+            return None;
         }
 
-        Ok(Some(MigrationFile::new(path.to_owned(), timestamp)))
+        Some(MigrationFile::new(path.to_owned(), timestamp))
     }
 }
 
@@ -330,7 +322,7 @@ mod tests {
 
         let adapter = SqlxAdapter;
         let path = Utf8Path::from_path(&down_file).expect("path should be valid UTF-8");
-        let files = adapter.process_migration_file(path, None, false).unwrap();
+        let files = adapter.process_migration_file(path, None, false);
 
         assert!(files.is_empty());
     }
