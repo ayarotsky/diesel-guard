@@ -59,16 +59,12 @@ impl Check for WideIndexCheck {
         vec![Violation::new(
             "CREATE INDEX with too many columns",
             format!(
-                "Index '{index}' on table '{table}' has {count} columns ({columns}). \
+                "Index '{index_name}' on table '{table_name}' has {column_count} columns ({columns_list}). \
                 Wide indexes (4+ columns) are rarely effective because Postgres can only use them efficiently \
-                when filtering on leftmost columns in order. They also increase storage costs and slow down writes.",
-                index = index_name,
-                table = table_name,
-                count = column_count,
-                columns = columns_list
+                when filtering on leftmost columns in order. They also increase storage costs and slow down writes."
             ),
             format!(
-                r#"Consider these alternatives:
+                r"Consider these alternatives:
 
 1. Use a partial index for specific query patterns:
    CREATE INDEX {index} ON {table}({first_col})
@@ -84,7 +80,7 @@ impl Check for WideIndexCheck {
    CREATE INDEX {index} ON {table}({first_col})
    INCLUDE ({other_cols});
 
-Note: Multi-column indexes are occasionally useful (e.g., for composite foreign keys or specific query patterns). If you've verified this index is necessary, use a safety-assured block."#,
+Note: Multi-column indexes are occasionally useful (e.g., for composite foreign keys or specific query patterns). If you've verified this index is necessary, use a safety-assured block.",
                 index = index_name,
                 table = table_name,
                 first_col = column_names.first().unwrap_or(&"column1".to_string()),

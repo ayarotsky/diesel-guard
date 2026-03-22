@@ -36,27 +36,26 @@ impl Check for TruncateTableCheck {
                     Some(Violation::new(
                         "TRUNCATE TABLE",
                         format!(
-                            "TRUNCATE TABLE on '{table}' acquires an ACCESS EXCLUSIVE lock, blocking \
+                            "TRUNCATE TABLE on '{table_name_str}' acquires an ACCESS EXCLUSIVE lock, blocking \
                             all reads and writes. Unlike DELETE, it cannot be batched or throttled. \
                             This is safe for empty/small tables or non-production environments, but \
-                            dangerous on large production tables.",
-                            table = table_name_str
+                            dangerous on large production tables."
                         ),
                         format!(
                             r#"If this table can be large in production, prefer batched DELETE:
 
 1. Delete rows in small batches:
-   DELETE FROM {table} WHERE id IN (
-     SELECT id FROM {table} LIMIT 1000
+   DELETE FROM {table_name_str} WHERE id IN (
+     SELECT id FROM {table_name_str} LIMIT 1000
    );
 
 2. Repeat until all rows are removed.
 
 3. (Optional) Reset sequences:
-   ALTER SEQUENCE {table}_id_seq RESTART WITH 1;
+   ALTER SEQUENCE {table_name_str}_id_seq RESTART WITH 1;
 
 4. (Optional) Reclaim space:
-   VACUUM {table};
+   VACUUM {table_name_str};
 
 If TRUNCATE is intentional (e.g. lookup table, test/staging environment,
 or table is known to be small), silence this check:
@@ -64,7 +63,7 @@ or table is known to be small), silence this check:
   Per-statement — wrap in a safety-assured block:
     -- safety-assured:start
     -- Safe because: lookup table, always small
-    TRUNCATE TABLE {table};
+    TRUNCATE TABLE {table_name_str};
     -- safety-assured:end
 
   Project-wide as a warning (reported but non-blocking):
@@ -73,8 +72,7 @@ or table is known to be small), silence this check:
 
   Project-wide silenced:
     # diesel-guard.toml
-    disable_checks = ["TruncateTableCheck"]"#,
-                            table = table_name_str
+    disable_checks = ["TruncateTableCheck"]"#
                         ),
                     ))
                 } else {

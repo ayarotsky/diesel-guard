@@ -6,12 +6,12 @@ use tempfile::TempDir;
 #[test]
 fn test_safety_assured_block_ignores_violations() {
     let checker = SafetyChecker::new();
-    let sql = r#"
+    let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
 ALTER TABLE posts DROP COLUMN body;
 -- safety-assured:end
-    "#;
+    ";
 
     let violations = checker.check_sql(sql).unwrap();
     assert_eq!(
@@ -24,10 +24,10 @@ ALTER TABLE posts DROP COLUMN body;
 #[test]
 fn test_without_safety_assured_detects_violations() {
     let checker = SafetyChecker::new();
-    let sql = r#"
+    let sql = r"
 ALTER TABLE users DROP COLUMN email;
 ALTER TABLE posts DROP COLUMN body;
-    "#;
+    ";
 
     let violations = checker.check_sql(sql).unwrap();
     assert_eq!(
@@ -40,7 +40,7 @@ ALTER TABLE posts DROP COLUMN body;
 #[test]
 fn test_partial_safety_assured() {
     let checker = SafetyChecker::new();
-    let sql = r#"
+    let sql = r"
 ALTER TABLE users DROP COLUMN email;
 
 -- safety-assured:start
@@ -48,7 +48,7 @@ ALTER TABLE posts DROP COLUMN body;
 -- safety-assured:end
 
 ALTER TABLE comments DROP COLUMN author;
-    "#;
+    ";
 
     let violations = checker.check_sql(sql).unwrap();
     assert_eq!(
@@ -68,7 +68,7 @@ ALTER TABLE comments DROP COLUMN author;
 #[test]
 fn test_multiple_blocks() {
     let checker = SafetyChecker::new();
-    let sql = r#"
+    let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
@@ -78,7 +78,7 @@ ALTER TABLE posts ADD COLUMN body TEXT;
 -- safety-assured:start
 ALTER TABLE comments DROP COLUMN author;
 -- safety-assured:end
-    "#;
+    ";
 
     let violations = checker.check_sql(sql).unwrap();
     assert_eq!(violations.len(), 0, "both blocks should be ignored");
@@ -87,11 +87,11 @@ ALTER TABLE comments DROP COLUMN author;
 #[test]
 fn test_case_insensitive() {
     let checker = SafetyChecker::new();
-    let sql = r#"
+    let sql = r"
 -- SAFETY-ASSURED:START
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:END
-    "#;
+    ";
 
     let violations = checker.check_sql(sql).unwrap();
     assert_eq!(
@@ -104,10 +104,10 @@ ALTER TABLE users DROP COLUMN email;
 #[test]
 fn test_unclosed_block_error() {
     let checker = SafetyChecker::new();
-    let sql = r#"
+    let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
-    "#;
+    ";
 
     let err = checker
         .check_sql(sql)
@@ -121,10 +121,10 @@ ALTER TABLE users DROP COLUMN email;
 #[test]
 fn test_unmatched_end_error() {
     let checker = SafetyChecker::new();
-    let sql = r#"
+    let sql = r"
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
-    "#;
+    ";
 
     let err = checker
         .check_sql(sql)
@@ -143,11 +143,11 @@ fn test_safety_assured_in_migration_file() {
 
     fs::write(
         migration_dir.join("up.sql"),
-        r#"
+        r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN deprecated_column;
 -- safety-assured:end
-        "#,
+        ",
     )
     .unwrap();
 
@@ -166,10 +166,10 @@ ALTER TABLE users DROP COLUMN deprecated_column;
 #[test]
 fn test_empty_block() {
     let checker = SafetyChecker::new();
-    let sql = r#"
+    let sql = r"
 -- safety-assured:start
 -- safety-assured:end
-    "#;
+    ";
 
     let violations = checker.check_sql(sql).unwrap();
     assert_eq!(violations.len(), 0, "empty block should not error");
@@ -178,13 +178,13 @@ fn test_empty_block() {
 #[test]
 fn test_comments_within_block() {
     let checker = SafetyChecker::new();
-    let sql = r#"
+    let sql = r"
 -- safety-assured:start
 -- This column was deprecated 6 months ago
 -- All code references have been removed
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
-    "#;
+    ";
 
     let violations = checker.check_sql(sql).unwrap();
     assert_eq!(
@@ -197,12 +197,12 @@ ALTER TABLE users DROP COLUMN email;
 #[test]
 fn test_multiline_statement_in_block() {
     let checker = SafetyChecker::new();
-    let sql = r#"
+    let sql = r"
 -- safety-assured:start
 ALTER TABLE users
     DROP COLUMN email;
 -- safety-assured:end
-    "#;
+    ";
 
     let violations = checker.check_sql(sql).unwrap();
     assert_eq!(
@@ -215,7 +215,7 @@ ALTER TABLE users
 #[test]
 fn test_mixed_safe_and_unsafe_operations() {
     let checker = SafetyChecker::new();
-    let sql = r#"
+    let sql = r"
 -- Safe operation - no default
 ALTER TABLE users ADD COLUMN email VARCHAR(255);
 
@@ -226,7 +226,7 @@ ALTER TABLE users DROP COLUMN deprecated_field;
 
 -- Another safe operation (no default, no lock)
 ALTER TABLE users ADD COLUMN name VARCHAR(255);
-    "#;
+    ";
 
     let violations = checker.check_sql(sql).unwrap();
     assert_eq!(
@@ -239,14 +239,14 @@ ALTER TABLE users ADD COLUMN name VARCHAR(255);
 #[test]
 fn test_nested_blocks() {
     let checker = SafetyChecker::new();
-    let sql = r#"
+    let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:start
 ALTER TABLE posts DROP COLUMN body;
 -- safety-assured:end
 -- safety-assured:end
-    "#;
+    ";
 
     // Nested blocks should be rejected with a clear error
     let err = checker.check_sql(sql).unwrap_err();
@@ -259,13 +259,13 @@ ALTER TABLE posts DROP COLUMN body;
 #[test]
 fn test_block_with_multiple_statement_types() {
     let checker = SafetyChecker::new();
-    let sql = r#"
+    let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
 ALTER TABLE posts ADD COLUMN admin BOOLEAN DEFAULT FALSE;
 CREATE INDEX users_idx ON users(name);
 -- safety-assured:end
-    "#;
+    ";
 
     let violations = checker.check_sql(sql).unwrap();
     assert_eq!(
@@ -279,13 +279,13 @@ CREATE INDEX users_idx ON users(name);
 fn test_block_with_multiple_same_operation_type() {
     // Edge case: Multiple ALTER statements (same keyword) within block
     let checker = SafetyChecker::new();
-    let sql = r#"
+    let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN deprecated_a;
 ALTER TABLE users DROP COLUMN deprecated_b;
 ALTER TABLE users DROP COLUMN deprecated_c;
 -- safety-assured:end
-    "#;
+    ";
 
     let violations = checker.check_sql(sql).unwrap();
     assert_eq!(
@@ -299,7 +299,7 @@ ALTER TABLE users DROP COLUMN deprecated_c;
 fn test_interleaved_blocks_and_statements_same_keyword() {
     // Edge case: Same keyword appears in block, outside block, and in another block
     let checker = SafetyChecker::new();
-    let sql = r#"
+    let sql = r"
 ALTER TABLE users DROP COLUMN a;
 
 -- safety-assured:start
@@ -314,7 +314,7 @@ ALTER TABLE users DROP COLUMN e;
 -- safety-assured:end
 
 ALTER TABLE users DROP COLUMN f;
-    "#;
+    ";
 
     let violations = checker.check_sql(sql).unwrap();
     // Should detect only lines 2, 10, 16 (a, d, f) - not b, c, e which are in blocks
@@ -333,13 +333,13 @@ ALTER TABLE users DROP COLUMN f;
 #[test]
 fn test_safety_assured_with_leading_whitespace() {
     let checker = SafetyChecker::new();
-    let sql = r#"
+    let sql = r"
 
     -- safety-assured:start
         ALTER TABLE users DROP COLUMN email;
     -- safety-assured:end
 
-    "#;
+    ";
 
     let violations = checker.check_sql(sql).unwrap();
     assert_eq!(violations.len(), 0, "should handle leading whitespace");

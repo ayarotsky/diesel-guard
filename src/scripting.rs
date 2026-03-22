@@ -133,28 +133,27 @@ fn map_to_violation(check_name: &str, value: Dynamic) -> Option<Violation> {
         .get("safe_alternative")
         .and_then(|v| v.clone().into_string().ok());
 
-    match (operation, problem, safe_alternative) {
-        (Some(op), Some(prob), Some(alt)) => Some(Violation::new(op, prob, alt)),
-        _ => {
-            let mut issues = Vec::new();
-            for key in &["operation", "problem", "safe_alternative"] {
-                match map.get(*key) {
-                    None => issues.push(format!("'{key}' is missing")),
-                    Some(v) if v.clone().into_string().is_err() => {
-                        issues.push(format!("'{key}' must be a string (got {})", v.type_name()))
-                    }
-                    _ => {}
+    if let (Some(op), Some(prob), Some(alt)) = (operation, problem, safe_alternative) {
+        Some(Violation::new(op, prob, alt))
+    } else {
+        let mut issues = Vec::new();
+        for key in &["operation", "problem", "safe_alternative"] {
+            match map.get(*key) {
+                None => issues.push(format!("'{key}' is missing")),
+                Some(v) if v.clone().into_string().is_err() => {
+                    issues.push(format!("'{key}' must be a string (got {})", v.type_name()));
                 }
+                _ => {}
             }
-            Some(Violation::new(
-                format!("SCRIPT ERROR: {check_name}"),
-                format!(
-                    "Custom check returned an invalid map: {}",
-                    issues.join(", ")
-                ),
-                "Fix the custom check script to return all three required string keys.",
-            ))
         }
+        Some(Violation::new(
+            format!("SCRIPT ERROR: {check_name}"),
+            format!(
+                "Custom check returned an invalid map: {}",
+                issues.join(", ")
+            ),
+            "Fix the custom check script to return all three required string keys.",
+        ))
     }
 }
 
@@ -253,12 +252,12 @@ pub fn load_custom_checks(
     };
 
     let mut entries: Vec<_> = read_dir
-        .filter_map(|entry| entry.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "rhai"))
         .collect();
 
     // Sort for deterministic order
-    entries.sort_by_key(|e| e.file_name());
+    entries.sort_by_key(std::fs::DirEntry::file_name);
 
     for entry in entries {
         let path = entry.path();
@@ -356,11 +355,11 @@ mod tests {
     #[test]
     fn test_script_returns_unit_no_violations() {
         let violations = run_script(
-            r#"
+            r"
             // Script that always returns unit (no violation)
             let stmt = node.CreateStmt;
             if stmt == () { return; }
-            "#,
+            ",
             "CREATE INDEX idx ON t(id);",
         );
         assert!(violations.is_empty());
@@ -422,9 +421,9 @@ mod tests {
     fn test_script_infinite_loop_hits_max_operations() {
         // Engine's max_operations limit should kick in
         let violations = run_script(
-            r#"
+            r"
             loop { }
-            "#,
+            ",
             "CREATE INDEX idx ON users(email);",
         );
         // Should not hang; returns empty due to runtime error
@@ -603,7 +602,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let dir_path = Utf8Path::from_path(dir.path()).unwrap();
 
-        fs::write(dir.path().join("my_check.rhai"), r#"return;"#).unwrap();
+        fs::write(dir.path().join("my_check.rhai"), r"return;").unwrap();
 
         let config = crate::config::Config {
             disable_checks: vec!["my_check".to_string()],

@@ -35,7 +35,7 @@ impl Check for DropIndexCheck {
                 .map(|name| {
                     let suggestion = format!(
                         r#"Use CONCURRENTLY to drop the index without blocking queries:
-   DROP INDEX CONCURRENTLY{if_exists} {index};
+   DROP INDEX CONCURRENTLY{if_exists_str} {name};
 
 Note: CONCURRENTLY requires Postgres 9.2+.
 
@@ -44,8 +44,6 @@ Considerations:
 - Allows concurrent SELECT, INSERT, UPDATE, DELETE operations
 - If it fails, the index may be marked "invalid" and should be dropped again
 - Cannot be rolled back (no transaction support)"#,
-                        if_exists = if_exists_str,
-                        index = name,
                     );
 
                     let safe_alternative = if ctx.run_in_transaction {
@@ -60,10 +58,8 @@ Considerations:
                     Violation::new(
                         "DROP INDEX without CONCURRENTLY",
                         format!(
-                            "Dropping index '{index}'{if_exists} without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock, blocking all \
-                            queries (SELECT, INSERT, UPDATE, DELETE) on the table until complete. Duration depends on system load and concurrent transactions.",
-                            index = name,
-                            if_exists = if_exists_str
+                            "Dropping index '{name}'{if_exists_str} without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock, blocking all \
+                            queries (SELECT, INSERT, UPDATE, DELETE) on the table until complete. Duration depends on system load and concurrent transactions."
                         ),
                         safe_alternative,
                     )
@@ -83,10 +79,8 @@ Considerations:
                 Violation::new(
                     "DROP INDEX CONCURRENTLY inside a transaction",
                     format!(
-                        "Dropping index '{index}'{if_exists} with CONCURRENTLY cannot run inside a transaction block. \
-                        PostgreSQL will raise an error at runtime.",
-                        index = name,
-                        if_exists = if_exists_str
+                        "Dropping index '{name}'{if_exists_str} with CONCURRENTLY cannot run inside a transaction block. \
+                        PostgreSQL will raise an error at runtime."
                     ),
                     ctx.no_transaction_hint,
                 )

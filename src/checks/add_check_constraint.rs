@@ -30,22 +30,21 @@ impl Check for AddCheckConstraintCheck {
             Some(Violation::new(
                 "ADD CHECK CONSTRAINT",
                 format!("Adding a check constraint '{constraint_name}' on table '{table_name}' without NOT VALID scans the entire table to validate existing rows,\
-             which can block auto vacuum. On larger tables this can cause performance issues."),
+             which can block autovacuum. On larger tables this can cause performance issues."),
                 format!(
-                    r#"For a safer check constraint addition on large tables:
+                    r"For a safer check constraint addition on large tables:
 
 1. Create a check constraint without any immediate validation:
-   ALTER TABLE {table} ADD CONSTRAINT {constraint_name} CHECK <expr> NOT VALID;
+   ALTER TABLE {table_name} ADD CONSTRAINT {constraint_name} CHECK <expr> NOT VALID;
 
 2. Step 2 (separate migration, acquires ShareUpdateExclusiveLock only)
   ALTER TABLE {table_name} VALIDATE CONSTRAINT {constraint_name};
 
 Benefits:
-- Table remains readable and writable during conttraint creation
+- Table remains readable and writable during constraint creation
 - No blocking of SELECT, INSERT, UPDATE, or DELETE operations
 - Safe for production deployments on large tables
-"#,
-                    table = table_name,
+",
                 )))
         }).collect()
     }

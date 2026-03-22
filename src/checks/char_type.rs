@@ -94,31 +94,26 @@ fn create_alter_table_violation(table_name: &str, column_name: &str, length: &st
     Violation::new(
         "ADD COLUMN with CHAR type",
         format!(
-            "Column '{column}' uses CHAR({length}) which is fixed-length and padded with spaces. \
+            "Column '{column_name}' uses CHAR({length}) which is fixed-length and padded with spaces. \
             This wastes storage and can cause subtle bugs with string comparisons. \
-            This is a best practice warning (no locking impact).",
-            column = column_name,
-            length = length
+            This is a best practice warning (no locking impact)."
         ),
         format!(
-            r#"Use TEXT or VARCHAR instead of CHAR:
+            r"Use TEXT or VARCHAR instead of CHAR:
 
 1. For variable-length strings (most cases):
-   ALTER TABLE {table} ADD COLUMN {column} TEXT;
+   ALTER TABLE {table_name} ADD COLUMN {column_name} TEXT;
 
 2. If you need a length constraint:
-   ALTER TABLE {table} ADD COLUMN {column} VARCHAR({length});
+   ALTER TABLE {table_name} ADD COLUMN {column_name} VARCHAR({length});
    -- Or use TEXT with a CHECK constraint:
-   ALTER TABLE {table} ADD COLUMN {column} TEXT CHECK (length({column}) <= {length});
+   ALTER TABLE {table_name} ADD COLUMN {column_name} TEXT CHECK (length({column_name}) <= {length});
 
 CHAR is only appropriate for truly fixed-length codes (e.g., ISO country codes).
 If this is intentional, use a safety-assured block:
    -- safety-assured:start
-   ALTER TABLE {table} ADD COLUMN {column} CHAR({length});
-   -- safety-assured:end"#,
-            table = table_name,
-            column = column_name,
-            length = length
+   ALTER TABLE {table_name} ADD COLUMN {column_name} CHAR({length});
+   -- safety-assured:end"
         ),
     )
 }
@@ -128,39 +123,34 @@ fn create_create_table_violation(table_name: &str, column_name: &str, length: &s
     Violation::new(
         "CREATE TABLE with CHAR type",
         format!(
-            "Column '{column}' uses CHAR({length}) which is fixed-length and padded with spaces. \
+            "Column '{column_name}' uses CHAR({length}) which is fixed-length and padded with spaces. \
             This wastes storage and can cause subtle bugs with string comparisons. \
-            This is a best practice warning (no locking impact).",
-            column = column_name,
-            length = length
+            This is a best practice warning (no locking impact)."
         ),
         format!(
-            r#"Use TEXT or VARCHAR instead of CHAR:
+            r"Use TEXT or VARCHAR instead of CHAR:
 
 1. For variable-length strings (most cases):
-   CREATE TABLE {table} (
-       {column} TEXT
+   CREATE TABLE {table_name} (
+       {column_name} TEXT
    );
 
 2. If you need a length constraint:
-   CREATE TABLE {table} (
-       {column} VARCHAR({length})
+   CREATE TABLE {table_name} (
+       {column_name} VARCHAR({length})
    );
    -- Or use TEXT with a CHECK constraint:
-   CREATE TABLE {table} (
-       {column} TEXT CHECK (length({column}) <= {length})
+   CREATE TABLE {table_name} (
+       {column_name} TEXT CHECK (length({column_name}) <= {length})
    );
 
 CHAR is only appropriate for truly fixed-length codes (e.g., ISO country codes).
 If this is intentional, use a safety-assured block:
    -- safety-assured:start
-   CREATE TABLE {table} (
-       {column} CHAR({length})
+   CREATE TABLE {table_name} (
+       {column_name} CHAR({length})
    );
-   -- safety-assured:end"#,
-            table = table_name,
-            column = column_name,
-            length = length
+   -- safety-assured:end"
         ),
     )
 }

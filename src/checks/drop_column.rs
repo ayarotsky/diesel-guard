@@ -35,11 +35,10 @@ impl Check for DropColumnCheck {
                 Some(Violation::new(
                     "DROP COLUMN",
                     format!(
-                        "Dropping column '{column}' from table '{table}' requires an ACCESS EXCLUSIVE lock, blocking all operations. \
-                        This typically triggers a table rewrite with duration depending on table size.",
-                        column = column_name, table = table_name
+                        "Dropping column '{column_name}' from table '{table_name}' requires an ACCESS EXCLUSIVE lock, blocking all operations. \
+                        This typically triggers a table rewrite with duration depending on table size."
                     ),
-                    format!(r#"1. Mark the column as unused in your application code first.
+                    format!(r"1. Mark the column as unused in your application code first.
 
 2. Deploy the application without the column references.
 
@@ -50,7 +49,7 @@ impl Check for DropColumnCheck {
 4. Drop the column in a later migration after confirming it's unused:
    ALTER TABLE {table} DROP COLUMN {column}{if_exists};
 
-Note: Postgres doesn't support DROP COLUMN CONCURRENTLY. The rewrite is unavoidable but staging the removal reduces risk."#,
+Note: Postgres doesn't support DROP COLUMN CONCURRENTLY. The rewrite is unavoidable but staging the removal reduces risk.",
                         table = table_name,
                         column = column_name,
                         if_exists = if_exists_clause(if_exists)

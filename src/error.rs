@@ -46,6 +46,7 @@ impl DieselGuardError {
     ///
     /// Adds source code with filename and computes the span from any
     /// position info in the error message. Non-parse errors are returned as-is.
+    #[must_use]
     pub fn with_file_context(self, path: &str, source: String) -> Self {
         match self {
             Self::ParseError { msg, span, .. } => {

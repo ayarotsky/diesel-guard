@@ -38,15 +38,13 @@ impl Check for AddJsonColumnCheck {
                 Some(Violation::new(
                     "ADD COLUMN with JSON type",
                     format!(
-                        "Adding column '{column}' with JSON type on table '{table}' can break existing SELECT DISTINCT queries. \
-                        The JSON type has no equality operator, causing runtime errors for DISTINCT, GROUP BY, and UNION operations.",
-                        column = column_name,
-                        table = table_name
+                        "Adding column '{column_name}' with JSON type on table '{table_name}' can break existing SELECT DISTINCT queries. \
+                        The JSON type has no equality operator, causing runtime errors for DISTINCT, GROUP BY, and UNION operations."
                     ),
                     format!(
-                        r#"Use JSONB instead of JSON:
+                        r"Use JSONB instead of JSON:
 
-   ALTER TABLE {table} ADD COLUMN {column} JSONB;
+   ALTER TABLE {table_name} ADD COLUMN {column_name} JSONB;
 
 Benefits of JSONB over JSON:
 - Has proper equality and comparison operators (supports DISTINCT, GROUP BY, UNION)
@@ -55,9 +53,7 @@ Benefits of JSONB over JSON:
 - Generally better performance for most use cases
 
 Note: The only advantage of JSON over JSONB is that it preserves exact formatting and key order,
-which is rarely needed in practice."#,
-                        table = table_name,
-                        column = column_name
+which is rarely needed in practice."
                     ),
                 ))
             })

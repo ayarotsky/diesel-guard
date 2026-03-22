@@ -60,12 +60,10 @@ impl Check for DropPrimaryKeyCheck {
                 Some(Violation::new(
                     "DROP PRIMARY KEY",
                     format!(
-                        "Dropping primary key constraint '{constraint}' from table '{table}' requires an ACCESS EXCLUSIVE lock, blocking all operations. \
-                        More critically, this breaks foreign key relationships in other tables and removes the uniqueness constraint.",
-                        constraint = constraint_name_str,
-                        table = table_name
+                        "Dropping primary key constraint '{constraint_name_str}' from table '{table_name}' requires an ACCESS EXCLUSIVE lock, blocking all operations. \
+                        More critically, this breaks foreign key relationships in other tables and removes the uniqueness constraint."
                     ),
-                    format!(r#"Consider the following before dropping a primary key:
+                    format!(r"Consider the following before dropping a primary key:
 
 1. Identify all foreign key dependencies:
    SELECT
@@ -73,7 +71,7 @@ impl Check for DropPrimaryKeyCheck {
    FROM information_schema.table_constraints tc
    JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
    JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.unique_constraint_name
-   WHERE tc.table_name = '{table}' AND tc.constraint_type = 'PRIMARY KEY';
+   WHERE tc.table_name = '{table_name}' AND tc.constraint_type = 'PRIMARY KEY';
 
 2. If you must change the primary key:
    - Create the new primary key constraint FIRST
@@ -85,11 +83,9 @@ impl Check for DropPrimaryKeyCheck {
    - Update application code gradually
    - Drop the old key only after full migration
 
-Note: This check uses naming pattern detection (e.g., '{constraint}' matches '*_pkey' pattern) and may not catch all cases.
+Note: This check uses naming pattern detection (e.g., '{constraint_name_str}' matches '*_pkey' pattern) and may not catch all cases.
 Future versions will support database connections for accurate constraint type verification.
-If this is a false positive, use a safety-assured block."#,
-                        table = table_name,
-                        constraint = constraint_name_str
+If this is a false positive, use a safety-assured block."
                     ),
                 ))
             })

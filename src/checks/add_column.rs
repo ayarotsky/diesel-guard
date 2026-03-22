@@ -47,23 +47,19 @@ impl Check for AddColumnCheck {
                 Some(Violation::new(
                     "ADD COLUMN with DEFAULT",
                     format!(
-                        "Adding column '{column}' with DEFAULT on table '{table}' requires a full table rewrite on Postgres < 11, \
-                        which acquires an ACCESS EXCLUSIVE lock and blocks all operations. Duration depends on table size.",
-                        column = column_name, table = table_name
+                        "Adding column '{column_name}' with DEFAULT on table '{table_name}' requires a full table rewrite on Postgres < 11, \
+                        which acquires an ACCESS EXCLUSIVE lock and blocks all operations. Duration depends on table size."
                     ),
-                    format!(r#"1. Add the column without a default:
-   ALTER TABLE {table} ADD COLUMN {column} {data_type};
+                    format!(r"1. Add the column without a default:
+   ALTER TABLE {table_name} ADD COLUMN {column_name} {data_type};
 
 2. Backfill data in batches (outside migration):
-   UPDATE {table} SET {column} = <value> WHERE {column} IS NULL;
+   UPDATE {table_name} SET {column_name} = <value> WHERE {column_name} IS NULL;
 
 3. Add default for new rows only:
-   ALTER TABLE {table} ALTER COLUMN {column} SET DEFAULT <value>;
+   ALTER TABLE {table_name} ALTER COLUMN {column_name} SET DEFAULT <value>;
 
-Note: For Postgres 11+, this is safe if the default is a constant value."#,
-                        table = table_name,
-                        column = column_name,
-                        data_type = data_type
+Note: For Postgres 11+, this is safe if the default is a constant value."
                     ),
                 ))
             })

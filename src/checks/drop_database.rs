@@ -35,39 +35,36 @@ impl Check for DropDatabaseCheck {
         vec![Violation::new(
             "DROP DATABASE",
             format!(
-                "Dropping database '{db}' permanently deletes the entire database \
+                "Dropping database '{db_name}' permanently deletes the entire database \
                 including all tables, data, and objects. This operation requires \
                 exclusive access (all connections must be terminated) and cannot \
-                run inside a transaction block.",
-                db = db_name
+                run inside a transaction block."
             ),
             format!(
-                r#"DROP DATABASE should almost never appear in application migrations.
+                r"DROP DATABASE should almost never appear in application migrations.
 
 If you need to drop a database:
 
 1. Verify this is intentional and coordinate with your DBA:
-   -- Confirm database '{db}' is scheduled for removal
+   -- Confirm database '{db_name}' is scheduled for removal
 
 2. Create a complete backup before proceeding:
-   pg_dump -Fc {db} > {db}_backup.dump
+   pg_dump -Fc {db_name} > {db_name}_backup.dump
 
 3. Terminate all active connections to the database:
    SELECT pg_terminate_backend(pid)
    FROM pg_stat_activity
-   WHERE datname = '{db}' AND pid <> pg_backend_pid();
+   WHERE datname = '{db_name}' AND pid <> pg_backend_pid();
 
 4. Drop the database (outside of application migrations):
-   DROP DATABASE{if_exists} {db};
+   DROP DATABASE{if_exists_str} {db_name};
 
 If this is intentional (e.g., test cleanup), use a safety-assured block:
    -- safety-assured:start
-   DROP DATABASE{if_exists} {db};
+   DROP DATABASE{if_exists_str} {db_name};
    -- safety-assured:end
 
-Note: Postgres 13+ supports WITH (FORCE) to auto-terminate connections, but this is even more dangerous."#,
-                if_exists = if_exists_str,
-                db = db_name
+Note: Postgres 13+ supports WITH (FORCE) to auto-terminate connections, but this is even more dangerous."
             ),
         )]
     }

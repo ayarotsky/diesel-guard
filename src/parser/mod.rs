@@ -34,7 +34,7 @@ pub fn parse(sql: &str) -> Result<Vec<RawStmt>> {
         })?;
         // Adjust stmt_location to be relative to the full SQL, not the individual statement.
         let adjusted = parsed.protobuf.stmts.into_iter().map(|mut s| {
-            s.stmt_location += offset as i32;
+            s.stmt_location += i32::try_from(offset).unwrap_or(0);
             s
         });
         all_stmts.extend(adjusted);
@@ -78,11 +78,11 @@ mod tests {
 
     #[test]
     fn test_parse_with_metadata() {
-        let sql = r#"
+        let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
-        "#;
+        ";
 
         let result = parse_with_metadata(sql).unwrap();
         assert_eq!(result.stmts.len(), 1);
@@ -121,10 +121,10 @@ ALTER TABLE users DROP COLUMN email;
 
     #[test]
     fn test_unique_using_index_with_other_statements() {
-        let sql = r#"
+        let sql = r"
 ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE USING INDEX users_email_idx;
 ALTER TABLE users DROP COLUMN old_field;
-        "#;
+        ";
 
         // pg_query parses BOTH statements (no more parser limitation)
         let result = parse_with_metadata(sql).unwrap();
@@ -153,10 +153,10 @@ ALTER TABLE users DROP COLUMN old_field;
 
     #[test]
     fn test_drop_index_concurrently_with_other_statements() {
-        let sql = r#"
+        let sql = r"
 DROP INDEX CONCURRENTLY idx_users_email;
 ALTER TABLE users DROP COLUMN old_field;
-        "#;
+        ";
 
         let result = parse_with_metadata(sql).unwrap();
         assert_eq!(result.stmts.len(), 2, "Both statements should be parsed");
@@ -176,10 +176,10 @@ ALTER TABLE users DROP COLUMN old_field;
 
     #[test]
     fn test_primary_key_using_index_with_other_statements() {
-        let sql = r#"
+        let sql = r"
 ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY USING INDEX users_pkey;
 ALTER TABLE users DROP COLUMN old_field;
-        "#;
+        ";
 
         let result = parse_with_metadata(sql).unwrap();
         assert_eq!(result.stmts.len(), 2, "Both statements should be parsed");
@@ -207,10 +207,10 @@ ALTER TABLE users DROP COLUMN old_field;
 
     #[test]
     fn test_reindex_with_other_statements() {
-        let sql = r#"
+        let sql = r"
 REINDEX INDEX CONCURRENTLY idx_users_email;
 ALTER TABLE users DROP COLUMN old_field;
-        "#;
+        ";
 
         let result = parse_with_metadata(sql).unwrap();
         assert_eq!(result.stmts.len(), 2, "Both statements should be parsed");

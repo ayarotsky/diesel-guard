@@ -160,20 +160,17 @@ fn main() -> Result<()> {
                 .filter(|v| v.severity == Severity::Warning)
                 .count();
 
-            match format.as_str() {
-                "json" => {
-                    println!("{}", OutputFormatter::format_json(&results));
+            if format.as_str() == "json" {
+                println!("{}", OutputFormatter::format_json(&results));
+            } else {
+                // text format
+                for (file_path, violations) in &results {
+                    print!("{}", OutputFormatter::format_text(file_path, violations));
                 }
-                _ => {
-                    // text format
-                    for (file_path, violations) in &results {
-                        print!("{}", OutputFormatter::format_text(file_path, violations));
-                    }
-                    println!(
-                        "{}",
-                        OutputFormatter::format_summary(total_errors, total_warnings)
-                    );
-                }
+                println!(
+                    "{}",
+                    OutputFormatter::format_summary(total_errors, total_warnings)
+                );
             }
 
             if total_errors > 0 {

@@ -215,12 +215,14 @@ impl Registry {
         let mut violations = Vec::new();
 
         for raw_stmt in stmts {
-            let node = match extract_node(raw_stmt) {
-                Some(node) => node,
-                None => continue,
+            let Some(node) = extract_node(raw_stmt) else {
+                continue;
             };
 
-            let offset = first_token_at_or_after(&token_starts, raw_stmt.stmt_location as usize);
+            let offset = first_token_at_or_after(
+                &token_starts,
+                usize::try_from(raw_stmt.stmt_location).unwrap_or(0),
+            );
             let stmt_line = byte_offset_to_line(sql, offset);
 
             if !ignored_lines.contains(&stmt_line) {
@@ -247,16 +249,15 @@ fn byte_offset_to_line(sql: &str, byte_offset: usize) -> usize {
 fn non_comment_token_starts(sql: &str) -> Vec<usize> {
     use pg_query::protobuf::Token;
 
-    let scan_result = match pg_query::scan(sql) {
-        Ok(r) => r,
-        Err(_) => return vec![],
+    let Ok(scan_result) = pg_query::scan(sql) else {
+        return vec![];
     };
 
     scan_result
         .tokens
         .iter()
         .filter(|t| t.token != Token::SqlComment as i32 && t.token != Token::CComment as i32)
-        .map(|t| t.start as usize)
+        .map(|t| usize::try_from(t.start).unwrap_or(0))
         .collect()
 }
 
@@ -324,7 +325,7 @@ mod tests {
         let config = Config {
             disable_checks: Registry::builtin_check_names()
                 .iter()
-                .map(|s| s.to_string())
+                .map(|s| (*s).to_string())
                 .collect(),
             ..Default::default()
         };
@@ -336,11 +337,11 @@ mod tests {
     #[test]
     fn test_check_with_safety_assured_block() {
         let registry = Registry::new();
-        let sql = r#"
+        let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
-        "#;
+        ";
 
         let result = pg_query::parse(sql).unwrap();
         let ignore_ranges = vec![IgnoreRange {

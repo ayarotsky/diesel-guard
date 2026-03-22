@@ -41,11 +41,11 @@ impl Check for AddForeignKeyCheck {
                 format!("Adding a foreign key constraint '{constraint_name}' on table '{table_name}' ({fk_cols}) without NOT VALID scans the entire table to validate existing rows,\
              acquiring ShareRowExclusiveLock for the duration. On large tables this blocks writes and is a common cause of migration-induced outages."),
                 format!(
-                    r#"For a safer foreign key addition on large tables:
+                    r"For a safer foreign key addition on large tables:
 
 1. Create a foreign key without any immediate validation:
-   ALTER TABLE {table} ADD CONSTRAINT {constraint_name}
-    FOREIGN KEY ({columns}) REFERENCES {ref_table} ({ref_cols}) NOT VALID;
+   ALTER TABLE {table_name} ADD CONSTRAINT {constraint_name}
+    FOREIGN KEY ({fk_cols}) REFERENCES {ref_table} ({ref_cols}) NOT VALID;
 
 2. Step 2 (separate migration, acquires ShareUpdateExclusiveLock only)
   ALTER TABLE {table_name} VALIDATE CONSTRAINT {constraint_name};
@@ -54,9 +54,7 @@ Benefits:
 - Table remains readable and writable during foreign key creation
 - No blocking of SELECT, INSERT, UPDATE, or DELETE operations
 - Safe for production deployments on large tables
-"#,
-                    table = table_name,
-                    columns = fk_cols,
+",
                 )))
         }).collect()
     }

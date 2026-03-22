@@ -39,30 +39,26 @@ impl Check for AddSerialColumnCheck {
                 Some(Violation::new(
                     "ADD COLUMN with SERIAL",
                     format!(
-                        "Adding column '{column}' with SERIAL type on table '{table}' requires a full table rewrite to populate sequence values for existing rows, \
-                        which acquires an ACCESS EXCLUSIVE lock and blocks all operations. Duration depends on table size and number of indexes.",
-                        column = column_name, table = table_name
+                        "Adding column '{column_name}' with SERIAL type on table '{table_name}' requires a full table rewrite to populate sequence values for existing rows, \
+                        which acquires an ACCESS EXCLUSIVE lock and blocks all operations. Duration depends on table size and number of indexes."
                     ),
-                    format!(r#"1. Create a sequence:
-   CREATE SEQUENCE {table}_{column}_seq;
+                    format!(r"1. Create a sequence:
+   CREATE SEQUENCE {table_name}_{column_name}_seq;
 
 2. Add the column WITHOUT default (fast, no rewrite):
-   ALTER TABLE {table} ADD COLUMN {column} {type_name};
+   ALTER TABLE {table_name} ADD COLUMN {column_name} {type_name};
 
 3. Backfill existing rows in batches (outside migration):
-   UPDATE {table} SET {column} = nextval('{table}_{column}_seq') WHERE {column} IS NULL;
+   UPDATE {table_name} SET {column_name} = nextval('{table_name}_{column_name}_seq') WHERE {column_name} IS NULL;
 
 4. Set default for future inserts only:
-   ALTER TABLE {table} ALTER COLUMN {column} SET DEFAULT nextval('{table}_{column}_seq');
+   ALTER TABLE {table_name} ALTER COLUMN {column_name} SET DEFAULT nextval('{table_name}_{column_name}_seq');
 
 5. Set NOT NULL if needed (Postgres 11+: safe if all values present):
-   ALTER TABLE {table} ALTER COLUMN {column} SET NOT NULL;
+   ALTER TABLE {table_name} ALTER COLUMN {column_name} SET NOT NULL;
 
 6. Set sequence ownership:
-   ALTER SEQUENCE {table}_{column}_seq OWNED BY {table}.{column};"#,
-                        table = table_name,
-                        column = column_name,
-                        type_name = type_name
+   ALTER SEQUENCE {table_name}_{column_name}_seq OWNED BY {table_name}.{column_name};"
                     ),
                 ))
             })

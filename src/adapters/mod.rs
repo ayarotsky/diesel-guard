@@ -136,7 +136,7 @@ pub(crate) fn collect_and_sort_entries(dir: &Utf8Path) -> Vec<DirEntry> {
         match result {
             Ok(entry) => entries.push(entry),
             Err(e) => {
-                eprintln!("Warning: Failed to read entry in {}: {}", dir, e);
+                eprintln!("Warning: Failed to read entry in {dir}: {e}");
             }
         }
     }

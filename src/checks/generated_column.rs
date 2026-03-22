@@ -43,44 +43,40 @@ impl Check for GeneratedColumnCheck {
                 Some(Violation::new(
                     "ADD COLUMN with GENERATED STORED",
                     format!(
-                        "Adding column '{column}' with GENERATED ALWAYS AS ... STORED on table '{table}' \
+                        "Adding column '{column_name}' with GENERATED ALWAYS AS ... STORED on table '{table_name}' \
                         triggers a full table rewrite because Postgres must compute and store the expression \
                         value for every existing row. This acquires an ACCESS EXCLUSIVE lock and blocks all operations. \
-                        Duration depends on table size.",
-                        column = column_name, table = table_name
+                        Duration depends on table size."
                     ),
-                    format!(r#"1. Add a regular nullable column instead:
-   ALTER TABLE {table} ADD COLUMN {column} {data_type};
+                    format!(r"1. Add a regular nullable column instead:
+   ALTER TABLE {table_name} ADD COLUMN {column_name} {data_type};
 
 2. Backfill values in batches (outside migration):
-   UPDATE {table} SET {column} = <expression> WHERE {column} IS NULL;
+   UPDATE {table_name} SET {column_name} = <expression> WHERE {column_name} IS NULL;
 
 3. Optionally add NOT NULL constraint:
-   ALTER TABLE {table} ALTER COLUMN {column} SET NOT NULL;
+   ALTER TABLE {table_name} ALTER COLUMN {column_name} SET NOT NULL;
 
 4. Use a trigger to compute values for new rows:
-   CREATE FUNCTION compute_{column}() RETURNS TRIGGER AS $$
+   CREATE FUNCTION compute_{column_name}() RETURNS TRIGGER AS $$
    BEGIN
-     NEW.{column} := <expression>;
+     NEW.{column_name} := <expression>;
      RETURN NEW;
    END;
    $$ LANGUAGE plpgsql;
 
-   CREATE TRIGGER trg_{column}
-   BEFORE INSERT OR UPDATE ON {table}
-   FOR EACH ROW EXECUTE FUNCTION compute_{column}();
+   CREATE TRIGGER trg_{column_name}
+   BEFORE INSERT OR UPDATE ON {table_name}
+   FOR EACH ROW EXECUTE FUNCTION compute_{column_name}();
 
 5. If the table rewrite is acceptable (e.g., small table or maintenance window),
    use a safety-assured block:
    -- safety-assured:start
-   ALTER TABLE {table} ADD COLUMN {column} {data_type} GENERATED ALWAYS AS (<expression>) STORED;
+   ALTER TABLE {table_name} ADD COLUMN {column_name} {data_type} GENERATED ALWAYS AS (<expression>) STORED;
    -- safety-assured:end
 
 Note: Postgres does not support VIRTUAL generated columns (only STORED).
-For new empty tables, GENERATED STORED columns are acceptable."#,
-                        table = table_name,
-                        column = column_name,
-                        data_type = data_type
+For new empty tables, GENERATED STORED columns are acceptable."
                     ),
                 ))
             })

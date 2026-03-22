@@ -1,6 +1,7 @@
 use crate::violation::{Severity, Violation};
-use colored::*;
+use colored::Colorize;
 use serde_json;
+use std::fmt::Write;
 
 pub struct OutputFormatter;
 
@@ -17,12 +18,14 @@ impl OutputFormatter {
             "Migration warnings in".yellow().bold()
         };
 
-        output.push_str(&format!(
+        write!(
+            output,
             "{} {} {}\n\n",
             header_icon,
             header_label,
             file_path.yellow()
-        ));
+        )
+        .unwrap();
 
         for violation in violations {
             let (icon, label) = match violation.severity {
@@ -30,14 +33,14 @@ impl OutputFormatter {
                 Severity::Warning => ("⚠️ ", violation.operation.as_str().yellow().bold()),
             };
 
-            output.push_str(&format!("{} {}\n\n", icon, label));
+            write!(output, "{icon} {label}\n\n").unwrap();
 
-            output.push_str(&format!("{}\n", "Problem:".white().bold()));
-            output.push_str(&format!("  {}\n\n", violation.problem));
+            writeln!(output, "{}", "Problem:".white().bold()).unwrap();
+            write!(output, "  {}\n\n", violation.problem).unwrap();
 
-            output.push_str(&format!("{}\n", "Safe alternative:".green().bold()));
+            writeln!(output, "{}", "Safe alternative:".green().bold()).unwrap();
             for line in violation.safe_alternative.lines() {
-                output.push_str(&format!("  {}\n", line));
+                writeln!(output, "  {line}").unwrap();
             }
 
             output.push('\n');

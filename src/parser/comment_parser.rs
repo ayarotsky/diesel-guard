@@ -42,8 +42,7 @@ impl CommentParser {
             if Self::is_start_directive(trimmed) {
                 if current_start.is_some() {
                     return Err(DieselGuardError::parse_error(format!(
-                        "Nested 'safety-assured:start' at line {}. Nested blocks are not supported. Close the previous block before starting a new one.",
-                        line_num
+                        "Nested 'safety-assured:start' at line {line_num}. Nested blocks are not supported. Close the previous block before starting a new one."
                     )));
                 }
                 current_start = Some(line_num);
@@ -59,8 +58,7 @@ impl CommentParser {
                     }
                     None => {
                         return Err(DieselGuardError::parse_error(format!(
-                            "Unmatched 'safety-assured:end' at line {}. Each 'safety-assured:end' must have a matching 'safety-assured:start' before it.",
-                            line_num
+                            "Unmatched 'safety-assured:end' at line {line_num}. Each 'safety-assured:end' must have a matching 'safety-assured:start' before it."
                         )));
                     }
                 }
@@ -70,8 +68,7 @@ impl CommentParser {
         // Check for unclosed blocks
         if let Some(start_line) = current_start {
             return Err(DieselGuardError::parse_error(format!(
-                "Unclosed 'safety-assured:start' at line {}. Did you forget to add 'safety-assured:end'?",
-                start_line
+                "Unclosed 'safety-assured:start' at line {start_line}. Did you forget to add 'safety-assured:end'?"
             )));
         }
 
@@ -95,11 +92,11 @@ mod tests {
 
     #[test]
     fn test_parse_simple_block() {
-        let sql = r#"
+        let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
-        "#;
+        ";
 
         let ranges = CommentParser::parse_ignore_ranges(sql).unwrap();
         assert_eq!(ranges.len(), 1);
@@ -109,7 +106,7 @@ ALTER TABLE users DROP COLUMN email;
 
     #[test]
     fn test_multiple_blocks() {
-        let sql = r#"
+        let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
@@ -119,7 +116,7 @@ ALTER TABLE posts ADD COLUMN body TEXT;
 -- safety-assured:start
 DROP INDEX old_index;
 -- safety-assured:end
-        "#;
+        ";
 
         let ranges = CommentParser::parse_ignore_ranges(sql).unwrap();
         assert_eq!(ranges.len(), 2);
@@ -131,11 +128,11 @@ DROP INDEX old_index;
 
     #[test]
     fn test_case_insensitive() {
-        let sql = r#"
+        let sql = r"
 -- SAFETY-ASSURED:START
 ALTER TABLE users DROP COLUMN email;
 -- safety-ASSURED:end
-        "#;
+        ";
 
         let ranges = CommentParser::parse_ignore_ranges(sql).unwrap();
         assert_eq!(ranges.len(), 1);
@@ -143,10 +140,10 @@ ALTER TABLE users DROP COLUMN email;
 
     #[test]
     fn test_unmatched_end() {
-        let sql = r#"
+        let sql = r"
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
-        "#;
+        ";
 
         let err = CommentParser::parse_ignore_ranges(sql).unwrap_err();
         assert_eq!(
@@ -157,10 +154,10 @@ ALTER TABLE users DROP COLUMN email;
 
     #[test]
     fn test_unclosed_start() {
-        let sql = r#"
+        let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
-        "#;
+        ";
 
         let err = CommentParser::parse_ignore_ranges(sql).unwrap_err();
         assert_eq!(
@@ -171,14 +168,14 @@ ALTER TABLE users DROP COLUMN email;
 
     #[test]
     fn test_nested_blocks_error() {
-        let sql = r#"
+        let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:start
 ALTER TABLE posts DROP COLUMN body;
 -- safety-assured:end
 -- safety-assured:end
-        "#;
+        ";
 
         // Nested blocks should be rejected with clear error
         let err = CommentParser::parse_ignore_ranges(sql).unwrap_err();
@@ -190,10 +187,10 @@ ALTER TABLE posts DROP COLUMN body;
 
     #[test]
     fn test_empty_block() {
-        let sql = r#"
+        let sql = r"
 -- safety-assured:start
 -- safety-assured:end
-        "#;
+        ";
 
         let ranges = CommentParser::parse_ignore_ranges(sql).unwrap();
         assert_eq!(ranges.len(), 1);
@@ -203,13 +200,13 @@ ALTER TABLE posts DROP COLUMN body;
 
     #[test]
     fn test_block_with_comments() {
-        let sql = r#"
+        let sql = r"
 -- safety-assured:start
 -- This column was deprecated
 ALTER TABLE users DROP COLUMN email;
 -- All references removed
 -- safety-assured:end
-        "#;
+        ";
 
         let ranges = CommentParser::parse_ignore_ranges(sql).unwrap();
         assert_eq!(ranges.len(), 1);
@@ -219,10 +216,10 @@ ALTER TABLE users DROP COLUMN email;
 
     #[test]
     fn test_no_blocks() {
-        let sql = r#"
+        let sql = r"
 ALTER TABLE users DROP COLUMN email;
 ALTER TABLE posts ADD COLUMN body TEXT;
-        "#;
+        ";
 
         let ranges = CommentParser::parse_ignore_ranges(sql).unwrap();
         assert_eq!(ranges.len(), 0);
@@ -267,11 +264,11 @@ ALTER TABLE posts ADD COLUMN body TEXT;
         ));
 
         // Invalid directive should cause an error (unmatched end)
-        let sql = r#"
+        let sql = r"
 -- safety-assured:start111
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
-        "#;
+        ";
 
         let err = CommentParser::parse_ignore_ranges(sql)
             .expect_err("Invalid start directive should not be recognized");

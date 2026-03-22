@@ -339,7 +339,7 @@ fn test_multiple_migrations_with_start_after() {
     ];
 
     for timestamp in &timestamps {
-        let migration_dir = temp_dir.path().join(format!("{}_migration", timestamp));
+        let migration_dir = temp_dir.path().join(format!("{timestamp}_migration"));
         fs::create_dir(&migration_dir).unwrap();
         fs::write(
             migration_dir.join("up.sql"),

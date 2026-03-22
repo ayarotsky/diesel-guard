@@ -32,16 +32,15 @@ impl Check for CreateExtensionCheck {
         vec![Violation::new(
             "CREATE EXTENSION",
             format!(
-                "Creating extension '{extension}' in a migration requires superuser privileges, which application \
+                "Creating extension '{extension_name}' in a migration requires superuser privileges, which application \
                 database users typically lack in production. Extensions are infrastructure concerns that should be \
-                managed outside application migrations.",
-                extension = extension_name
+                managed outside application migrations."
             ),
             format!(
-                r#"Install the extension outside of migrations:
+                r"Install the extension outside of migrations:
 
 1. For local development, add to your database setup scripts:
-   CREATE EXTENSION {if_not_exists}{extension};
+   CREATE EXTENSION {if_not_exists_str}{extension_name};
 
 2. For production, use infrastructure automation (Ansible, Terraform, etc.):
    - Include extension installation in database provisioning
@@ -51,9 +50,7 @@ impl Check for CreateExtensionCheck {
 3. Document required extensions in your project README
 
 Note: Common extensions like pg_trgm, uuid-ossp, hstore, and postgis should be
-installed by your DBA or infrastructure team before application deployment."#,
-                if_not_exists = if_not_exists_str,
-                extension = extension_name
+installed by your DBA or infrastructure team before application deployment."
             ),
         )]
     }

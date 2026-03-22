@@ -38,6 +38,7 @@ impl Violation {
         }
     }
 
+    #[must_use]
     pub fn with_severity(mut self, severity: Severity) -> Self {
         self.severity = severity;
         self
