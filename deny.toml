@@ -95,7 +95,6 @@ allow = [
     "MPL-2.0",
     "BSD-3-Clause",
     "ISC",
-    "Unicode-DFS-2016",
     "Unicode-3.0",
     "CC0-1.0",
 ]
@@ -204,16 +203,23 @@ deny = [
 
 # Certain crates/versions that will be skipped when doing duplicate detection.
 skip = [
-    #"ansi_term@0.11.0",
-    #{ crate = "ansi_term@0.11.0", reason = "you can specify a reason why it can't be updated/removed" },
+    # pg_query v6 uses thiserror v1; we use v2 — can't change without updating pg_query
+    { crate = "thiserror@1.0.69", reason = "pg_query requires thiserror v1" },
+    { crate = "thiserror-impl@1.0.69", reason = "pg_query requires thiserror v1" },
+    # pg_query uses itertools v0.10; prost-build/prost-derive use v0.14
+    { crate = "itertools@0.10.5", reason = "pg_query requires itertools v0.10" },
+    # rhai's ahash uses const-random which requires getrandom v0.2
+    { crate = "getrandom@0.2.17", reason = "rhai's ahash dependency requires getrandom v0.2" },
+    # miette uses unicode-width v0.1 directly; textwrap (also via miette) uses v0.2
+    { crate = "unicode-width@0.1.14", reason = "miette requires unicode-width v0.1" },
 ]
 # Similarly to `skip` allows you to skip certain crates during duplicate
 # detection. Unlike skip, it also includes the entire tree of transitive
 # dependencies starting at the specified crate, up to a certain depth, which is
 # by default infinite.
 skip-tree = [
-    #"ansi_term@0.11.0", # will be skipped along with _all_ of its direct and transitive dependencies
-    #{ crate = "ansi_term@0.11.0", depth = 20 },
+    # pg_query's build script uses bindgen v0.66 which drags in old rustix/linux-raw-sys/windows-* versions
+    { crate = "bindgen@0.66.1", reason = "pg_query build dep, pulls in old rustix/windows-sys/linux-raw-sys" },
 ]
 
 # This section is considered when running `cargo deny check sources`.

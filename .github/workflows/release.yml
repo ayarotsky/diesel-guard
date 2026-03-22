@@ -272,7 +272,7 @@ jobs:
             --notes-file "$RUNNER_TEMP/notes.txt" \
             artifacts/*
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
   publish-homebrew-formula:
     needs:
