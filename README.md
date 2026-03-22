@@ -97,7 +97,7 @@ Add to your GitHub Actions workflow:
 
 ## What It Detects
 
-27 built-in checks across locking, rewrites, and schema safety:
+28 built-in checks across locking, rewrites, and schema safety:
 
 | Check                                            | Risk                                              |
 |--------------------------------------------------|---------------------------------------------------|
@@ -119,6 +119,7 @@ Add to your GitHub Actions workflow:
 | REFRESH MATERIALIZED VIEW without CONCURRENTLY   | ACCESS EXCLUSIVE lock, blocks all reads           |
 | REINDEX without CONCURRENTLY                     | ACCESS EXCLUSIVE lock                             |
 | RENAME COLUMN                                    | Breaks running app references immediately         |
+| RENAME SCHEMA                                    | Breaks all references to objects in the schema    |
 | RENAME TABLE                                     | Breaks running app references, ACCESS EXCLUSIVE   |
 | TRUNCATE TABLE                                   | ACCESS EXCLUSIVE, cannot be batched               |
 | ADD COLUMN with JSON                             | Breaks DISTINCT/GROUP BY                          |

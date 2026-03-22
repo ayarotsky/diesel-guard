@@ -374,6 +374,17 @@ fn test_rename_column_detected() {
 }
 
 #[test]
+fn test_rename_schema_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("rename_schema_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(violations[0].operation, "RENAME SCHEMA");
+}
+
+#[test]
 fn test_rename_table_detected() {
     let checker = SafetyChecker::new();
     let path = fixture_path("rename_table_unsafe");
@@ -498,14 +509,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        31,
-        "Expected violations in 31 files, got {}",
+        32,
+        "Expected violations in 32 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 41,
-        "Expected 41 total violations: 28 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 6, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {total_violations}"
+        total_violations, 42,
+        "Expected 42 total violations: 29 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 6, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {total_violations}"
     );
 }
 
