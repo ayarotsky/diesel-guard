@@ -1,10 +1,12 @@
 # Checks
 
-diesel-guard ships with 24 built-in safety checks covering the most common Postgres migration hazards.
+diesel-guard ships with 27 built-in safety checks covering the most common Postgres migration hazards.
 
 | Check | Operation | Lock Type |
 |---|---|---|
+| [Add Check Constraint](add-check-constraint.md) | `ALTER TABLE ... ADD CONSTRAINT ... CHECK` without `NOT VALID` | ACCESS EXCLUSIVE |
 | [ADD COLUMN with DEFAULT](add-column-default.md) | `ALTER TABLE ... ADD COLUMN ... DEFAULT` | ACCESS EXCLUSIVE + table rewrite |
+| [Add Foreign Key](add_foreign_key.md) | `ALTER TABLE ... ADD FOREIGN KEY` without `NOT VALID` | ShareRowExclusiveLock |
 | [Adding an Index](adding-index.md) | `CREATE INDEX` without `CONCURRENTLY`; `CREATE INDEX CONCURRENTLY` inside a transaction | SHARE |
 | [Adding a UNIQUE Constraint](adding-unique-constraint.md) | `ALTER TABLE ... ADD UNIQUE` | ACCESS EXCLUSIVE |
 | [Changing Column Type](changing-column-type.md) | `ALTER TABLE ... ALTER COLUMN ... TYPE` | ACCESS EXCLUSIVE + table rewrite |
@@ -19,6 +21,7 @@ diesel-guard ships with 24 built-in safety checks covering the most common Postg
 | [Generated Columns](generated-column.md) | `ADD COLUMN ... GENERATED ALWAYS AS ... STORED` | ACCESS EXCLUSIVE + table rewrite |
 | [JSON Fields](json-field.md) | `ADD COLUMN ... JSON` | — (best practice) |
 | [Wide Indexes](multiple-column-index.md) | `CREATE INDEX` with 4+ columns | — (best practice) |
+| [REFRESH MATERIALIZED VIEW](refresh-materialized-view.md) | `REFRESH MATERIALIZED VIEW` without `CONCURRENTLY`; `REFRESH MATERIALIZED VIEW CONCURRENTLY` inside a transaction | ACCESS EXCLUSIVE |
 | [Renaming a Column](renaming-column.md) | `ALTER TABLE ... RENAME COLUMN` | ACCESS EXCLUSIVE |
 | [Renaming a Table](renaming-table.md) | `ALTER TABLE ... RENAME TO` | ACCESS EXCLUSIVE |
 | [REINDEX](reindexing.md) | `REINDEX` without `CONCURRENTLY`; `REINDEX CONCURRENTLY` inside a transaction | ACCESS EXCLUSIVE |

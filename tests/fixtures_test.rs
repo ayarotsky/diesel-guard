@@ -28,6 +28,7 @@ fn test_safe_fixtures_pass() {
         "drop_index_safe",
         "drop_not_null_safe",
         "generated_column_safe",
+        "refresh_matview_safe",
         "reindex_safe",
         "safety_assured_drop",
         "safety_assured_multiple",
@@ -321,6 +322,20 @@ fn test_generated_column_detected() {
 }
 
 #[test]
+fn test_refresh_matview_without_concurrently_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("refresh_matview_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(
+        violations[0].operation,
+        "REFRESH MATERIALIZED VIEW without CONCURRENTLY"
+    );
+}
+
+#[test]
 fn test_reindex_without_concurrently_detected() {
     let checker = SafetyChecker::new();
     let path = fixture_path("reindex_unsafe");
@@ -483,14 +498,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        30,
-        "Expected violations in 30 files, got {}",
+        31,
+        "Expected violations in 31 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 40,
-        "Expected 40 total violations: 27 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 6, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {total_violations}"
+        total_violations, 41,
+        "Expected 41 total violations: 28 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 6, short_int_pk_unsafe with 5 (4 short int + 1 add pk), got {total_violations}"
     );
 }
 
@@ -556,7 +571,9 @@ fn test_safe_sqlx_fixtures_pass() {
     // which is now correctly detected as a violation.
     let safe_sqlx_fixtures = vec![
         "tests/fixtures_sqlx/sqlx_concurrently_with_directive",
+        "tests/fixtures_sqlx/sqlx_drop_index_safe",
         "tests/fixtures_sqlx/sqlx_reindex_safe",
+        "tests/fixtures_sqlx/sqlx_refresh_matview_safe",
     ];
 
     for fixture in safe_sqlx_fixtures {
@@ -597,6 +614,140 @@ fn test_sqlx_concurrently_without_no_transaction_detected() {
 }
 
 #[test]
+fn test_sqlx_add_index_without_concurrently_detected() {
+    use diesel_guard::Config;
+
+    let config = Config {
+        framework: "sqlx".to_string(),
+        ..Default::default()
+    };
+    let checker = SafetyChecker::with_config(config);
+
+    let results = checker
+        .check_directory(Utf8Path::new("tests/fixtures_sqlx/sqlx_add_index_unsafe"))
+        .unwrap();
+
+    assert_eq!(results.len(), 1, "Expected 1 file with violations");
+    assert_eq!(results[0].1.len(), 1, "Expected 1 violation");
+    assert_eq!(results[0].1[0].operation, "ADD INDEX without CONCURRENTLY");
+}
+
+#[test]
+fn test_sqlx_drop_index_without_concurrently_detected() {
+    use diesel_guard::Config;
+
+    let config = Config {
+        framework: "sqlx".to_string(),
+        ..Default::default()
+    };
+    let checker = SafetyChecker::with_config(config);
+
+    let results = checker
+        .check_directory(Utf8Path::new("tests/fixtures_sqlx/sqlx_drop_index_unsafe"))
+        .unwrap();
+
+    assert_eq!(results.len(), 1, "Expected 1 file with violations");
+    assert_eq!(results[0].1.len(), 1, "Expected 1 violation");
+    assert_eq!(results[0].1[0].operation, "DROP INDEX without CONCURRENTLY");
+}
+
+#[test]
+fn test_sqlx_drop_index_concurrently_missing_directive_detected() {
+    use diesel_guard::Config;
+
+    let config = Config {
+        framework: "sqlx".to_string(),
+        ..Default::default()
+    };
+    let checker = SafetyChecker::with_config(config);
+
+    let results = checker
+        .check_directory(Utf8Path::new(
+            "tests/fixtures_sqlx/sqlx_drop_index_missing_directive",
+        ))
+        .unwrap();
+
+    assert_eq!(results.len(), 1, "Expected 1 file with violations");
+    assert_eq!(results[0].1.len(), 1, "Expected 1 violation");
+    assert_eq!(
+        results[0].1[0].operation,
+        "DROP INDEX CONCURRENTLY inside a transaction"
+    );
+}
+
+#[test]
+fn test_sqlx_reindex_concurrently_missing_directive_detected() {
+    use diesel_guard::Config;
+
+    let config = Config {
+        framework: "sqlx".to_string(),
+        ..Default::default()
+    };
+    let checker = SafetyChecker::with_config(config);
+
+    let results = checker
+        .check_directory(Utf8Path::new(
+            "tests/fixtures_sqlx/sqlx_reindex_missing_directive",
+        ))
+        .unwrap();
+
+    assert_eq!(results.len(), 1, "Expected 1 file with violations");
+    assert_eq!(results[0].1.len(), 1, "Expected 1 violation");
+    assert_eq!(
+        results[0].1[0].operation,
+        "REINDEX CONCURRENTLY inside a transaction"
+    );
+}
+
+#[test]
+fn test_sqlx_refresh_matview_without_concurrently_detected() {
+    use diesel_guard::Config;
+
+    let config = Config {
+        framework: "sqlx".to_string(),
+        ..Default::default()
+    };
+    let checker = SafetyChecker::with_config(config);
+
+    let results = checker
+        .check_directory(Utf8Path::new(
+            "tests/fixtures_sqlx/sqlx_refresh_matview_unsafe",
+        ))
+        .unwrap();
+
+    assert_eq!(results.len(), 1, "Expected 1 file with violations");
+    assert_eq!(results[0].1.len(), 1, "Expected 1 violation");
+    assert_eq!(
+        results[0].1[0].operation,
+        "REFRESH MATERIALIZED VIEW without CONCURRENTLY"
+    );
+}
+
+#[test]
+fn test_sqlx_refresh_matview_concurrently_missing_directive_detected() {
+    use diesel_guard::Config;
+
+    let config = Config {
+        framework: "sqlx".to_string(),
+        ..Default::default()
+    };
+    let checker = SafetyChecker::with_config(config);
+
+    let results = checker
+        .check_directory(Utf8Path::new(
+            "tests/fixtures_sqlx/sqlx_refresh_matview_missing_directive",
+        ))
+        .unwrap();
+
+    assert_eq!(results.len(), 1, "Expected 1 file with violations");
+    assert_eq!(results[0].1.len(), 1, "Expected 1 violation");
+    assert_eq!(
+        results[0].1[0].operation,
+        "REFRESH MATERIALIZED VIEW CONCURRENTLY inside a transaction"
+    );
+}
+
+#[test]
 fn test_check_all_sqlx_fixtures() {
     use diesel_guard::Config;
 
@@ -610,10 +761,18 @@ fn test_check_all_sqlx_fixtures() {
     // Check each fixture directory individually and collect results
     let fixture_dirs = vec![
         "tests/fixtures_sqlx/sqlx_suffix_add_column_unsafe",
+        "tests/fixtures_sqlx/sqlx_add_index_unsafe",
         "tests/fixtures_sqlx/sqlx_concurrently_missing_directive",
         "tests/fixtures_sqlx/sqlx_concurrently_with_directive",
+        "tests/fixtures_sqlx/sqlx_drop_index_unsafe",
+        "tests/fixtures_sqlx/sqlx_drop_index_safe",
+        "tests/fixtures_sqlx/sqlx_drop_index_missing_directive",
         "tests/fixtures_sqlx/sqlx_reindex_unsafe",
         "tests/fixtures_sqlx/sqlx_reindex_safe",
+        "tests/fixtures_sqlx/sqlx_reindex_missing_directive",
+        "tests/fixtures_sqlx/sqlx_refresh_matview_unsafe",
+        "tests/fixtures_sqlx/sqlx_refresh_matview_safe",
+        "tests/fixtures_sqlx/sqlx_refresh_matview_missing_directive",
     ];
 
     let mut all_violations = 0;
@@ -630,16 +789,22 @@ fn test_check_all_sqlx_fixtures() {
     }
 
     // Expected violations (with check_down = false):
-    // 1. sqlx_suffix_add_column_unsafe/.up.sql - 1 violation (ADD COLUMN with DEFAULT)
-    // 2. sqlx_concurrently_missing_directive - 1 violation (CREATE INDEX CONCURRENTLY inside a transaction)
-    // 3. sqlx_reindex_unsafe - 1 violation (REINDEX without CONCURRENTLY)
+    // 1. sqlx_suffix_add_column_unsafe - 1 violation (ADD COLUMN with DEFAULT)
+    // 2. sqlx_add_index_unsafe - 1 violation (ADD INDEX without CONCURRENTLY)
+    // 3. sqlx_concurrently_missing_directive - 1 violation (CREATE INDEX CONCURRENTLY inside a transaction)
+    // 4. sqlx_drop_index_unsafe - 1 violation (DROP INDEX without CONCURRENTLY)
+    // 5. sqlx_drop_index_missing_directive - 1 violation (DROP INDEX CONCURRENTLY inside a transaction)
+    // 6. sqlx_reindex_unsafe - 1 violation (REINDEX without CONCURRENTLY)
+    // 7. sqlx_reindex_missing_directive - 1 violation (REINDEX CONCURRENTLY inside a transaction)
+    // 8. sqlx_refresh_matview_unsafe - 1 violation (REFRESH MATERIALIZED VIEW without CONCURRENTLY)
+    // 9. sqlx_refresh_matview_missing_directive - 1 violation (REFRESH MATERIALIZED VIEW CONCURRENTLY inside a transaction)
     // Note: .down.sql correctly skipped, with-directive and safe fixtures have 0 violations
     assert_eq!(
-        files_with_violations, 3,
-        "Expected 3 files with violations, got {files_with_violations}"
+        files_with_violations, 9,
+        "Expected 9 files with violations, got {files_with_violations}"
     );
     assert_eq!(
-        all_violations, 3,
-        "Expected 3 total violations, got {all_violations}"
+        all_violations, 9,
+        "Expected 9 total violations, got {all_violations}"
     );
 }

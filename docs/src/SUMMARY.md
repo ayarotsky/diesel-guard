@@ -23,6 +23,7 @@
   - [Generated Columns](checks/generated-column.md)
   - [JSON Fields](checks/json-field.md)
   - [Wide Indexes](checks/multiple-column-index.md)
+  - [REFRESH MATERIALIZED VIEW](checks/refresh-materialized-view.md)
   - [Renaming a Column](checks/renaming-column.md)
   - [Renaming a Table](checks/renaming-table.md)
   - [REINDEX](checks/reindexing.md)

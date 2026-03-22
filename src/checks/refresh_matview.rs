@@ -1,0 +1,247 @@
+//! Detection for REFRESH MATERIALIZED VIEW without CONCURRENTLY.
+//!
+//! This check identifies `REFRESH MATERIALIZED VIEW` statements that don't use the CONCURRENTLY
+//! option, which blocks all reads on the view for the duration of the refresh.
+//!
+//! Refreshing a materialized view without CONCURRENTLY acquires an AccessExclusiveLock on the view,
+//! which blocks all reads (SELECT) until the refresh completes. Duration depends on view complexity
+//! and underlying data size.
+//!
+//! Using CONCURRENTLY allows the view to be refreshed while permitting concurrent reads,
+//! though it takes longer, requires a unique index on the view, and cannot run inside a
+//! transaction block.
+
+use crate::checks::pg_helpers::{NodeEnum, range_var_name};
+use crate::checks::{Check, Config, MigrationContext};
+use crate::violation::Violation;
+
+pub struct RefreshMatViewCheck;
+
+impl Check for RefreshMatViewCheck {
+    fn check(&self, node: &NodeEnum, _config: &Config, ctx: &MigrationContext) -> Vec<Violation> {
+        let NodeEnum::RefreshMatViewStmt(stmt) = node else {
+            return vec![];
+        };
+
+        let view_name = stmt
+            .relation
+            .as_ref()
+            .map(range_var_name)
+            .unwrap_or_default();
+
+        if !stmt.concurrent {
+            // REFRESH MATERIALIZED VIEW without CONCURRENTLY — always a violation
+            let suggestion = format!(
+                r#"Use CONCURRENTLY to refresh the view without blocking reads:
+   REFRESH MATERIALIZED VIEW CONCURRENTLY {view_name};
+
+Note: CONCURRENTLY takes longer and requires a unique index on the materialized view. Without a unique index, PostgreSQL will refuse the CONCURRENTLY option.
+
+Considerations:
+- Requires a unique index on the view (e.g. CREATE UNIQUE INDEX ON {view_name}(id);)
+- Takes longer to complete than a non-concurrent refresh
+- If it fails, the view data remains unchanged — no "partial" refresh state"#,
+            );
+
+            let safe_alternative = if ctx.run_in_transaction {
+                format!(
+                    "{suggestion}\n\nNote: CONCURRENTLY cannot run inside a transaction block.\n{hint}",
+                    hint = ctx.no_transaction_hint
+                )
+            } else {
+                suggestion
+            };
+
+            return vec![Violation::new(
+                "REFRESH MATERIALIZED VIEW without CONCURRENTLY",
+                format!(
+                    "Refreshing materialized view '{view_name}' without CONCURRENTLY acquires an \
+                    AccessExclusiveLock, blocking all reads (SELECT) for the duration of the refresh. \
+                    Duration depends on view complexity and underlying data size."
+                ),
+                safe_alternative,
+            )];
+        }
+
+        // REFRESH MATERIALIZED VIEW CONCURRENTLY — safe only if migration runs outside a transaction
+        if !ctx.run_in_transaction {
+            return vec![];
+        }
+
+        // REFRESH MATERIALIZED VIEW CONCURRENTLY inside a transaction — PostgreSQL will error at runtime
+        vec![Violation::new(
+            "REFRESH MATERIALIZED VIEW CONCURRENTLY inside a transaction",
+            format!(
+                "Refreshing materialized view '{view_name}' with CONCURRENTLY cannot run inside a \
+                transaction block. PostgreSQL will raise an error at runtime."
+            ),
+            ctx.no_transaction_hint,
+        )]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::checks::test_utils::parse_sql;
+    use crate::{assert_detects_violation, assert_detects_violation_containing};
+
+    #[test]
+    fn test_detects_refresh_without_concurrently() {
+        assert_detects_violation!(
+            RefreshMatViewCheck,
+            "REFRESH MATERIALIZED VIEW my_view;",
+            "REFRESH MATERIALIZED VIEW without CONCURRENTLY"
+        );
+    }
+
+    #[test]
+    fn test_detects_refresh_without_concurrently_mentions_view_name() {
+        assert_detects_violation_containing!(
+            RefreshMatViewCheck,
+            "REFRESH MATERIALIZED VIEW my_view;",
+            "REFRESH MATERIALIZED VIEW without CONCURRENTLY",
+            "my_view"
+        );
+    }
+
+    #[test]
+    fn test_allows_refresh_with_concurrently_outside_transaction() {
+        let stmt = parse_sql("REFRESH MATERIALIZED VIEW CONCURRENTLY my_view;");
+        let violations = RefreshMatViewCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: false,
+                ..MigrationContext::default()
+            },
+        );
+        assert_eq!(
+            violations.len(),
+            0,
+            "Expected no violations outside transaction"
+        );
+    }
+
+    #[test]
+    fn test_detects_concurrent_in_transaction() {
+        let stmt = parse_sql("REFRESH MATERIALIZED VIEW CONCURRENTLY my_view;");
+        let violations = RefreshMatViewCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: true,
+                ..MigrationContext::default()
+            },
+        );
+        assert_eq!(violations.len(), 1, "Expected 1 violation");
+        assert_eq!(
+            violations[0].operation,
+            "REFRESH MATERIALIZED VIEW CONCURRENTLY inside a transaction"
+        );
+    }
+
+    #[test]
+    fn test_allows_concurrent_outside_transaction() {
+        let stmt = parse_sql("REFRESH MATERIALIZED VIEW CONCURRENTLY my_view;");
+        let violations = RefreshMatViewCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: false,
+                ..MigrationContext::default()
+            },
+        );
+        assert_eq!(violations.len(), 0, "Expected no violations");
+    }
+
+    #[test]
+    fn test_ignores_other_statements() {
+        let stmt = parse_sql("CREATE TABLE users (id SERIAL PRIMARY KEY);");
+        let violations =
+            RefreshMatViewCheck.check(&stmt, &Config::default(), &MigrationContext::default());
+        assert_eq!(violations.len(), 0);
+    }
+
+    #[test]
+    fn test_safe_alternative_includes_transaction_hint_when_in_transaction() {
+        let stmt = parse_sql("REFRESH MATERIALIZED VIEW my_view;");
+        let violations = RefreshMatViewCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: true,
+                no_transaction_hint: "Create `metadata.toml` with `run_in_transaction = false`.",
+            },
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(
+            violations[0]
+                .safe_alternative
+                .contains("Create `metadata.toml` with `run_in_transaction = false`."),
+            "Expected transaction hint in safe_alternative"
+        );
+        assert!(
+            violations[0]
+                .safe_alternative
+                .contains("CONCURRENTLY cannot run inside a transaction block"),
+            "Expected transaction note in safe_alternative"
+        );
+    }
+
+    #[test]
+    fn test_safe_alternative_omits_transaction_hint_when_outside_transaction() {
+        let stmt = parse_sql("REFRESH MATERIALIZED VIEW my_view;");
+        let violations = RefreshMatViewCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: false,
+                no_transaction_hint: "Create `metadata.toml` with `run_in_transaction = false`.",
+            },
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(
+            !violations[0]
+                .safe_alternative
+                .contains("Create `metadata.toml` with `run_in_transaction = false`."),
+            "Expected no transaction hint in safe_alternative"
+        );
+    }
+
+    #[test]
+    fn test_sqlx_framework_safe_alternative_message() {
+        let stmt = parse_sql("REFRESH MATERIALIZED VIEW CONCURRENTLY my_view;");
+        let violations = RefreshMatViewCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: true,
+                no_transaction_hint: "Add `-- no-transaction` as the first line of the migration file.",
+            },
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(
+            violations[0].safe_alternative.contains("-- no-transaction"),
+            "Expected SQLx safe alternative message"
+        );
+    }
+
+    #[test]
+    fn test_diesel_framework_safe_alternative_message() {
+        let stmt = parse_sql("REFRESH MATERIALIZED VIEW CONCURRENTLY my_view;");
+        let violations = RefreshMatViewCheck.check(
+            &stmt,
+            &Config::default(),
+            &MigrationContext {
+                run_in_transaction: true,
+                no_transaction_hint: "Create `metadata.toml` in the migration directory with `run_in_transaction = false`.",
+            },
+        );
+        assert_eq!(violations.len(), 1);
+        assert!(
+            violations[0].safe_alternative.contains("metadata.toml"),
+            "Expected Diesel safe alternative message"
+        );
+    }
+}
