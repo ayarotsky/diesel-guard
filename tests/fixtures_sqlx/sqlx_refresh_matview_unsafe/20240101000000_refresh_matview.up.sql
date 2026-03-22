@@ -1,0 +1,2 @@
+-- Unsafe: REFRESH MATERIALIZED VIEW without CONCURRENTLY blocks all reads
+REFRESH MATERIALIZED VIEW my_view;
