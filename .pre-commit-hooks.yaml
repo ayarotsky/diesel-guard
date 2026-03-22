@@ -1,0 +1,7 @@
+- id: diesel-guard
+  name: diesel-guard
+  description: Check SQL migrations for unsafe PostgreSQL operations
+  language: rust
+  entry: diesel-guard check
+  files: \.sql$
+  pass_filenames: false

@@ -49,6 +49,15 @@ Via PowerShell (Windows):
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/ayarotsky/diesel-guard/releases/latest/download/diesel-guard-installer.ps1 | iex"
 ```
 
+Via pre-commit:
+```yaml
+repos:
+  - repo: https://github.com/ayarotsky/diesel-guard
+    rev: v0.8.0
+    hooks:
+      - id: diesel-guard
+```
+
 ## Quick Start
 
 ```sh

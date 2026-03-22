@@ -2,8 +2,6 @@
 
 ## GitHub Actions
 
-Add `diesel-guard` to your CI pipeline to automatically check migrations on pull requests.
-
 ### Option 1: GitHub Action (Recommended)
 
 Use the official GitHub Action:
@@ -69,3 +67,4 @@ jobs:
       - name: Check DB migrations
         run: diesel-guard check
 ```
+
