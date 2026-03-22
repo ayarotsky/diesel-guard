@@ -1,4 +1,5 @@
 use crate::error::{DieselGuardError, Result};
+use miette::{SourceOffset, SourceSpan};
 use pg_query::protobuf::RawStmt;
 
 pub mod comment_parser;
@@ -14,9 +15,31 @@ pub struct ParsedSql {
 
 /// Parse SQL string into AST statements
 pub fn parse(sql: &str) -> Result<Vec<RawStmt>> {
-    pg_query::parse(sql)
-        .map(|result| result.protobuf.stmts)
-        .map_err(|e| DieselGuardError::parse_error(e.to_string()))
+    // Split first so each statement's byte offset is known before parsing.
+    // If the scanner itself fails, fall back to whole-file parse (no position info).
+    let Ok(stmts) = pg_query::split_with_scanner(sql) else {
+        return pg_query::parse(sql)
+            .map(|r| r.protobuf.stmts)
+            .map_err(|e| DieselGuardError::parse_error(e.to_string()));
+    };
+
+    let mut all_stmts = Vec::new();
+    for stmt in stmts {
+        let leading = stmt.len() - stmt.trim_start().len();
+        let offset = stmt.as_ptr() as usize - sql.as_ptr() as usize + leading;
+        let parsed = pg_query::parse(stmt).map_err(|e| DieselGuardError::ParseError {
+            msg: e.to_string(),
+            src: None,
+            span: Some(SourceSpan::new(SourceOffset::from(offset), 0)),
+        })?;
+        // Adjust stmt_location to be relative to the full SQL, not the individual statement.
+        let adjusted = parsed.protobuf.stmts.into_iter().map(|mut s| {
+            s.stmt_location += offset as i32;
+            s
+        });
+        all_stmts.extend(adjusted);
+    }
+    Ok(all_stmts)
 }
 
 /// Parse SQL with metadata for safety-assured blocks
@@ -75,6 +98,14 @@ ALTER TABLE users DROP COLUMN email;
         assert_eq!(result.stmts.len(), 1);
         assert_eq!(result.ignore_ranges.len(), 0);
         assert_eq!(result.sql, sql);
+    }
+
+    #[test]
+    fn test_parse_unterminated_string_falls_back_to_whole_file_parse() {
+        // An unterminated string literal causes split_with_scanner to fail,
+        // exercising the fallback path on lines 21-23.
+        let result = parse("SELECT 'unterminated");
+        assert!(result.is_err());
     }
 
     // pg_query parses everything sqlparser couldn't:

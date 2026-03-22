@@ -45,6 +45,22 @@ Safe alternative:
   Note: For Postgres 11+, this is safe if the default is a constant value.
 ```
 
+## Parse Errors
+
+If a migration file contains invalid SQL, diesel-guard reports the file name and
+points to the exact failing statement:
+
+```
+× Failed to parse SQL: Invalid statement: syntax error at or near "@"
+╭─[migrations/2024_01_01_create_users/up.sql:3:1]
+2 │ CREATE TABLE b ();
+3 │ CREATE TABLE @bad;
+  ·              ▲
+  · problematic SQL
+╰─
+help: Check that your SQL syntax is valid
+```
+
 ## JSON Output
 
 For CI/CD or programmatic processing:

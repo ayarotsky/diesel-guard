@@ -4,11 +4,7 @@ use thiserror::Error;
 #[derive(Error, Debug, Diagnostic)]
 pub enum DieselGuardError {
     #[error("Failed to parse SQL: {msg}")]
-    #[diagnostic(
-        code(diesel_guard::parse_error),
-        help("Check that your SQL syntax is valid Postgres"),
-        url("https://www.postgresql.org/docs/current/sql-syntax.html")
-    )]
+    #[diagnostic(help("Check that your SQL syntax is valid"))]
     ParseError {
         msg: String,
         #[source_code]
@@ -52,14 +48,18 @@ impl DieselGuardError {
     /// position info in the error message. Non-parse errors are returned as-is.
     pub fn with_file_context(self, path: &str, source: String) -> Self {
         match self {
-            Self::ParseError { msg, .. } => {
-                let span = parse_byte_position(&msg)
-                    .map(|pos| SourceSpan::new(SourceOffset::from(pos), 0));
+            Self::ParseError { msg, span, .. } => {
+                // Prefer pre-computed offset from parser; fall back to position in message; then byte 0.
+                let span = span
+                    .or_else(|| {
+                        parse_byte_position(&msg).map(|p| SourceSpan::new(SourceOffset::from(p), 0))
+                    })
+                    .unwrap_or_else(|| SourceSpan::new(SourceOffset::from(0), 0));
 
                 Self::ParseError {
                     msg,
                     src: Some(NamedSource::new(path, source)),
-                    span,
+                    span: Some(span),
                 }
             }
             other => other,
