@@ -1,6 +1,7 @@
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use diesel_guard::ast_dump;
+use diesel_guard::checks::Finding;
 use diesel_guard::output::OutputFormatter;
 use diesel_guard::violation::Severity;
 use diesel_guard::{Config, SafetyChecker};
@@ -64,7 +65,8 @@ EXAMPLES:
         /// Path to migration file or directory, or "-" for stdin (default: "migrations/")
         path: Option<Utf8PathBuf>,
 
-        /// Output format: "text" (default) or "json"
+        /// Output format: "text" (default), "json", or "github"
+        /// When the GITHUB_ACTIONS environment variable is set to "true", "github" is used automatically.
         #[arg(long, default_value = "text")]
         format: String,
     },
@@ -108,6 +110,68 @@ EXAMPLES:
     },
 }
 
+fn run_check(path: Option<Utf8PathBuf>, format: &str) -> Result<()> {
+    let path = path.unwrap_or_else(|| Utf8PathBuf::from("migrations"));
+    let config = match Config::load() {
+        Ok(config) => config,
+        Err(diesel_guard::config::ConfigError::IoError(_))
+            if !Utf8PathBuf::from("diesel-guard.toml").exists() =>
+        {
+            eprintln!("Warning: No config file found. Using default configuration.");
+            Config::default()
+        }
+        Err(e) => return Err(e.into()),
+    };
+
+    let checker = SafetyChecker::with_config(config);
+    let results = checker.check_path(&path)?;
+
+    // Auto-detect GitHub Actions environment
+    let effective_format =
+        if std::env::var("GITHUB_ACTIONS").as_deref() == Ok("true") && format == "text" {
+            "github"
+        } else {
+            format
+        };
+
+    if results.is_empty() {
+        if effective_format != "github" {
+            println!("{}", OutputFormatter::format_summary(0, 0));
+        }
+        exit(0);
+    }
+
+    let total_errors: usize = results
+        .iter()
+        .flat_map(|(_, v)| v)
+        .filter(|f: &&Finding| f.severity == Severity::Error)
+        .count();
+    let total_warnings: usize = results
+        .iter()
+        .flat_map(|(_, v)| v)
+        .filter(|f: &&Finding| f.severity == Severity::Warning)
+        .count();
+
+    match effective_format {
+        "json" => println!("{}", OutputFormatter::format_json(&results)),
+        "github" => print!("{}", OutputFormatter::format_github(&results)),
+        _ => {
+            for (file_path, findings) in &results {
+                print!("{}", OutputFormatter::format_text(file_path, findings));
+            }
+            println!(
+                "{}",
+                OutputFormatter::format_summary(total_errors, total_warnings)
+            );
+        }
+    }
+
+    if total_errors > 0 {
+        exit(1);
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     miette::set_hook(Box::new(|_| {
         Box::new(
@@ -122,61 +186,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Check { path, format } => {
-            let path = path.unwrap_or_else(|| Utf8PathBuf::from("migrations"));
-            // Load configuration with explicit error handling
-            let config = match Config::load() {
-                Ok(config) => config,
-                Err(diesel_guard::config::ConfigError::IoError(_))
-                    if !Utf8PathBuf::from("diesel-guard.toml").exists() =>
-                {
-                    // File doesn't exist - use defaults with warning
-                    eprintln!("Warning: No config file found. Using default configuration.");
-                    Config::default()
-                }
-                Err(e) => {
-                    // Config file exists but has errors - this is fatal
-                    return Err(e.into());
-                }
-            };
-
-            let checker = SafetyChecker::with_config(config);
-
-            let results = checker.check_path(&path)?;
-
-            if results.is_empty() {
-                println!("{}", OutputFormatter::format_summary(0, 0));
-                exit(0);
-            }
-
-            let total_errors: usize = results
-                .iter()
-                .flat_map(|(_, v)| v)
-                .filter(|v| v.severity == Severity::Error)
-                .count();
-            let total_warnings: usize = results
-                .iter()
-                .flat_map(|(_, v)| v)
-                .filter(|v| v.severity == Severity::Warning)
-                .count();
-
-            if format.as_str() == "json" {
-                println!("{}", OutputFormatter::format_json(&results));
-            } else {
-                // text format
-                for (file_path, violations) in &results {
-                    print!("{}", OutputFormatter::format_text(file_path, violations));
-                }
-                println!(
-                    "{}",
-                    OutputFormatter::format_summary(total_errors, total_warnings)
-                );
-            }
-
-            if total_errors > 0 {
-                exit(1);
-            }
-        }
+        Commands::Check { path, format } => run_check(path, &format)?,
 
         Commands::DumpAst { sql, file } => {
             let sql_input = match (sql, file) {

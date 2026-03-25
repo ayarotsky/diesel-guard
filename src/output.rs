@@ -1,16 +1,44 @@
-use crate::violation::{Severity, Violation};
+use crate::checks::Finding;
+use crate::violation::Severity;
 use colored::Colorize;
+use serde::Serialize;
 use serde_json;
 use std::fmt::Write;
 
 pub struct OutputFormatter;
 
+/// Compute 1-indexed line and column from a byte offset in `sql`.
+fn byte_offset_to_line_col(sql: &str, offset: usize) -> (u32, u32) {
+    let offset = offset.min(sql.len());
+    let prefix = &sql[..offset];
+    let newlines = prefix.bytes().filter(|&b| b == b'\n').count();
+    let line = u32::try_from(newlines)
+        .unwrap_or(u32::MAX)
+        .saturating_add(1);
+    let col_start = prefix.rfind('\n').map_or(0, |i| i + 1);
+    let col_bytes = prefix.len() - col_start;
+    let col = u32::try_from(col_bytes)
+        .unwrap_or(u32::MAX)
+        .saturating_add(1);
+    (line, col)
+}
+
+/// Read the SQL source for a file path, used to compute line numbers from spans.
+/// Returns `None` for stdin (`-`) or if reading fails.
+fn read_sql_for_path(file_path: &str) -> Option<String> {
+    if file_path == "-" {
+        return None;
+    }
+    std::fs::read_to_string(file_path).ok()
+}
+
 impl OutputFormatter {
-    /// Format violations as colored text for terminal
-    pub fn format_text(file_path: &str, violations: &[Violation]) -> String {
+    /// Format findings as colored text for terminal
+    pub fn format_text(file_path: &str, findings: &[Finding]) -> String {
+        let sql = read_sql_for_path(file_path);
         let mut output = String::new();
 
-        let has_errors = violations.iter().any(|v| v.severity == Severity::Error);
+        let has_errors = findings.iter().any(|f| f.severity == Severity::Error);
         let header_icon = if has_errors { "❌" } else { "⚠️" };
         let header_label = if has_errors {
             "Unsafe migration detected in".red().bold()
@@ -18,28 +46,38 @@ impl OutputFormatter {
             "Migration warnings in".yellow().bold()
         };
 
+        let display_path = if file_path == "-" {
+            "<stdin>"
+        } else {
+            file_path
+        };
         write!(
             output,
             "{} {} {}\n\n",
             header_icon,
             header_label,
-            file_path.yellow()
+            display_path.yellow()
         )
         .unwrap();
 
-        for violation in violations {
-            let (icon, label) = match violation.severity {
-                Severity::Error => ("❌", violation.operation.as_str().red().bold()),
-                Severity::Warning => ("⚠️ ", violation.operation.as_str().yellow().bold()),
+        for finding in findings {
+            let (icon, label) = match finding.severity {
+                Severity::Error => ("❌", finding.operation.as_str().red().bold()),
+                Severity::Warning => ("⚠️ ", finding.operation.as_str().yellow().bold()),
             };
 
-            write!(output, "{icon} {label}\n\n").unwrap();
+            if let Some(ref sql_src) = sql {
+                let (line, _) = byte_offset_to_line_col(sql_src, finding.span.offset());
+                write!(output, "{icon} {label} (line {line})\n\n").unwrap();
+            } else {
+                write!(output, "{icon} {label}\n\n").unwrap();
+            }
 
             writeln!(output, "{}", "Problem:".white().bold()).unwrap();
-            write!(output, "  {}\n\n", violation.problem).unwrap();
+            write!(output, "  {}\n\n", finding.problem).unwrap();
 
             writeln!(output, "{}", "Safe alternative:".green().bold()).unwrap();
-            for line in violation.safe_alternative.lines() {
+            for line in finding.safe_alternative.lines() {
                 writeln!(output, "  {line}").unwrap();
             }
 
@@ -49,9 +87,96 @@ impl OutputFormatter {
         output
     }
 
-    /// Format violations as JSON
-    pub fn format_json(results: &[(String, Vec<Violation>)]) -> String {
-        serde_json::to_string_pretty(results).unwrap_or_else(|_| "{}".into())
+    /// Format findings as JSON
+    pub fn format_json(results: &[(String, Vec<Finding>)]) -> String {
+        #[derive(Serialize)]
+        struct JsonFinding<'a> {
+            operation: &'a str,
+            problem: &'a str,
+            safe_alternative: &'a str,
+            severity: Severity,
+            line: Option<u32>,
+        }
+
+        #[derive(Serialize)]
+        struct JsonFileResult<'a> {
+            file: &'a str,
+            findings: Vec<JsonFinding<'a>>,
+        }
+
+        let output: Vec<JsonFileResult<'_>> = results
+            .iter()
+            .map(|(path, findings)| {
+                let sql = read_sql_for_path(path);
+                JsonFileResult {
+                    file: if path == "-" { "<stdin>" } else { path },
+                    findings: findings
+                        .iter()
+                        .map(|f| {
+                            let line = sql
+                                .as_deref()
+                                .map(|s| byte_offset_to_line_col(s, f.span.offset()).0);
+                            JsonFinding {
+                                operation: &f.operation,
+                                problem: &f.problem,
+                                safe_alternative: &f.safe_alternative,
+                                severity: f.severity,
+                                line,
+                            }
+                        })
+                        .collect(),
+                }
+            })
+            .collect();
+
+        serde_json::to_string_pretty(&output).unwrap_or_else(|_| "{}".into())
+    }
+
+    /// Format findings as GitHub Actions workflow commands for inline PR annotations.
+    ///
+    /// Emits `::error` / `::warning` commands that GitHub renders as annotations in
+    /// the pull-request diff. Activated automatically when `GITHUB_ACTIONS=true` or
+    /// via `--format github`.
+    pub fn format_github(results: &[(String, Vec<Finding>)]) -> String {
+        let mut output = String::new();
+
+        for (file_path, findings) in results {
+            let sql = read_sql_for_path(file_path);
+
+            for finding in findings {
+                let level = match finding.severity {
+                    Severity::Error => "error",
+                    Severity::Warning => "warning",
+                };
+
+                let (start_line, start_col, end_line, end_col) = if let Some(ref sql_src) = sql {
+                    let (sl, sc) = byte_offset_to_line_col(sql_src, finding.span.offset());
+                    let end_offset =
+                        (finding.span.offset() + finding.span.len()).min(sql_src.len());
+                    let (el, ec) = byte_offset_to_line_col(sql_src, end_offset);
+                    (sl, sc, el, ec)
+                } else {
+                    (1, 1, 1, 1)
+                };
+
+                // Encode the message: newlines must be %0A per GitHub spec
+                let message = format!(
+                    "{}%0A%0A{}%0A%0ASafe alternative:%0A{}",
+                    finding.problem,
+                    finding.operation,
+                    finding.safe_alternative.replace('\n', "%0A"),
+                );
+                let title = &finding.operation;
+
+                writeln!(
+                    output,
+                    "::{level} file={file_path},line={start_line},endLine={end_line},col={start_col},endColumn={end_col},title={title}::{message}"
+                )
+                .unwrap();
+            }
+        }
+
+        output
     }
 
     /// Format summary

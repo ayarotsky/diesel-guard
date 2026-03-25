@@ -1,10 +1,9 @@
 use crate::adapters::{DieselAdapter, MigrationAdapter, SqlxAdapter};
-use crate::checks::{MigrationContext, Registry};
+use crate::checks::{Finding, MigrationContext, Registry};
 use crate::config::Config;
 use crate::error::Result;
 use crate::parser;
 use crate::scripting;
-use crate::violation::Violation;
 use camino::Utf8Path;
 use std::fs;
 use std::io::{self, BufRead, BufReader};
@@ -104,7 +103,7 @@ impl SafetyChecker {
     }
 
     /// Check SQL string for violations
-    pub fn check_sql(&self, sql: &str) -> Result<Vec<Violation>> {
+    pub fn check_sql(&self, sql: &str) -> Result<Vec<Finding>> {
         let parsed = parser::parse_with_metadata(sql)?;
         Ok(self.registry.check_stmts_with_context(
             &parsed.stmts,
@@ -116,7 +115,7 @@ impl SafetyChecker {
     }
 
     /// Check a single migration file
-    pub fn check_file(&self, path: &Utf8Path) -> Result<Vec<Violation>> {
+    pub fn check_file(&self, path: &Utf8Path) -> Result<Vec<Finding>> {
         let sql = fs::read_to_string(path)?;
 
         let ctx = self
@@ -137,7 +136,7 @@ impl SafetyChecker {
     }
 
     /// Check all migration files in a directory
-    pub fn check_directory(&self, dir: &Utf8Path) -> Result<Vec<(String, Vec<Violation>)>> {
+    pub fn check_directory(&self, dir: &Utf8Path) -> Result<Vec<(String, Vec<Finding>)>> {
         let adapter = self.adapter()?;
 
         let migration_files = adapter
@@ -157,15 +156,15 @@ impl SafetyChecker {
 
             match parser::parse_with_metadata(&sql) {
                 Ok(parsed) => {
-                    let violations = self.registry.check_stmts_with_context(
+                    let findings = self.registry.check_stmts_with_context(
                         &parsed.stmts,
                         &parsed.sql,
                         &parsed.ignore_ranges,
                         &self.config,
                         &ctx,
                     );
-                    if !violations.is_empty() {
-                        results.push((mig_file.path.to_string(), violations));
+                    if !findings.is_empty() {
+                        results.push((relative_path(&mig_file.path), findings));
                     }
                 }
                 Err(e) => {
@@ -178,33 +177,47 @@ impl SafetyChecker {
     }
 
     // check a migration string from a buffer
-    fn check_buffer(&self, reader: &mut dyn BufRead) -> Result<Vec<Violation>> {
+    fn check_buffer(&self, reader: &mut dyn BufRead) -> Result<Vec<Finding>> {
         let mut buffer = String::new();
         reader.read_to_string(&mut buffer)?;
         self.check_sql(&buffer)
     }
 
     /// Check a path (file, directory or stdin)
-    pub fn check_path(&self, path: &Utf8Path) -> Result<Vec<(String, Vec<Violation>)>> {
+    pub fn check_path(&self, path: &Utf8Path) -> Result<Vec<(String, Vec<Finding>)>> {
         // "-" means we're using stdin as an input.
         if path.as_str() == "-" {
-            let violations = self.check_buffer(&mut BufReader::new(io::stdin().lock()))?;
-            if violations.is_empty() {
+            let findings = self.check_buffer(&mut BufReader::new(io::stdin().lock()))?;
+            if findings.is_empty() {
                 Ok(vec![])
             } else {
-                Ok(vec![(path.to_string(), violations)])
+                Ok(vec![(path.to_string(), findings)])
             }
         } else if path.is_dir() {
             self.check_directory(path)
         } else {
-            let violations = self.check_file(path)?;
-            if violations.is_empty() {
+            let findings = self.check_file(path)?;
+            if findings.is_empty() {
                 Ok(vec![])
             } else {
-                Ok(vec![(path.to_string(), violations)])
+                Ok(vec![(relative_path(path), findings)])
             }
         }
     }
+}
+
+/// Convert an absolute path to a path relative to the current working directory.
+/// Falls back to the original path string if relativization fails.
+fn relative_path(path: &Utf8Path) -> String {
+    std::env::current_dir()
+        .ok()
+        .and_then(|cwd| {
+            path.as_std_path()
+                .strip_prefix(&cwd)
+                .ok()
+                .map(|p| p.to_string_lossy().into_owned())
+        })
+        .unwrap_or_else(|| path.to_string())
 }
 
 impl Default for SafetyChecker {
@@ -223,16 +236,16 @@ mod tests {
     fn test_check_safe_sql() {
         let checker = SafetyChecker::new();
         let sql = "ALTER TABLE users ADD COLUMN email VARCHAR(255);";
-        let violations = checker.check_sql(sql).unwrap();
-        assert_eq!(violations.len(), 0);
+        let findings = checker.check_sql(sql).unwrap();
+        assert_eq!(findings.len(), 0);
     }
 
     #[test]
     fn test_check_unsafe_sql() {
         let checker = SafetyChecker::new();
         let sql = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
-        let violations = checker.check_sql(sql).unwrap();
-        assert_eq!(violations.len(), 1);
+        let findings = checker.check_sql(sql).unwrap();
+        assert_eq!(findings.len(), 1);
     }
 
     #[test]
@@ -244,26 +257,26 @@ mod tests {
         let checker = SafetyChecker::with_config(config);
 
         let sql = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
-        let violations = checker.check_sql(sql).unwrap();
-        assert_eq!(violations.len(), 0);
+        let findings = checker.check_sql(sql).unwrap();
+        assert_eq!(findings.len(), 0);
     }
 
     #[test]
     fn test_reindex_without_concurrently_detected() {
         let checker = SafetyChecker::new();
         let sql = "REINDEX INDEX idx_users_email;";
-        let violations = checker.check_sql(sql).unwrap();
-        assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].operation, "REINDEX without CONCURRENTLY");
+        let findings = checker.check_sql(sql).unwrap();
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].operation, "REINDEX without CONCURRENTLY");
     }
 
     #[test]
     fn test_reindex_table_without_concurrently_detected() {
         let checker = SafetyChecker::new();
         let sql = "REINDEX TABLE users;";
-        let violations = checker.check_sql(sql).unwrap();
-        assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].operation, "REINDEX without CONCURRENTLY");
+        let findings = checker.check_sql(sql).unwrap();
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].operation, "REINDEX without CONCURRENTLY");
     }
 
     #[test]
@@ -272,10 +285,10 @@ mod tests {
         // so REINDEX CONCURRENTLY is flagged as requiring no-transaction context.
         let checker = SafetyChecker::new();
         let sql = "REINDEX INDEX CONCURRENTLY idx_users_email;";
-        let violations = checker.check_sql(sql).unwrap();
-        assert_eq!(violations.len(), 1);
+        let findings = checker.check_sql(sql).unwrap();
+        assert_eq!(findings.len(), 1);
         assert_eq!(
-            violations[0].operation,
+            findings[0].operation,
             "REINDEX CONCURRENTLY inside a transaction"
         );
     }
@@ -289,8 +302,8 @@ mod tests {
         let checker = SafetyChecker::with_config(config);
 
         let sql = "REINDEX INDEX idx_users_email;";
-        let violations = checker.check_sql(sql).unwrap();
-        assert_eq!(violations.len(), 0);
+        let findings = checker.check_sql(sql).unwrap();
+        assert_eq!(findings.len(), 0);
     }
 
     #[test]
@@ -300,8 +313,8 @@ mod tests {
             REINDEX INDEX idx_users_email;
             REINDEX TABLE posts;
         ";
-        let violations = checker.check_sql(sql).unwrap();
-        assert_eq!(violations.len(), 2);
+        let findings = checker.check_sql(sql).unwrap();
+        assert_eq!(findings.len(), 2);
     }
 
     #[test]
@@ -322,20 +335,20 @@ mod tests {
     fn test_buffer_input_safe_sql() {
         let checker: SafetyChecker = SafetyChecker::new();
         let input_data = "ALTER TABLE users ADD COLUMN foo TEXT;";
-        let violations = checker
+        let findings = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
             .unwrap();
-        assert_eq!(violations.len(), 0);
+        assert_eq!(findings.len(), 0);
     }
 
     #[test]
     fn test_buffer_input_unsafe_sql() {
         let checker: SafetyChecker = SafetyChecker::new();
         let input_data = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
-        let violations = checker
+        let findings = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
             .unwrap();
-        assert_eq!(violations.len(), 1);
+        assert_eq!(findings.len(), 1);
     }
 
     #[test]
@@ -348,10 +361,10 @@ mod tests {
         };
         // Should not panic; .txt file is silently ignored
         let checker = SafetyChecker::with_config(config);
-        let violations = checker
+        let findings = checker
             .check_sql("ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;")
             .unwrap();
-        assert_eq!(violations.len(), 1);
+        assert_eq!(findings.len(), 1);
     }
 
     #[test]
@@ -362,11 +375,11 @@ mod tests {
         };
         // Should not panic; warning is printed to stderr
         let checker = SafetyChecker::with_config(config);
-        let violations = checker
+        let findings = checker
             .check_sql("ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;")
             .unwrap();
         // NonExistentCheck is unknown so nothing runs — zero violations
-        assert_eq!(violations.len(), 0);
+        assert_eq!(findings.len(), 0);
     }
 
     #[test]
@@ -414,10 +427,10 @@ mod tests {
     fn test_buffer_empty_string() {
         let checker: SafetyChecker = SafetyChecker::new();
         let input_data = "";
-        let violations = checker
+        let findings = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
             .unwrap();
-        assert_eq!(violations.len(), 0);
+        assert_eq!(findings.len(), 0);
     }
 
     #[test]
@@ -427,10 +440,10 @@ mod tests {
             REINDEX INDEX idx_users_email;
             REINDEX TABLE posts;
         ";
-        let violations = checker
+        let findings = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
             .unwrap();
-        assert_eq!(violations.len(), 2);
+        assert_eq!(findings.len(), 2);
     }
 
     // --- Integration tests: metadata-aware CONCURRENTLY detection ---
@@ -459,9 +472,9 @@ mod tests {
             camino::Utf8Path::from_path(temp_dir.path()).expect("path should be valid UTF-8");
 
         let results = checker.check_directory(dir_path).unwrap();
-        let total_violations: usize = results.iter().map(|(_, v)| v.len()).sum();
+        let total_findings: usize = results.iter().map(|(_, v)| v.len()).sum();
         assert_eq!(
-            total_violations, 1,
+            total_findings, 1,
             "Expected 1 violation (CONCURRENTLY in transaction)"
         );
         assert_eq!(
@@ -498,9 +511,9 @@ mod tests {
             camino::Utf8Path::from_path(temp_dir.path()).expect("path should be valid UTF-8");
 
         let results = checker.check_directory(dir_path).unwrap();
-        let total_violations: usize = results.iter().map(|(_, v)| v.len()).sum();
+        let total_findings: usize = results.iter().map(|(_, v)| v.len()).sum();
         assert_eq!(
-            total_violations, 0,
+            total_findings, 0,
             "Expected no violations with metadata.toml"
         );
     }
@@ -527,9 +540,9 @@ mod tests {
             camino::Utf8Path::from_path(temp_dir.path()).expect("path should be valid UTF-8");
 
         let results = checker.check_directory(dir_path).unwrap();
-        let total_violations: usize = results.iter().map(|(_, v)| v.len()).sum();
+        let total_findings: usize = results.iter().map(|(_, v)| v.len()).sum();
         assert_eq!(
-            total_violations, 1,
+            total_findings, 1,
             "Expected 1 violation (CONCURRENTLY inside a transaction)"
         );
         assert_eq!(
@@ -559,9 +572,9 @@ mod tests {
             camino::Utf8Path::from_path(temp_dir.path()).expect("path should be valid UTF-8");
 
         let results = checker.check_directory(dir_path).unwrap();
-        let total_violations: usize = results.iter().map(|(_, v)| v.len()).sum();
+        let total_findings: usize = results.iter().map(|(_, v)| v.len()).sum();
         assert_eq!(
-            total_violations, 0,
+            total_findings, 0,
             "Expected no violations with -- no-transaction"
         );
     }

@@ -1,14 +1,24 @@
+use diesel_guard::Finding;
 use diesel_guard::Violation;
 use diesel_guard::output::OutputFormatter;
+use miette::{SourceOffset, SourceSpan};
+
+/// Create a Finding with a dummy zero-length span at offset 0 (for formatting tests).
+fn finding(operation: &str, problem: &str, safe_alternative: &str) -> Finding {
+    Finding {
+        violation: Violation::new(operation, problem, safe_alternative),
+        span: SourceSpan::new(SourceOffset::from(0), 0),
+    }
+}
 
 #[test]
 fn test_format_json_valid_structure() {
-    let violations = vec![Violation::new(
+    let findings = vec![finding(
         "DROP TABLE",
         "Dropping a table is dangerous",
         "Use a soft-delete pattern instead",
     )];
-    let results = vec![("migrations/001_init/up.sql".to_string(), violations)];
+    let results = vec![("migrations/001_init/up.sql".to_string(), findings)];
 
     let json_str = OutputFormatter::format_json(&results);
     let parsed: serde_json::Value =
@@ -18,28 +28,34 @@ fn test_format_json_valid_structure() {
     let arr = parsed.as_array().expect("top-level should be an array");
     assert_eq!(arr.len(), 1);
 
-    // Each entry is [filepath, [violations]]
-    let entry = arr[0].as_array().expect("entry should be an array");
-    assert_eq!(entry[0].as_str().unwrap(), "migrations/001_init/up.sql");
+    // Each entry is an object with "file" and "findings"
+    let entry = &arr[0];
+    assert_eq!(
+        entry["file"].as_str().unwrap(),
+        "migrations/001_init/up.sql"
+    );
 
-    let violations_arr = entry[1].as_array().expect("violations should be an array");
-    assert_eq!(violations_arr.len(), 1);
+    let findings_arr = entry["findings"]
+        .as_array()
+        .expect("findings should be an array");
+    assert_eq!(findings_arr.len(), 1);
 
-    // Each violation has required keys
-    let v = &violations_arr[0];
+    // Each finding has required keys
+    let f = &findings_arr[0];
     assert!(
-        v.get("operation").is_some(),
-        "violation should have 'operation' key"
+        f.get("operation").is_some(),
+        "finding should have 'operation' key"
     );
     assert!(
-        v.get("problem").is_some(),
-        "violation should have 'problem' key"
+        f.get("problem").is_some(),
+        "finding should have 'problem' key"
     );
     assert!(
-        v.get("safe_alternative").is_some(),
-        "violation should have 'safe_alternative' key"
+        f.get("safe_alternative").is_some(),
+        "finding should have 'safe_alternative' key"
     );
-    assert_eq!(v["operation"].as_str().unwrap(), "DROP TABLE");
+    assert!(f.get("line").is_some(), "finding should have 'line' key");
+    assert_eq!(f["operation"].as_str().unwrap(), "DROP TABLE");
 }
 
 #[test]
@@ -57,13 +73,13 @@ fn test_format_json_multiple_files() {
     let results = vec![
         (
             "migrations/001/up.sql".to_string(),
-            vec![Violation::new("DROP TABLE", "p1", "s1")],
+            vec![finding("DROP TABLE", "p1", "s1")],
         ),
         (
             "migrations/002/up.sql".to_string(),
             vec![
-                Violation::new("DROP COLUMN", "p2", "s2"),
-                Violation::new("ADD INDEX", "p3", "s3"),
+                finding("DROP COLUMN", "p2", "s2"),
+                finding("ADD INDEX", "p3", "s3"),
             ],
         ),
     ];
@@ -74,15 +90,13 @@ fn test_format_json_multiple_files() {
 
     assert_eq!(arr.len(), 2);
 
-    // First file: 1 violation
-    let entry0 = arr[0].as_array().unwrap();
-    assert_eq!(entry0[0].as_str().unwrap(), "migrations/001/up.sql");
-    assert_eq!(entry0[1].as_array().unwrap().len(), 1);
+    // First file: 1 finding
+    assert_eq!(arr[0]["file"].as_str().unwrap(), "migrations/001/up.sql");
+    assert_eq!(arr[0]["findings"].as_array().unwrap().len(), 1);
 
-    // Second file: 2 violations
-    let entry1 = arr[1].as_array().unwrap();
-    assert_eq!(entry1[0].as_str().unwrap(), "migrations/002/up.sql");
-    assert_eq!(entry1[1].as_array().unwrap().len(), 2);
+    // Second file: 2 findings
+    assert_eq!(arr[1]["file"].as_str().unwrap(), "migrations/002/up.sql");
+    assert_eq!(arr[1]["findings"].as_array().unwrap().len(), 2);
 }
 
 #[test]
@@ -90,13 +104,13 @@ fn test_format_text_contains_expected_sections() {
     // Strip ANSI codes for predictable assertions
     colored::control::set_override(false);
 
-    let violations = vec![Violation::new(
+    let findings = vec![finding(
         "DROP TABLE",
         "Dropping a table is dangerous",
         "Use a soft-delete pattern instead",
     )];
 
-    let output = OutputFormatter::format_text("migrations/001/up.sql", &violations);
+    let output = OutputFormatter::format_text("migrations/001/up.sql", &findings);
 
     assert!(
         output.contains("migrations/001/up.sql"),

@@ -1,5 +1,5 @@
 use camino::Utf8Path;
-use diesel_guard::{Config, SafetyChecker, Violation};
+use diesel_guard::{Config, Finding, SafetyChecker};
 use std::fs;
 use tempfile::TempDir;
 
@@ -348,7 +348,7 @@ fn test_unknown_check_name_detected_after_custom_checks_loaded() {
 
 /// Run SQL through the real `examples/` directory with all built-in checks
 /// disabled so only example Rhai scripts produce violations.
-fn check_with_examples(sql: &str) -> Vec<Violation> {
+fn check_with_examples(sql: &str) -> Vec<Finding> {
     let config = Config {
         custom_checks_dir: Some("examples".to_string()),
         disable_checks: vec![
@@ -382,7 +382,7 @@ fn check_with_examples(sql: &str) -> Vec<Violation> {
     SafetyChecker::with_config(config).check_sql(sql).unwrap()
 }
 
-fn has_violation_containing(violations: &[Violation], substring: &str) -> bool {
+fn has_violation_containing(violations: &[Finding], substring: &str) -> bool {
     violations.iter().any(|v| v.operation.contains(substring))
 }
 

@@ -77,12 +77,32 @@ mod helpers {
 use crate::parser::IgnoreRange;
 use crate::violation::Violation;
 pub use helpers::*;
+use miette::{SourceOffset, SourceSpan};
 use pg_helpers::{NodeEnum, extract_node};
 use pg_query::protobuf::RawStmt;
 use std::sync::LazyLock;
 
 pub use crate::adapters::MigrationContext;
 use crate::checks::add_check_constraint::AddCheckConstraintCheck;
+
+/// A violation paired with its source location.
+///
+/// Derefs to [`Violation`] so callers can access `finding.operation`, `finding.problem`, etc.
+/// directly without going through `finding.violation`.
+#[derive(Debug)]
+pub struct Finding {
+    pub violation: Violation,
+    /// Byte offset + byte length of the statement in the SQL source.
+    /// Same type as the span used by [`crate::error::DieselGuardError::ParseError`].
+    pub span: SourceSpan,
+}
+
+impl std::ops::Deref for Finding {
+    type Target = Violation;
+    fn deref(&self) -> &Violation {
+        &self.violation
+    }
+}
 
 /// Lazily-derived list of all built-in check names from an unfiltered registry.
 /// This avoids maintaining a manual list that can drift from the actual checks.
@@ -200,6 +220,7 @@ impl Registry {
     ///
     /// Uses RawStmt.stmt_location (byte offset) to determine which line each
     /// statement falls on, then skips checks for statements in safety-assured blocks.
+    /// Each violation is wrapped in a [`Finding`] that carries its source span.
     pub fn check_stmts_with_context(
         &self,
         stmts: &[RawStmt],
@@ -207,7 +228,7 @@ impl Registry {
         ignore_ranges: &[IgnoreRange],
         config: &Config,
         ctx: &MigrationContext,
-    ) -> Vec<Violation> {
+    ) -> Vec<Finding> {
         // Build set of all ignored line numbers for fast lookup
         let ignored_lines: std::collections::HashSet<usize> = ignore_ranges
             .iter()
@@ -218,7 +239,7 @@ impl Registry {
         // statement. Use the scanner to get accurate token positions.
         let token_starts = non_comment_token_starts(sql);
 
-        let mut violations = Vec::new();
+        let mut findings = Vec::new();
 
         for raw_stmt in stmts {
             let Some(node) = extract_node(raw_stmt) else {
@@ -232,11 +253,22 @@ impl Registry {
             let stmt_line = byte_offset_to_line(sql, offset);
 
             if !ignored_lines.contains(&stmt_line) {
-                violations.extend(self.check_node(node, config, ctx));
+                let stmt_len = if raw_stmt.stmt_len == 0 {
+                    sql.len().saturating_sub(offset)
+                } else {
+                    usize::try_from(raw_stmt.stmt_len).unwrap_or(0)
+                };
+                let span = SourceSpan::new(SourceOffset::from(offset), stmt_len);
+
+                findings.extend(
+                    self.check_node(node, config, ctx)
+                        .into_iter()
+                        .map(|violation| Finding { violation, span }),
+                );
             }
         }
 
-        violations
+        findings
     }
 
     /// Get all built-in check names (regardless of which are enabled).

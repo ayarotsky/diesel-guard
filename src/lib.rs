@@ -10,6 +10,7 @@ pub mod scripting;
 pub mod violation;
 
 pub use adapters::{MigrationAdapter, MigrationContext, MigrationFile};
+pub use checks::Finding;
 pub use config::{Config, ConfigError};
 pub use safety_checker::SafetyChecker;
 pub use violation::Violation;
