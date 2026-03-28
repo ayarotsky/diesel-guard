@@ -10,7 +10,7 @@ fn test_concurrently_violations_include_sqlx_transaction_hint() {
     let temp_dir = TempDir::new().unwrap();
     fs::write(
         temp_dir.path().join("1_indexes.up.sql"),
-        "CREATE INDEX idx_a ON users(email);\nDROP INDEX idx_b;\nREINDEX INDEX idx_a;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nCREATE INDEX idx_a ON users(email);\nDROP INDEX idx_b;\nREINDEX INDEX idx_a;",
     )
     .unwrap();
 
@@ -53,7 +53,7 @@ fn test_sqlx_numeric_version_comparison() {
     for version in &["1", "2", "10"] {
         fs::write(
             temp_dir.path().join(format!("{version}_migration.up.sql")),
-            "ALTER TABLE users DROP COLUMN old_col;",
+            "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN old_col;",
         )
         .unwrap();
     }
@@ -86,7 +86,7 @@ fn test_sqlx_single_file_format_no_markers() {
     // Single file format: VERSION_DESC.sql (no .up/.down suffix, no markers)
     fs::write(
         temp_dir.path().join("20240101000000_create.sql"),
-        "ALTER TABLE users DROP COLUMN old_col;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN old_col;",
     )
     .unwrap();
 
@@ -113,14 +113,14 @@ fn test_sqlx_start_after_with_suffix_format() {
     // Old migration (should be skipped)
     fs::write(
         temp_dir.path().join("1_old.up.sql"),
-        "ALTER TABLE users DROP COLUMN a;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN a;",
     )
     .unwrap();
 
     // New migration (should be checked)
     fs::write(
         temp_dir.path().join("42_new.up.sql"),
-        "ALTER TABLE users DROP COLUMN b;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN b;",
     )
     .unwrap();
 
@@ -145,12 +145,12 @@ fn test_sqlx_check_down_suffix_format() {
     // Suffix format with both up and down files
     fs::write(
         temp_dir.path().join("1_test.up.sql"),
-        "ALTER TABLE users DROP COLUMN up_col;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN up_col;",
     )
     .unwrap();
     fs::write(
         temp_dir.path().join("1_test.down.sql"),
-        "ALTER TABLE users DROP COLUMN down_col;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN down_col;",
     )
     .unwrap();
 
