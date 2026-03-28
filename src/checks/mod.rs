@@ -16,6 +16,7 @@ mod drop_index;
 mod drop_primary_key;
 mod drop_table;
 mod generated_column;
+mod missing_lock_timeout;
 pub mod pg_helpers;
 mod refresh_matview;
 mod reindex;
@@ -48,6 +49,7 @@ pub use drop_index::DropIndexCheck;
 pub use drop_primary_key::DropPrimaryKeyCheck;
 pub use drop_table::DropTableCheck;
 pub use generated_column::GeneratedColumnCheck;
+pub use missing_lock_timeout::MissingLockTimeoutCheck;
 pub use refresh_matview::RefreshMatViewCheck;
 pub use reindex::ReindexCheck;
 pub use rename_column::RenameColumnCheck;
@@ -142,6 +144,7 @@ impl Registry {
         self.register_check(config, DropPrimaryKeyCheck);
         self.register_check(config, DropTableCheck);
         self.register_check(config, GeneratedColumnCheck);
+        self.register_check(config, MissingLockTimeoutCheck);
         self.register_check(config, RefreshMatViewCheck);
         self.register_check(config, ReindexCheck);
         self.register_check(config, RenameColumnCheck);
@@ -218,6 +221,22 @@ impl Registry {
         // statement. Use the scanner to get accurate token positions.
         let token_starts = non_comment_token_starts(sql);
 
+        // Pre-scan for SET lock_timeout / SET statement_timeout anywhere in the file
+        // so checks can know whether timeout configuration is present.
+        let ctx = {
+            let mut ctx = ctx.clone();
+            for raw_stmt in stmts {
+                if let Some(NodeEnum::VariableSetStmt(set_stmt)) = extract_node(raw_stmt) {
+                    match set_stmt.name.as_str() {
+                        "lock_timeout" => ctx.has_lock_timeout = true,
+                        "statement_timeout" => ctx.has_statement_timeout = true,
+                        _ => {}
+                    }
+                }
+            }
+            ctx
+        };
+
         let mut violations = Vec::new();
 
         for raw_stmt in stmts {
@@ -232,7 +251,7 @@ impl Registry {
             let stmt_line = byte_offset_to_line(sql, offset);
 
             if !ignored_lines.contains(&stmt_line) {
-                violations.extend(self.check_node(node, config, ctx));
+                violations.extend(self.check_node(node, config, &ctx));
             }
         }
 
@@ -368,7 +387,7 @@ ALTER TABLE users DROP COLUMN email;
     #[test]
     fn test_check_without_safety_assured_block() {
         let registry = Registry::new();
-        let sql = "ALTER TABLE users DROP COLUMN email;";
+        let sql = "SET lock_timeout = '2s'; SET statement_timeout = '60s'; ALTER TABLE users DROP COLUMN email;";
 
         let result = pg_query::parse(sql).unwrap();
         let ignore_ranges = vec![];

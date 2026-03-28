@@ -632,6 +632,7 @@ mod tests {
         let ctx = crate::checks::MigrationContext {
             run_in_transaction: false,
             no_transaction_hint: "",
+            ..Default::default()
         };
         let violations = run_script_with_ctx(
             r#"
@@ -654,6 +655,7 @@ mod tests {
         let ctx = crate::checks::MigrationContext {
             run_in_transaction: true,
             no_transaction_hint: "Add -- diesel:no-transaction to the migration file.",
+            ..Default::default()
         };
         let violations = run_script_with_ctx(
             r#"

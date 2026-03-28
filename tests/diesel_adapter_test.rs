@@ -10,12 +10,12 @@ fn test_diesel_loose_sql_and_directory_migrations_coexist() {
     // Directory-based migration
     let dir_mig = temp_dir.path().join("2024_01_01_000000_create_users");
     fs::create_dir(&dir_mig).unwrap();
-    fs::write(dir_mig.join("up.sql"), "ALTER TABLE users DROP COLUMN a;").unwrap();
+    fs::write(dir_mig.join("up.sql"), "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN a;").unwrap();
 
     // Loose SQL file with timestamp
     fs::write(
         temp_dir.path().join("2024_06_01_000000_add_indexes.sql"),
-        "ALTER TABLE users DROP COLUMN b;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN b;",
     )
     .unwrap();
 
@@ -43,17 +43,17 @@ fn test_diesel_mixed_timestamp_separators() {
     // Underscore separator
     let dir1 = temp_dir.path().join("2023_01_01_000000_old");
     fs::create_dir(&dir1).unwrap();
-    fs::write(dir1.join("up.sql"), "ALTER TABLE users DROP COLUMN a;").unwrap();
+    fs::write(dir1.join("up.sql"), "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN a;").unwrap();
 
     // Dash separator
     let dir2 = temp_dir.path().join("2024-06-01-000000_middle");
     fs::create_dir(&dir2).unwrap();
-    fs::write(dir2.join("up.sql"), "ALTER TABLE users DROP COLUMN b;").unwrap();
+    fs::write(dir2.join("up.sql"), "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN b;").unwrap();
 
     // No separator
     let dir3 = temp_dir.path().join("20250101000000_new");
     fs::create_dir(&dir3).unwrap();
-    fs::write(dir3.join("up.sql"), "ALTER TABLE users DROP COLUMN c;").unwrap();
+    fs::write(dir3.join("up.sql"), "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN c;").unwrap();
 
     // start_after = "2024_01_01_000000" should skip only the underscore dir
     let config = Config {
@@ -90,7 +90,7 @@ fn test_concurrently_violations_include_diesel_transaction_hint() {
     fs::create_dir(&migration_dir).unwrap();
     fs::write(
         migration_dir.join("up.sql"),
-        "CREATE INDEX idx_a ON users(email);\nDROP INDEX idx_b;\nREINDEX INDEX idx_a;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nCREATE INDEX idx_a ON users(email);\nDROP INDEX idx_b;\nREINDEX INDEX idx_a;",
     )
     .unwrap();
 
@@ -132,7 +132,7 @@ fn test_diesel_no_separator_timestamp() {
     // YYYYMMDDHHMMSS format (no separators)
     let dir = temp_dir.path().join("20240101000000_create_users");
     fs::create_dir(&dir).unwrap();
-    fs::write(dir.join("up.sql"), "ALTER TABLE users DROP COLUMN old_col;").unwrap();
+    fs::write(dir.join("up.sql"), "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN old_col;").unwrap();
 
     let config = Config {
         framework: "diesel".to_string(),

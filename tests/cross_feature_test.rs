@@ -117,7 +117,7 @@ fn test_disable_builtin_and_custom_checks_simultaneously() {
 
     // SQL that triggers DropTableCheck, DropColumnCheck, and my_check
     let violations = checker
-        .check_sql("DROP TABLE t; ALTER TABLE t DROP COLUMN c;")
+        .check_sql("SET lock_timeout = '2s'; SET statement_timeout = '60s'; DROP TABLE t; ALTER TABLE t DROP COLUMN c;")
         .unwrap();
 
     // DropTableCheck should still fire (not disabled)
@@ -152,18 +152,14 @@ fn test_check_down_with_safety_assured_in_down_sql() {
     // Safe up.sql
     fs::write(
         migration_dir.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN email VARCHAR(255);",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users ADD COLUMN email VARCHAR(255);",
     )
     .unwrap();
 
     // down.sql with safety-assured block and unprotected statement
     fs::write(
         migration_dir.join("down.sql"),
-        r"-- safety-assured:start
-ALTER TABLE users DROP COLUMN email;
--- safety-assured:end
-ALTER TABLE users DROP COLUMN phone;
-",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\n-- safety-assured:start\nALTER TABLE users DROP COLUMN email;\n-- safety-assured:end\nALTER TABLE users DROP COLUMN phone;\n",
     )
     .unwrap();
 

@@ -28,6 +28,10 @@ pub struct MigrationContext {
     /// Framework-specific hint for how to opt out of transactions.
     /// Empty string when no framework context is available (e.g. `check_sql`).
     pub no_transaction_hint: &'static str,
+    /// Whether the migration contains a `SET lock_timeout` statement.
+    pub has_lock_timeout: bool,
+    /// Whether the migration contains a `SET statement_timeout` statement.
+    pub has_statement_timeout: bool,
 }
 
 impl Default for MigrationContext {
@@ -35,6 +39,8 @@ impl Default for MigrationContext {
         Self {
             run_in_transaction: true,
             no_transaction_hint: "",
+            has_lock_timeout: false,
+            has_statement_timeout: false,
         }
     }
 }

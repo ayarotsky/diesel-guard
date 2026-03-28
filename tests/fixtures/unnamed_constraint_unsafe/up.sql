@@ -1,4 +1,6 @@
 -- Unsafe: Unnamed constraints get auto-generated names from Postgres
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 
 -- Unnamed UNIQUE constraint
 ALTER TABLE users ADD UNIQUE (email);

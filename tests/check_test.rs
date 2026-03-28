@@ -30,7 +30,7 @@ fn test_default_migrations_dir() {
     fs::create_dir(&migrations_dir).expect("Failed to create migrations dir");
     fs::write(
         migrations_dir.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN foo TEXT;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users ADD COLUMN foo TEXT;",
     )
     .expect("Failed to write migration");
 
@@ -56,7 +56,7 @@ fn test_stdin_input_safe() {
     let command_output = Stdio::piped();
 
     // Create test data for the command
-    let test_data = "ALTER TABLE users ADD COLUMN foo TEXT;";
+    let test_data = "SET lock_timeout = '2s'; SET statement_timeout = '60s'; ALTER TABLE users ADD COLUMN foo TEXT;";
 
     // Run check command
     let mut handle = Command::new(diesel_guard_bin())
