@@ -37,9 +37,13 @@ runs:
           *) echo "Unsupported platform: $OS/$ARCH" && exit 1 ;;
         esac
 
+        mkdir -p "$HOME/.local/bin"
         curl -fsSL \
           "https://github.com/ayarotsky/diesel-guard/releases/download/v${VERSION}/diesel-guard-${TARGET}.tar.xz" \
-          | tar xJ --strip-components=1 -C /usr/local/bin
+          -o /tmp/diesel-guard.tar.xz
+        tar xJf /tmp/diesel-guard.tar.xz --strip-components=1 -C "$HOME/.local/bin"
+        rm /tmp/diesel-guard.tar.xz
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
     - name: Check DB migrations
       shell: bash
