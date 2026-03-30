@@ -16,7 +16,7 @@ runs:
     - name: Install diesel-guard
       shell: bash
       run: |
-        VERSION="${{ github.action_ref }}"
+        VERSION=$(basename "$GITHUB_ACTION_PATH")
         VERSION="${VERSION#v}"
         if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
           echo "Error: diesel-guard action must be pinned to a version tag (e.g. uses: ayarotsky/diesel-guard@v0.8.0)"

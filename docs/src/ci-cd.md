@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # Pin to specific version (recommended for stability)
-      - uses: ayarotsky/diesel-guard@v0.4.0
+      - uses: ayarotsky/diesel-guard@v0.9.0
         with:
           path: migrations/
 ```

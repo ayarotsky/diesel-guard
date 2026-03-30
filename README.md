@@ -92,7 +92,7 @@ Safe alternative:
 Add to your GitHub Actions workflow:
 
 ```yaml
-- uses: ayarotsky/diesel-guard-action@v1
+- uses: ayarotsky/diesel-guard@v0.9.0
 ```
 
 ## What It Detects
