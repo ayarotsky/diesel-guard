@@ -18,7 +18,11 @@ runs:
       run: |
         VERSION=$(basename "$GITHUB_ACTION_PATH")
         VERSION="${VERSION#v}"
-        if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        if [[ "$VERSION" == "main" ]]; then
+          VERSION=$(curl -fsSL -o /dev/null -w '%{url_effective}' \
+            "https://github.com/ayarotsky/diesel-guard/releases/latest" \
+            | sed 's/.*\/tag\/v//')
+        elif ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
           echo "Error: diesel-guard action must be pinned to a version tag (e.g. uses: ayarotsky/diesel-guard@v0.8.0)"
           exit 1
         fi

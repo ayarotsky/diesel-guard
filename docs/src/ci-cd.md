@@ -24,7 +24,7 @@ jobs:
 
 **Versioning:**
 - The action automatically installs the diesel-guard CLI version matching the tag
-- `@v0.4.0` installs diesel-guard v0.4.0
+- `@v0.9.0` installs diesel-guard v0.9.0
 - `@main` installs the latest version
 
 **Alternatives:**
