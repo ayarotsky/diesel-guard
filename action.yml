@@ -39,7 +39,7 @@ runs:
 
         curl -fsSL \
           "https://github.com/ayarotsky/diesel-guard/releases/download/v${VERSION}/diesel-guard-${TARGET}.tar.xz" \
-          | tar xJ -C /usr/local/bin
+          | tar xJ --strip-components=1 -C /usr/local/bin
 
     - name: Check DB migrations
       shell: bash
