@@ -151,7 +151,7 @@ ALTER TABLE users DROP COLUMN legacy_field;
 - [Seven tips for dealing with Postgres locks](https://www.citusdata.com/blog/2018/02/22/seven-tips-for-dealing-with-postgres-locks/)
 - [Move fast and migrate things: how we automated migrations in Postgres](https://benchling.engineering/move-fast-and-migrate-things-how-we-automated-migrations-in-postgres-d60aba0fc3d4)
 - [PostgreSQL at scale: database schema changes without downtime](https://medium.com/paypal-tech/postgresql-at-scale-database-schema-changes-without-downtime-20d3749ed680)
-- [SQL Style Guide](https://www.sqlstyle.guide/)
+- [PostgreSQL Explicit Locking](https://www.postgresql.org/docs/current/explicit-locking.html)
 
 ## Credits
 
