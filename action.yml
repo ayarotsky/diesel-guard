@@ -38,8 +38,8 @@ runs:
         esac
 
         curl -fsSL \
-          "https://github.com/ayarotsky/diesel-guard/releases/download/v${VERSION}/diesel-guard-${TARGET}.tar.gz" \
-          | tar xz -C /usr/local/bin
+          "https://github.com/ayarotsky/diesel-guard/releases/download/v${VERSION}/diesel-guard-${TARGET}.tar.xz" \
+          | tar xJ -C /usr/local/bin
 
     - name: Check DB migrations
       shell: bash
