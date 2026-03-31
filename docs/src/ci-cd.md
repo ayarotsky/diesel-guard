@@ -14,26 +14,10 @@ jobs:
   check-migrations:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      # Pin to specific version (recommended for stability)
-      - uses: ayarotsky/diesel-guard@v0.9.0
+      - uses: actions/checkout@v6
+      - uses: ayarotsky/diesel-guard-action@v1
         with:
           path: migrations/
-```
-
-**Versioning:**
-- The action automatically installs the diesel-guard CLI version matching the tag
-- `@v0.9.0` installs diesel-guard v0.9.0
-- `@main` installs the latest version
-
-**Alternatives:**
-
-```yaml
-# Always use latest (gets new checks and fixes automatically)
-- uses: ayarotsky/diesel-guard@main
-  with:
-    path: migrations/
 ```
 
 This will:
@@ -41,6 +25,21 @@ This will:
 - Check your migrations for unsafe patterns
 - Display detailed violation reports in workflow logs
 - Fail the workflow if violations are detected
+
+**Inputs:**
+
+| Input     | Description                                            | Default       |
+|-----------|--------------------------------------------------------|---------------|
+| `path`    | Path to migrations directory or a single `.sql` file   | `migrations/` |
+| `version` | diesel-guard binary version to install (e.g. `0.9.0`)  | `latest`      |
+
+**Pin the diesel-guard binary version** (recommended for reproducible builds):
+
+```yaml
+- uses: ayarotsky/diesel-guard-action@v1
+  with:
+    version: '0.9.0'
+```
 
 ### Option 2: Manual Installation
 

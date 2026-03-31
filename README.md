@@ -92,7 +92,16 @@ Safe alternative:
 Add to your GitHub Actions workflow:
 
 ```yaml
-- uses: ayarotsky/diesel-guard@main
+- uses: actions/checkout@v6
+- uses: ayarotsky/diesel-guard-action@v1
+```
+
+Pin the diesel-guard binary version for reproducible builds:
+
+```yaml
+- uses: ayarotsky/diesel-guard-action@v1
+  with:
+    version: '0.9.0'
 ```
 
 ## What It Detects
