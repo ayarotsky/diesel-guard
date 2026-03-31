@@ -229,6 +229,8 @@ fn test_disable_checks_separates_serial_checks() {
     fs::write(
         migration_dir.join("up.sql"),
         r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 CREATE TABLE events (id BIGSERIAL PRIMARY KEY);
 ALTER TABLE users ADD COLUMN id SERIAL;
 ",

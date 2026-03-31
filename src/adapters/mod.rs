@@ -20,6 +20,7 @@ pub use sqlx::SqlxAdapter;
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 /// Per-migration context extracted by the adapter and passed to each check.
+#[non_exhaustive]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct MigrationContext {
     /// Whether the migration runs inside a transaction.

@@ -246,28 +246,43 @@ impl Registry {
         // statement. Use the scanner to get accurate token positions.
         let token_starts = non_comment_token_starts(sql);
 
-        // Pre-scan for SET lock_timeout / SET statement_timeout anywhere in the file
-        // so checks can know whether timeout configuration is present.
-        let ctx = {
-            let mut ctx = ctx.clone();
-            for raw_stmt in stmts {
-                if let Some(NodeEnum::VariableSetStmt(set_stmt)) = extract_node(raw_stmt) {
-                    match set_stmt.name.as_str() {
-                        "lock_timeout" => ctx.has_lock_timeout = true,
-                        "statement_timeout" => ctx.has_statement_timeout = true,
-                        _ => {}
-                    }
-                }
-            }
-            ctx
-        };
-
+        // Walk statements in order, updating timeout context incrementally so that
+        // SET lock_timeout only protects DDL that appears *after* it.
+        let mut ctx = ctx.clone();
         let mut violations = Vec::new();
 
         for raw_stmt in stmts {
             let Some(node) = extract_node(raw_stmt) else {
                 continue;
             };
+
+            // Update context for SET / RESET timeout statements before running checks.
+            if let NodeEnum::VariableSetStmt(set_stmt) = &node {
+                use pg_query::protobuf::VariableSetKind;
+
+                let kind =
+                    VariableSetKind::try_from(set_stmt.kind).unwrap_or(VariableSetKind::Undefined);
+
+                match kind {
+                    VariableSetKind::VarSetValue => match set_stmt.name.as_str() {
+                        "lock_timeout" => ctx.has_lock_timeout = true,
+                        "statement_timeout" => ctx.has_statement_timeout = true,
+                        _ => {}
+                    },
+                    VariableSetKind::VarSetDefault | VariableSetKind::VarReset => {
+                        match set_stmt.name.as_str() {
+                            "lock_timeout" => ctx.has_lock_timeout = false,
+                            "statement_timeout" => ctx.has_statement_timeout = false,
+                            _ => {}
+                        }
+                    }
+                    VariableSetKind::VarResetAll => {
+                        ctx.has_lock_timeout = false;
+                        ctx.has_statement_timeout = false;
+                    }
+                    _ => {}
+                }
+            }
 
             let offset = first_token_at_or_after(
                 &token_starts,
@@ -434,13 +449,20 @@ ALTER TABLE users DROP COLUMN email;
     // --- Line number accuracy ---
 
     fn check_sql_violations(sql: &str) -> ViolationList {
-        let registry = Registry::new();
+        // These line-number tests run raw ALTER TABLE statements without a
+        // timeout preamble. Disable MissingLockTimeoutCheck so each DDL
+        // statement produces exactly one violation (from the check under test).
+        let config = Config {
+            disable_checks: vec!["MissingLockTimeoutCheck".to_string()],
+            ..Default::default()
+        };
+        let registry = Registry::with_config(&config);
         let result = pg_query::parse(sql).unwrap();
         registry.check_stmts_with_context(
             &result.protobuf.stmts,
             sql,
             &[],
-            &Config::default(),
+            &config,
             &MigrationContext::default(),
         )
     }
@@ -496,7 +518,11 @@ ALTER TABLE users DROP COLUMN email;
 
     #[test]
     fn test_violation_line_number_stmt_inside_safety_assured_suppressed() {
-        let registry = Registry::new();
+        let config = Config {
+            disable_checks: vec!["MissingLockTimeoutCheck".to_string()],
+            ..Default::default()
+        };
+        let registry = Registry::with_config(&config);
         let sql = "-- safety-assured:start\nALTER TABLE users DROP COLUMN email;\n-- safety-assured:end\nALTER TABLE posts DROP COLUMN body;";
         let result = pg_query::parse(sql).unwrap();
         let ignore_ranges = vec![IgnoreRange {
@@ -507,7 +533,7 @@ ALTER TABLE users DROP COLUMN email;
             &result.protobuf.stmts,
             sql,
             &ignore_ranges,
-            &Config::default(),
+            &config,
             &MigrationContext::default(),
         );
         assert_eq!(violations.len(), 1);
@@ -516,7 +542,11 @@ ALTER TABLE users DROP COLUMN email;
 
     #[test]
     fn test_violation_line_number_stmt_after_safety_assured_end_not_suppressed() {
-        let registry = Registry::new();
+        let config = Config {
+            disable_checks: vec!["MissingLockTimeoutCheck".to_string()],
+            ..Default::default()
+        };
+        let registry = Registry::with_config(&config);
         // Statement is on line 4, one line after the block ends.
         let sql = "-- safety-assured:start\nALTER TABLE users DROP COLUMN email;\n-- safety-assured:end\nALTER TABLE posts DROP COLUMN body;";
         let result = pg_query::parse(sql).unwrap();
@@ -528,7 +558,7 @@ ALTER TABLE users DROP COLUMN email;
             &result.protobuf.stmts,
             sql,
             &ignore_ranges,
-            &Config::default(),
+            &config,
             &MigrationContext::default(),
         );
         assert_eq!(violations[0].0, 4);

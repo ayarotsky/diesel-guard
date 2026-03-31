@@ -38,7 +38,7 @@ impl Check for MissingLockTimeoutCheck {
         };
 
         vec![Violation::new(
-            format!("{operation} without lock timeout"),
+            format!("{operation} without {missing}"),
             format!(
                 "{operation} requires an aggressive lock that blocks reads/writes. \
                  Without {missing}, the migration can hang indefinitely waiting \
@@ -62,7 +62,7 @@ mod tests {
         assert_detects_violation!(
             MissingLockTimeoutCheck,
             "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;",
-            "ALTER TABLE without lock timeout"
+            "ALTER TABLE without lock_timeout and statement_timeout"
         );
     }
 
@@ -71,7 +71,7 @@ mod tests {
         assert_detects_violation!(
             MissingLockTimeoutCheck,
             "CREATE INDEX idx_users_email ON users(email);",
-            "CREATE INDEX without lock timeout"
+            "CREATE INDEX without lock_timeout and statement_timeout"
         );
     }
 
@@ -80,7 +80,7 @@ mod tests {
         assert_detects_violation!(
             MissingLockTimeoutCheck,
             "DROP TABLE users;",
-            "DROP without lock timeout"
+            "DROP without lock_timeout and statement_timeout"
         );
     }
 
@@ -89,7 +89,7 @@ mod tests {
         assert_detects_violation!(
             MissingLockTimeoutCheck,
             "TRUNCATE TABLE users;",
-            "TRUNCATE TABLE without lock timeout"
+            "TRUNCATE TABLE without lock_timeout and statement_timeout"
         );
     }
 
@@ -98,7 +98,7 @@ mod tests {
         assert_detects_violation!(
             MissingLockTimeoutCheck,
             "REINDEX INDEX idx_users_email;",
-            "REINDEX without lock timeout"
+            "REINDEX without lock_timeout and statement_timeout"
         );
     }
 
@@ -107,7 +107,7 @@ mod tests {
         assert_detects_violation!(
             MissingLockTimeoutCheck,
             "ALTER TABLE users RENAME TO customers;",
-            "RENAME without lock timeout"
+            "RENAME without lock_timeout and statement_timeout"
         );
     }
 
@@ -116,7 +116,7 @@ mod tests {
         assert_detects_violation!(
             MissingLockTimeoutCheck,
             "REFRESH MATERIALIZED VIEW my_view;",
-            "REFRESH MATERIALIZED VIEW without lock timeout"
+            "REFRESH MATERIALIZED VIEW without lock_timeout and statement_timeout"
         );
     }
 
@@ -125,7 +125,7 @@ mod tests {
         assert_detects_violation!(
             MissingLockTimeoutCheck,
             "CREATE EXTENSION IF NOT EXISTS pg_trgm;",
-            "CREATE EXTENSION without lock timeout"
+            "CREATE EXTENSION without lock_timeout and statement_timeout"
         );
     }
 

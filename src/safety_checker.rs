@@ -570,6 +570,16 @@ mod tests {
 
     // --- Line number integration tests (full pipeline through check_sql) ---
 
+    // These tests focus on line-number bookkeeping and use raw ALTER TABLE
+    // statements without a timeout preamble, so disable MissingLockTimeoutCheck
+    // to keep one violation per DDL statement from the check under test.
+    fn line_number_test_checker() -> SafetyChecker {
+        SafetyChecker::with_config(Config {
+            disable_checks: vec!["MissingLockTimeoutCheck".to_string()],
+            ..Default::default()
+        })
+    }
+
     fn violation_lines(checker: &SafetyChecker, sql: &str) -> Vec<usize> {
         let mut lines: Vec<usize> = checker
             .check_sql(sql)
@@ -583,28 +593,28 @@ mod tests {
 
     #[test]
     fn test_line_numbers_two_stmts_on_sequential_lines() {
-        let checker = SafetyChecker::new();
+        let checker = line_number_test_checker();
         let sql = "ALTER TABLE users DROP COLUMN email;\nALTER TABLE posts DROP COLUMN body;";
         assert_eq!(violation_lines(&checker, sql), vec![1, 2]);
     }
 
     #[test]
     fn test_line_numbers_stmts_separated_by_blank_line() {
-        let checker = SafetyChecker::new();
+        let checker = line_number_test_checker();
         let sql = "ALTER TABLE users DROP COLUMN email;\n\nALTER TABLE posts DROP COLUMN body;";
         assert_eq!(violation_lines(&checker, sql), vec![1, 3]);
     }
 
     #[test]
     fn test_line_numbers_stmts_with_interleaved_line_comments() {
-        let checker = SafetyChecker::new();
+        let checker = line_number_test_checker();
         let sql = "-- first op\nALTER TABLE users DROP COLUMN email;\n-- second op\nALTER TABLE posts DROP COLUMN body;";
         assert_eq!(violation_lines(&checker, sql), vec![2, 4]);
     }
 
     #[test]
     fn test_line_numbers_stmt_just_after_safety_assured_block() {
-        let checker = SafetyChecker::new();
+        let checker = line_number_test_checker();
         // Lines: 1=start directive, 2=suppressed DROP, 3=end directive, 4=blank, 5=active DROP
         let sql = "-- safety-assured:start\nALTER TABLE users DROP COLUMN email;\n-- safety-assured:end\n\nALTER TABLE posts DROP COLUMN body;";
         assert_eq!(violation_lines(&checker, sql), vec![5]);
@@ -612,7 +622,7 @@ mod tests {
 
     #[test]
     fn test_line_numbers_multiple_violations_from_one_stmt_share_same_line() {
-        let checker = SafetyChecker::new();
+        let checker = line_number_test_checker();
         // Two DROP COLUMN clauses in one ALTER TABLE on line 3
         let sql = "\n\nALTER TABLE users DROP COLUMN a, DROP COLUMN b;";
         let violations = checker.check_sql(sql).unwrap();

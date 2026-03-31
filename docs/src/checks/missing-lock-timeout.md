@@ -4,7 +4,7 @@
 
 ## Bad
 
-DDL statements that acquire locks without a configured timeout can hang indefinitely waiting for the lock, blocking all subsequent queries on the table for the entire wait duration.
+DDL statements that acquire locks without both `lock_timeout` and `statement_timeout` configured can hang indefinitely waiting for locks, delaying production traffic. This check flags lock-prone DDL when either setting is missing.
 
 ```sql
 ALTER TABLE users ADD COLUMN admin BOOLEAN;
@@ -12,7 +12,7 @@ ALTER TABLE users ADD COLUMN admin BOOLEAN;
 
 ## Good
 
-Set `lock_timeout` and `statement_timeout` before any DDL to ensure the migration fails fast rather than holding up production traffic:
+Set both `lock_timeout` and `statement_timeout` before any DDL to ensure the migration fails fast rather than holding up production traffic:
 
 ```sql
 SET lock_timeout = '2s';

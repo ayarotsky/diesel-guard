@@ -383,7 +383,24 @@ fn test_missing_lock_timeout_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ALTER TABLE without lock timeout");
+    assert_eq!(
+        violations[0].1.operation,
+        "ALTER TABLE without lock_timeout and statement_timeout"
+    );
+}
+
+#[test]
+fn test_timeout_after_ddl_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("timeout_after_ddl_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(
+        violations[0].1.operation,
+        "ALTER TABLE without lock_timeout and statement_timeout"
+    );
 }
 
 #[test]
