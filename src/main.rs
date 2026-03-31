@@ -146,7 +146,7 @@ fn main() -> Result<()> {
 
             if results.is_empty() {
                 println!("{}", OutputFormatter::format_summary(0, 0));
-                exit(0);
+                return Ok(());
             }
 
             let total_errors: usize = results
