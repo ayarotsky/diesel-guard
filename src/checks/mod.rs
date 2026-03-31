@@ -221,28 +221,43 @@ impl Registry {
         // statement. Use the scanner to get accurate token positions.
         let token_starts = non_comment_token_starts(sql);
 
-        // Pre-scan for SET lock_timeout / SET statement_timeout anywhere in the file
-        // so checks can know whether timeout configuration is present.
-        let ctx = {
-            let mut ctx = ctx.clone();
-            for raw_stmt in stmts {
-                if let Some(NodeEnum::VariableSetStmt(set_stmt)) = extract_node(raw_stmt) {
-                    match set_stmt.name.as_str() {
-                        "lock_timeout" => ctx.has_lock_timeout = true,
-                        "statement_timeout" => ctx.has_statement_timeout = true,
-                        _ => {}
-                    }
-                }
-            }
-            ctx
-        };
-
+        // Walk statements in order, updating timeout context incrementally so that
+        // SET lock_timeout only protects DDL that appears *after* it.
+        let mut ctx = ctx.clone();
         let mut violations = Vec::new();
 
         for raw_stmt in stmts {
             let Some(node) = extract_node(raw_stmt) else {
                 continue;
             };
+
+            // Update context for SET / RESET timeout statements before running checks.
+            if let NodeEnum::VariableSetStmt(set_stmt) = &node {
+                use pg_query::protobuf::VariableSetKind;
+
+                let kind = VariableSetKind::try_from(set_stmt.kind)
+                    .unwrap_or(VariableSetKind::Undefined);
+
+                match kind {
+                    VariableSetKind::VarSetValue => match set_stmt.name.as_str() {
+                        "lock_timeout" => ctx.has_lock_timeout = true,
+                        "statement_timeout" => ctx.has_statement_timeout = true,
+                        _ => {}
+                    },
+                    VariableSetKind::VarSetDefault | VariableSetKind::VarReset => {
+                        match set_stmt.name.as_str() {
+                            "lock_timeout" => ctx.has_lock_timeout = false,
+                            "statement_timeout" => ctx.has_statement_timeout = false,
+                            _ => {}
+                        }
+                    }
+                    VariableSetKind::VarResetAll => {
+                        ctx.has_lock_timeout = false;
+                        ctx.has_statement_timeout = false;
+                    }
+                    _ => {}
+                }
+            }
 
             let offset = first_token_at_or_after(
                 &token_starts,
