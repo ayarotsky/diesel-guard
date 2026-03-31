@@ -37,6 +37,10 @@ fn test_default_migrations_dir() {
     let output = Command::new(&bin)
         .arg("check")
         .current_dir(tempdir.path())
+        // GitHub Actions sets GITHUB_ACTIONS=true, which causes the tool to switch to
+        // github format automatically. In github format, the success summary is suppressed
+        // (nothing to annotate), so this test would fail when run in CI.
+        .env_remove("GITHUB_ACTIONS")
         .output()
         .expect("Failed to execute check command");
 
@@ -64,6 +68,10 @@ fn test_stdin_input_safe() {
         .arg("-")
         .stdin(command_input)
         .stdout(command_output)
+        // GitHub Actions sets GITHUB_ACTIONS=true, which causes the tool to switch to
+        // github format automatically. In github format, the success summary is suppressed
+        // (nothing to annotate), so this test would fail when run in CI.
+        .env_remove("GITHUB_ACTIONS")
         .spawn()
         .expect("Failed to execute check command");
 
