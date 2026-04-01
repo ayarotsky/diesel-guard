@@ -43,29 +43,29 @@ jobs:
           path: ~/.cargo/bin
           key: ${{ runner.os }}-cargo-tools-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Install just
+        uses: extractions/setup-just@v3
+
       - name: Install cargo tools
         run: |
           command -v cargo-deny   || cargo install cargo-deny --locked
           command -v cargo-audit  || cargo install cargo-audit --locked
           command -v cargo-auditable || cargo install cargo-auditable --locked
 
-      - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      - name: Lint
+        run: just lint
 
       - name: Check documentation
-        run: cargo doc --no-deps
+        run: just doc
 
       - name: Check dependencies
         run: cargo deny check
 
       - name: Build
-        run: cargo auditable build --release
+        run: just build-release
 
       - name: Run tests
-        run: cargo test --all-features
+        run: just test
 
       - name: Audit dependencies
         run: cargo audit
@@ -92,11 +92,14 @@ jobs:
           path: ~/.cargo/bin
           key: ${{ runner.os }}-cargo-tarpaulin-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Install just
+        uses: extractions/setup-just@v3
+
       - name: Install tarpaulin
         run: cargo install --locked cargo-tarpaulin || true
 
       - name: Generate coverage report
-        run: cargo tarpaulin --all-features --out lcov --exclude-files src/main.rs
+        run: just coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v6
