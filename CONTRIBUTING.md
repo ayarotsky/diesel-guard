@@ -128,7 +128,7 @@ Use `diesel-guard dump-ast --sql "..."` to inspect what AST a statement produces
 3. **Create fixtures** — `tests/fixtures/your_operation_{safe,unsafe}/up.sql`. First line MUST be `-- Safe: ...` or `-- Unsafe: ...`.
 4. **Update integration tests** in `tests/fixtures_test.rs` — add to `safe_fixtures` vec, add detection test, update `test_check_entire_fixtures_directory` counts.
 5. **Update docs** — create `docs/src/checks/<check>.md` with bad/good examples and add entry to `docs/src/SUMMARY.md`.
-6. **Verify** — `cargo test && cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings`
+6. **Verify** — `just check` (fast gate) then `just ci` (full pipeline)
 
 ### Naming Conventions
 
@@ -222,16 +222,27 @@ The test suite has three layers:
 
 ## Code Quality
 
+This project uses [just](https://github.com/casey/just) as a task runner. Install it with `brew install just` or `cargo install just`.
+
 Run before submitting:
 
 ```bash
-cargo fmt
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test
-cargo build --release
+just ci
 ```
 
-All four must pass for a PR to merge.
+This mirrors the CI pipeline exactly: clippy, format check, doc check, dependency audit, release build, tests, and security audit. All steps must pass for a PR to merge.
+
+For a faster pre-commit gate (format check + clippy + unit tests only):
+
+```bash
+just check
+```
+
+Install required tools if you haven't already:
+
+```bash
+just install-tools
+```
 
 ## Contributing Process
 
