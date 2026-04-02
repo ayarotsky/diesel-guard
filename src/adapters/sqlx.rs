@@ -72,6 +72,7 @@ impl MigrationAdapter for SqlxAdapter {
             return MigrationContext {
                 run_in_transaction: true,
                 no_transaction_hint: NO_TRANSACTION_HINT,
+                ..Default::default()
             };
         };
 
@@ -83,6 +84,7 @@ impl MigrationAdapter for SqlxAdapter {
         MigrationContext {
             run_in_transaction: !has_no_transaction,
             no_transaction_hint: NO_TRANSACTION_HINT,
+            ..Default::default()
         }
     }
 }

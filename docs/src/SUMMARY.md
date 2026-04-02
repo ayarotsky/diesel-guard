@@ -22,6 +22,7 @@
   - [Dropping a Table](checks/dropping-table.md)
   - [Generated Columns](checks/generated-column.md)
   - [JSON Fields](checks/json-field.md)
+  - [Missing Lock Timeout](checks/missing-lock-timeout.md)
   - [Wide Indexes](checks/multiple-column-index.md)
   - [REFRESH MATERIALIZED VIEW](checks/refresh-materialized-view.md)
   - [Renaming a Column](checks/renaming-column.md)
