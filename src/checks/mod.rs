@@ -1,5 +1,6 @@
 mod add_check_constraint;
 mod add_column;
+mod add_domain_check_constraint;
 mod add_foreign_key;
 mod add_index;
 mod add_json_column;
@@ -32,6 +33,7 @@ mod wide_index;
 mod test_utils;
 
 pub use add_column::AddColumnCheck;
+pub use add_domain_check_constraint::AddDomainCheckConstraintCheck;
 pub use add_foreign_key::AddForeignKeyCheck;
 pub use add_index::AddIndexCheck;
 pub use add_json_column::AddJsonColumnCheck;
@@ -136,6 +138,7 @@ impl Registry {
         self.register_check(config, AlterColumnTypeCheck);
         self.register_check(config, CharTypeCheck);
         self.register_check(config, CreateExtensionCheck);
+        self.register_check(config, AddDomainCheckConstraintCheck);
         self.register_check(config, DropColumnCheck);
         self.register_check(config, DropDatabaseCheck);
         self.register_check(config, DropIndexCheck);

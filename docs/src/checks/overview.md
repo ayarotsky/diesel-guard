@@ -1,6 +1,6 @@
 # Checks
 
-diesel-guard ships with 28 built-in safety checks covering the most common Postgres migration hazards.
+diesel-guard ships with 29 built-in safety checks covering the most common Postgres migration hazards.
 
 | Check | Operation | Lock Type |
 |---|---|---|
@@ -12,6 +12,7 @@ diesel-guard ships with 28 built-in safety checks covering the most common Postg
 | [Changing Column Type](changing-column-type.md) | `ALTER TABLE ... ALTER COLUMN ... TYPE` | ACCESS EXCLUSIVE + table rewrite |
 | [CHAR Fields](char-field.md) | `CHAR`/`CHARACTER` column types | — (best practice) |
 | [Creating an Extension](creating-extension.md) | `CREATE EXTENSION` | — (requires superuser) |
+| [Domain CHECK Constraint](add-domain-check-constraint.md) | `ALTER DOMAIN ... ADD CONSTRAINT ... CHECK` without `NOT VALID` | ACCESS EXCLUSIVE |
 | [Dropping a Column](dropping-column.md) | `ALTER TABLE ... DROP COLUMN` | ACCESS EXCLUSIVE |
 | [Dropping a Constraint](dropping-constraint.md) | Unnamed `UNIQUE`/`FOREIGN KEY`/`CHECK` constraints | — (best practice) |
 | [Dropping a Database](dropping-database.md) | `DROP DATABASE` | Exclusive access |
