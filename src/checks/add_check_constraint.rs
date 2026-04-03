@@ -1,5 +1,5 @@
 use crate::checks::Check;
-use crate::checks::pg_helpers::{alter_table_cmds, cmd_def_as_constraint};
+use crate::checks::pg_helpers::{alter_table_cmds, cmd_def_as_constraint, constraint_display_name};
 use crate::{Config, MigrationContext, Violation};
 use pg_query::NodeEnum;
 use pg_query::protobuf::ConstrType;
@@ -21,11 +21,7 @@ impl Check for AddCheckConstraintCheck {
                 return None;
             }
 
-            let constraint_name = if constraint.conname.is_empty() {
-                "<unnamed>".to_string()
-            } else {
-                constraint.conname.clone()
-            };
+            let constraint_name = constraint_display_name(constraint);
 
             Some(Violation::new(
                 "ADD CHECK CONSTRAINT",

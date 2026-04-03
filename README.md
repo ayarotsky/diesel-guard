@@ -106,7 +106,7 @@ Pin the diesel-guard binary version for reproducible builds:
 
 ## What It Detects
 
-28 built-in checks across locking, rewrites, and schema safety. See the [full list of checks](https://ayarotsky.github.io/diesel-guard/checks/overview.html).
+29 built-in checks across locking, rewrites, and schema safety. See the [full list of checks](https://ayarotsky.github.io/diesel-guard/checks/overview.html).
 
 ## Escape Hatch
 
