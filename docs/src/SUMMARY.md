@@ -14,6 +14,7 @@
   - [Changing Column Type](checks/changing-column-type.md)
   - [CHAR Fields](checks/char-field.md)
   - [Creating an Extension](checks/creating-extension.md)
+  - [Creating a Table without Primary Key](checks/create-table-without-pk.md)
   - [Domain CHECK Constraint](checks/add-domain-check-constraint.md)
   - [Dropping a Column](checks/dropping-column.md)
   - [Dropping a Constraint](checks/dropping-constraint.md)

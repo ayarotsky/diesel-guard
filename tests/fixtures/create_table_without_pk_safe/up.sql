@@ -1,0 +1,2 @@
+-- Safe: CREATE TABLE with a primary key
+CREATE TABLE events (id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name TEXT);
