@@ -6,6 +6,7 @@ diesel-guard ships safety checks covering the most common Postgres migration haz
 |---|---|---|
 | [Add Check Constraint](add-check-constraint.md) | `ALTER TABLE ... ADD CONSTRAINT ... CHECK` without `NOT VALID` | ACCESS EXCLUSIVE |
 | [ADD COLUMN with DEFAULT](add-column-default.md) | `ALTER TABLE ... ADD COLUMN ... DEFAULT` | ACCESS EXCLUSIVE + table rewrite |
+| [Adding an EXCLUDE Constraint](add-exclude-constraint.md) | `ALTER TABLE ... ADD CONSTRAINT ... EXCLUDE` | SHARE ROW EXCLUSIVE + full table scan |
 | [Add Foreign Key](add_foreign_key.md) | `ALTER TABLE ... ADD FOREIGN KEY` without `NOT VALID` | ShareRowExclusiveLock |
 | [Adding an Index](adding-index.md) | `CREATE INDEX` without `CONCURRENTLY`; `CREATE INDEX CONCURRENTLY` inside a transaction | SHARE |
 | [Adding a UNIQUE Constraint](adding-unique-constraint.md) | `ALTER TABLE ... ADD UNIQUE` | ACCESS EXCLUSIVE |

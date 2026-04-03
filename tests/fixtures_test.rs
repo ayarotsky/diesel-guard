@@ -79,6 +79,17 @@ fn test_add_foreign_key_unsafe_detected() {
 }
 
 #[test]
+fn test_add_exclude_constraint_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("add_exclude_constraint_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(violations[0].operation, "ADD EXCLUDE constraint");
+}
+
+#[test]
 fn test_add_check_constraint_unsafe_detected() {
     let checker = SafetyChecker::new();
     let path = fixture_path("add_check_constraint_unsafe");
@@ -541,14 +552,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        34,
-        "Expected violations in 34 files, got {}",
+        35,
+        "Expected violations in 35 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 45,
-        "Expected 45 total violations: 31 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 6, short_int_pk_unsafe with 6 (4 short int + 1 add pk + 1 no pk), got {total_violations}"
+        total_violations, 46,
+        "Expected 46 total violations: 32 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 6, short_int_pk_unsafe with 6 (4 short int + 1 add pk + 1 no pk), got {total_violations}"
     );
 }
 
