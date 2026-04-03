@@ -22,6 +22,7 @@ diesel-guard ships safety checks covering the most common Postgres migration haz
 | [Dropping a Table](dropping-table.md) | `DROP TABLE` | ACCESS EXCLUSIVE |
 | [Generated Columns](generated-column.md) | `ADD COLUMN ... GENERATED ALWAYS AS ... STORED` | ACCESS EXCLUSIVE + table rewrite |
 | [JSON Fields](json-field.md) | `ADD COLUMN ... JSON` | — (best practice) |
+| [Mutation without WHERE](mutation-without-where.md) | `DELETE FROM table` or `UPDATE table SET ...` without `WHERE` | ACCESS EXCLUSIVE / ROW EXCLUSIVE |
 | [Wide Indexes](multiple-column-index.md) | `CREATE INDEX` with 4+ columns | — (best practice) |
 | [REFRESH MATERIALIZED VIEW](refresh-materialized-view.md) | `REFRESH MATERIALIZED VIEW` without `CONCURRENTLY`; `REFRESH MATERIALIZED VIEW CONCURRENTLY` inside a transaction | ACCESS EXCLUSIVE |
 | [Renaming a Column](renaming-column.md) | `ALTER TABLE ... RENAME COLUMN` | ACCESS EXCLUSIVE |
