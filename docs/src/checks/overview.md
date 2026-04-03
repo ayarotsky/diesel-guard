@@ -1,6 +1,6 @@
 # Checks
 
-diesel-guard ships with 29 built-in safety checks covering the most common Postgres migration hazards.
+diesel-guard ships safety checks covering the most common Postgres migration hazards.
 
 | Check | Operation | Lock Type |
 |---|---|---|
