@@ -26,6 +26,8 @@ fn test_safe_fixtures_pass() {
         "add_unique_constraint_safe",
         "char_type_safe",
         "create_table_without_pk_safe",
+        "delete_with_where_safe",
+        "update_with_where_safe",
         "domain_check_constraint_safe",
         "drop_index_safe",
         "drop_not_null_safe",
@@ -542,6 +544,28 @@ fn test_domain_check_constraint_alter_detected() {
 }
 
 #[test]
+fn test_delete_without_where_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("delete_without_where_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(violations[0].operation, "DELETE without WHERE");
+}
+
+#[test]
+fn test_update_without_where_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("update_without_where_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(violations[0].operation, "UPDATE without WHERE");
+}
+
+#[test]
 fn test_check_entire_fixtures_directory() {
     let checker = SafetyChecker::new();
     let results = checker
@@ -552,14 +576,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        35,
-        "Expected violations in 35 files, got {}",
+        37,
+        "Expected violations in 37 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 46,
-        "Expected 46 total violations: 32 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 6, short_int_pk_unsafe with 6 (4 short int + 1 add pk + 1 no pk), got {total_violations}"
+        total_violations, 48,
+        "Expected 48 total violations: 34 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 6, short_int_pk_unsafe with 6 (4 short int + 1 add pk + 1 no pk), got {total_violations}"
     );
 }
 
