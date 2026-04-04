@@ -31,7 +31,7 @@ build-release:
 
 # Generate an lcov coverage report (requires cargo-tarpaulin; Linux-friendly)
 coverage:
-    cargo tarpaulin --all-features --out lcov --exclude-files src/main.rs
+    cargo tarpaulin --all-features --out lcov --exclude-files src/main.rs src/checks/test_utils.rs
 
 # ── Composite ─────────────────────────────────────────────────────────────────
 
