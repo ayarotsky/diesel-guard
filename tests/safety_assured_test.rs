@@ -61,7 +61,7 @@ ALTER TABLE comments DROP COLUMN author;
     assert!(
         violations
             .iter()
-            .all(|v| v.operation.contains("DROP COLUMN"))
+            .all(|(_, v)| v.operation.contains("DROP COLUMN"))
     );
 }
 
@@ -326,7 +326,7 @@ ALTER TABLE users DROP COLUMN f;
     assert!(
         violations
             .iter()
-            .all(|v| v.operation.contains("DROP COLUMN"))
+            .all(|(_, v)| v.operation.contains("DROP COLUMN"))
     );
 }
 

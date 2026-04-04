@@ -1,10 +1,10 @@
+use crate::ViolationList;
 use crate::adapters::{DieselAdapter, MigrationAdapter, SqlxAdapter};
 use crate::checks::{MigrationContext, Registry};
 use crate::config::Config;
 use crate::error::Result;
 use crate::parser;
 use crate::scripting;
-use crate::violation::Violation;
 use camino::Utf8Path;
 use std::fs;
 use std::io::{self, BufRead, BufReader};
@@ -104,7 +104,7 @@ impl SafetyChecker {
     }
 
     /// Check SQL string for violations
-    pub fn check_sql(&self, sql: &str) -> Result<Vec<Violation>> {
+    pub fn check_sql(&self, sql: &str) -> Result<ViolationList> {
         let parsed = parser::parse_with_metadata(sql)?;
         Ok(self.registry.check_stmts_with_context(
             &parsed.stmts,
@@ -116,7 +116,7 @@ impl SafetyChecker {
     }
 
     /// Check a single migration file
-    pub fn check_file(&self, path: &Utf8Path) -> Result<Vec<Violation>> {
+    pub fn check_file(&self, path: &Utf8Path) -> Result<ViolationList> {
         let sql = fs::read_to_string(path)?;
 
         let ctx = self
@@ -137,7 +137,7 @@ impl SafetyChecker {
     }
 
     /// Check all migration files in a directory
-    pub fn check_directory(&self, dir: &Utf8Path) -> Result<Vec<(String, Vec<Violation>)>> {
+    pub fn check_directory(&self, dir: &Utf8Path) -> Result<Vec<(String, ViolationList)>> {
         let adapter = self.adapter()?;
 
         let migration_files = adapter
@@ -178,14 +178,14 @@ impl SafetyChecker {
     }
 
     // check a migration string from a buffer
-    fn check_buffer(&self, reader: &mut dyn BufRead) -> Result<Vec<Violation>> {
+    fn check_buffer(&self, reader: &mut dyn BufRead) -> Result<ViolationList> {
         let mut buffer = String::new();
         reader.read_to_string(&mut buffer)?;
         self.check_sql(&buffer)
     }
 
     /// Check a path (file, directory or stdin)
-    pub fn check_path(&self, path: &Utf8Path) -> Result<Vec<(String, Vec<Violation>)>> {
+    pub fn check_path(&self, path: &Utf8Path) -> Result<Vec<(String, ViolationList)>> {
         // "-" means we're using stdin as an input.
         if path.as_str() == "-" {
             let violations = self.check_buffer(&mut BufReader::new(io::stdin().lock()))?;
@@ -254,7 +254,7 @@ mod tests {
         let sql = "REINDEX INDEX idx_users_email;";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].operation, "REINDEX without CONCURRENTLY");
+        assert_eq!(violations[0].1.operation, "REINDEX without CONCURRENTLY");
     }
 
     #[test]
@@ -263,7 +263,7 @@ mod tests {
         let sql = "REINDEX TABLE users;";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].operation, "REINDEX without CONCURRENTLY");
+        assert_eq!(violations[0].1.operation, "REINDEX without CONCURRENTLY");
     }
 
     #[test]
@@ -275,7 +275,7 @@ mod tests {
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 1);
         assert_eq!(
-            violations[0].operation,
+            violations[0].1.operation,
             "REINDEX CONCURRENTLY inside a transaction"
         );
     }
@@ -465,7 +465,7 @@ mod tests {
             "Expected 1 violation (CONCURRENTLY in transaction)"
         );
         assert_eq!(
-            results[0].1[0].operation,
+            results[0].1[0].1.operation,
             "CREATE INDEX CONCURRENTLY inside a transaction"
         );
     }
@@ -533,7 +533,7 @@ mod tests {
             "Expected 1 violation (CONCURRENTLY inside a transaction)"
         );
         assert_eq!(
-            results[0].1[0].operation,
+            results[0].1[0].1.operation,
             "CREATE INDEX CONCURRENTLY inside a transaction"
         );
     }
@@ -563,6 +563,62 @@ mod tests {
         assert_eq!(
             total_violations, 0,
             "Expected no violations with -- no-transaction"
+        );
+    }
+
+    // --- Line number integration tests (full pipeline through check_sql) ---
+
+    fn violation_lines(checker: &SafetyChecker, sql: &str) -> Vec<usize> {
+        let mut lines: Vec<usize> = checker
+            .check_sql(sql)
+            .unwrap()
+            .iter()
+            .map(|(l, _)| *l)
+            .collect();
+        lines.sort_unstable();
+        lines
+    }
+
+    #[test]
+    fn test_line_numbers_two_stmts_on_sequential_lines() {
+        let checker = SafetyChecker::new();
+        let sql = "ALTER TABLE users DROP COLUMN email;\nALTER TABLE posts DROP COLUMN body;";
+        assert_eq!(violation_lines(&checker, sql), vec![1, 2]);
+    }
+
+    #[test]
+    fn test_line_numbers_stmts_separated_by_blank_line() {
+        let checker = SafetyChecker::new();
+        let sql = "ALTER TABLE users DROP COLUMN email;\n\nALTER TABLE posts DROP COLUMN body;";
+        assert_eq!(violation_lines(&checker, sql), vec![1, 3]);
+    }
+
+    #[test]
+    fn test_line_numbers_stmts_with_interleaved_line_comments() {
+        let checker = SafetyChecker::new();
+        let sql = "-- first op\nALTER TABLE users DROP COLUMN email;\n-- second op\nALTER TABLE posts DROP COLUMN body;";
+        assert_eq!(violation_lines(&checker, sql), vec![2, 4]);
+    }
+
+    #[test]
+    fn test_line_numbers_stmt_just_after_safety_assured_block() {
+        let checker = SafetyChecker::new();
+        // Lines: 1=start directive, 2=suppressed DROP, 3=end directive, 4=blank, 5=active DROP
+        let sql = "-- safety-assured:start\nALTER TABLE users DROP COLUMN email;\n-- safety-assured:end\n\nALTER TABLE posts DROP COLUMN body;";
+        assert_eq!(violation_lines(&checker, sql), vec![5]);
+    }
+
+    #[test]
+    fn test_line_numbers_multiple_violations_from_one_stmt_share_same_line() {
+        let checker = SafetyChecker::new();
+        // Two DROP COLUMN clauses in one ALTER TABLE on line 3
+        let sql = "\n\nALTER TABLE users DROP COLUMN a, DROP COLUMN b;";
+        let violations = checker.check_sql(sql).unwrap();
+        assert_eq!(violations.len(), 2);
+        assert!(
+            violations.iter().all(|(l, _)| *l == 3),
+            "Both violations must reference line 3, got {:?}",
+            violations.iter().map(|(l, _)| l).collect::<Vec<_>>()
         );
     }
 }

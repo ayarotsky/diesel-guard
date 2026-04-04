@@ -4,20 +4,14 @@ use crate::violation::Violation;
 use camino::Utf8Path;
 use pg_query::protobuf::node::Node as NodeEnum;
 use rhai::{AST, Dynamic, Engine};
-use std::fmt;
 use std::sync::Arc;
 
 /// Error encountered while loading or running a custom Rhai check script.
-#[derive(Debug)]
+#[derive(thiserror::Error, Debug)]
+#[error("{file}: {message}")]
 pub struct ScriptError {
     pub file: String,
     pub message: String,
-}
-
-impl fmt::Display for ScriptError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {}", self.file, self.message)
-    }
 }
 
 /// A custom check backed by a compiled Rhai script.
@@ -25,6 +19,16 @@ pub struct CustomCheck {
     name: &'static str,
     engine: Arc<Engine>,
     ast: AST,
+}
+
+impl CustomCheck {
+    fn internal_error(&self, err: &dyn std::fmt::Display) -> Vec<Violation> {
+        vec![Violation::new(
+            format!("SCRIPT ERROR: {}", self.name),
+            format!("Error in custom check '{}': {err}", self.name),
+            "This is likely a diesel-guard bug. Please report it.",
+        )]
+    }
 }
 
 impl Check for CustomCheck {
@@ -36,24 +40,12 @@ impl Check for CustomCheck {
         // Serialize the pg_query node to a Rhai Dynamic value via serde
         let dynamic_node = match rhai::serde::to_dynamic(node) {
             Ok(d) => d,
-            Err(e) => {
-                eprintln!(
-                    "Warning: custom check '{}': failed to serialize node: {e}",
-                    self.name
-                );
-                return vec![];
-            }
+            Err(e) => return self.internal_error(&e),
         };
 
         let dynamic_config = match rhai::serde::to_dynamic(config) {
             Ok(d) => d,
-            Err(e) => {
-                eprintln!(
-                    "Warning: custom check '{}': failed to serialize config: {e}",
-                    self.name
-                );
-                return vec![];
-            }
+            Err(e) => return self.internal_error(&e),
         };
 
         let dynamic_ctx = rhai::serde::to_dynamic(ctx).unwrap();
@@ -69,14 +61,11 @@ impl Check for CustomCheck {
         {
             Ok(result) => parse_script_result(self.name, result),
             Err(e) => {
-                // Don't warn on "ErrorTerminated" — that's just max_operations kicking in
-                // for scripts that intentionally don't early-return on unmatched node types.
-                // All other runtime errors are worth reporting.
-                let err_str = e.to_string();
-                if !err_str.contains("ErrorTerminated") {
-                    eprintln!("Warning: custom check '{}': runtime error: {e}", self.name);
-                }
-                vec![]
+                vec![Violation::new(
+                    format!("SCRIPT ERROR: {}", self.name),
+                    format!("Runtime error in custom check '{}': {e}", self.name),
+                    "Fix the custom check script to eliminate the runtime error.",
+                )]
             }
         }
     }
@@ -419,15 +408,19 @@ mod tests {
 
     #[test]
     fn test_script_infinite_loop_hits_max_operations() {
-        // Engine's max_operations limit should kick in
+        // Engine's max_operations limit should kick in and surface as a SCRIPT ERROR
         let violations = run_script(
             r"
             loop { }
             ",
             "CREATE INDEX idx ON users(email);",
         );
-        // Should not hang; returns empty due to runtime error
-        assert!(violations.is_empty());
+        assert_eq!(
+            violations.len(),
+            1,
+            "expected 1 SCRIPT ERROR, got: {violations:?}"
+        );
+        assert_eq!(violations[0].operation, "SCRIPT ERROR: test_check");
     }
 
     #[test]
@@ -713,6 +706,103 @@ mod tests {
         assert_eq!(
             violations[0].problem,
             "Custom check returned an invalid map: 'operation' must be a string (got i64)"
+        );
+    }
+
+    #[test]
+    fn test_map_with_non_string_problem_field() {
+        let violations = run_script(
+            r#"#{ operation: "op", problem: 42, safe_alternative: "s" }"#,
+            "CREATE INDEX idx ON users(email);",
+        );
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].operation, "SCRIPT ERROR: test_check");
+        assert!(
+            violations[0].problem.contains("'problem' must be a string"),
+            "got: {}",
+            violations[0].problem
+        );
+    }
+
+    #[test]
+    fn test_map_with_non_string_safe_alternative_field() {
+        let violations = run_script(
+            r#"#{ operation: "op", problem: "p", safe_alternative: false }"#,
+            "CREATE INDEX idx ON users(email);",
+        );
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].operation, "SCRIPT ERROR: test_check");
+        assert!(
+            violations[0]
+                .problem
+                .contains("'safe_alternative' must be a string"),
+            "got: {}",
+            violations[0].problem
+        );
+    }
+
+    fn make_test_check() -> CustomCheck {
+        let engine = Arc::new(create_engine());
+        let ast = engine.compile("()").expect("script should compile");
+        let name: &'static str = Box::leak("test_check".to_string().into_boxed_str());
+        CustomCheck { name, engine, ast }
+    }
+
+    #[test]
+    fn test_internal_error_yields_script_error_violation() {
+        let check = make_test_check();
+        let violations = check.internal_error(&"boom");
+        assert_eq!(violations.len(), 1);
+        let v = &violations[0];
+        assert_eq!(v.operation, "SCRIPT ERROR: test_check");
+        assert_eq!(v.problem, "Error in custom check 'test_check': boom");
+        assert_eq!(
+            v.safe_alternative,
+            "This is likely a diesel-guard bug. Please report it."
+        );
+    }
+
+    #[test]
+    fn test_script_runtime_error_yields_script_error_violation() {
+        // Division by zero is a runtime error that does NOT contain "ErrorTerminated".
+        // A broken script must not silently disable the safety check — it must surface
+        // as a SCRIPT ERROR violation.
+        let violations = run_script("1 / 0", "CREATE INDEX idx ON users(email);");
+        assert_eq!(
+            violations.len(),
+            1,
+            "expected 1 SCRIPT ERROR violation, got: {violations:?}"
+        );
+        let v = &violations[0];
+        assert_eq!(v.operation, "SCRIPT ERROR: test_check");
+        assert_eq!(
+            v.problem,
+            "Runtime error in custom check 'test_check': Division by zero: 1 / 0"
+        );
+        assert_eq!(
+            v.safe_alternative,
+            "Fix the custom check script to eliminate the runtime error."
+        );
+    }
+
+    #[test]
+    fn test_pg_alter_table_constraint_and_drop_constants_accessible() {
+        // Verify one representative constant from each untested group:
+        // AT_ADD_COLUMN (AlterTableType), CONSTR_PRIMARY (ConstrType), DROP_CASCADE (DropBehavior).
+        let violations = run_script(
+            r#"
+            let at = pg::AT_ADD_COLUMN;
+            let ct = pg::CONSTR_PRIMARY;
+            let db = pg::DROP_CASCADE;
+            if at == () || ct == () || db == () {
+                return #{ operation: "MISSING CONSTANT", problem: "a pg constant was ()", safe_alternative: "" };
+            }
+            "#,
+            "SELECT 1;",
+        );
+        assert!(
+            violations.is_empty(),
+            "All pg constants should be accessible, got: {violations:?}"
         );
     }
 }

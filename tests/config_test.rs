@@ -522,7 +522,7 @@ fn test_enable_checks_integration() {
     assert_eq!(results.len(), 1);
     let violations = &results[0].1;
     assert_eq!(violations.len(), 1);
-    assert!(violations[0].operation.contains("ADD COLUMN"));
+    assert!(violations[0].1.operation.contains("ADD COLUMN"));
 }
 
 #[test]
@@ -601,7 +601,7 @@ fn test_diesel_concurrently_without_metadata_warns() {
     assert_eq!(results.len(), 1, "Expected 1 file with violations");
     assert_eq!(results[0].1.len(), 1, "Expected 1 violation");
     assert_eq!(
-        results[0].1[0].operation,
+        results[0].1[0].1.operation,
         "CREATE INDEX CONCURRENTLY inside a transaction"
     );
 }

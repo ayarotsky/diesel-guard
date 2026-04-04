@@ -6,6 +6,7 @@ use diesel_guard::violation::Severity;
 use diesel_guard::{Config, SafetyChecker};
 use miette::{IntoDiagnostic, Result};
 use std::fs;
+use std::io::Write;
 use std::process::exit;
 
 const CONFIG_TEMPLATE: &str = include_str!("../diesel-guard.toml.example");
@@ -108,6 +109,63 @@ EXAMPLES:
     },
 }
 
+fn run_check(path: &camino::Utf8Path, format: &str) -> Result<()> {
+    if !Utf8PathBuf::from("diesel-guard.toml").exists() {
+        eprintln!("Warning: No config file found. Using default configuration.");
+    }
+    let config = Config::load().map_err(|e| miette::miette!(e))?;
+
+    let checker = SafetyChecker::with_config(config);
+    let results = checker.check_path(path)?;
+
+    if results.is_empty() {
+        match format {
+            "json" => println!("[]"),
+            "github" => {}
+            _ => println!("{}", OutputFormatter::format_summary(0, 0)),
+        }
+        return Ok(());
+    }
+
+    let total_errors: usize = results
+        .iter()
+        .flat_map(|(_, v)| v)
+        .filter(|(_, v)| v.severity == Severity::Error)
+        .count();
+
+    match format {
+        "json" => {
+            println!("{}", OutputFormatter::format_json(&results));
+        }
+        "github" => {
+            for (file_path, violations) in &results {
+                print!("{}", OutputFormatter::format_github(file_path, violations));
+            }
+        }
+        _ => {
+            let total_warnings: usize = results
+                .iter()
+                .flat_map(|(_, v)| v)
+                .filter(|(_, v)| v.severity == Severity::Warning)
+                .count();
+            for (file_path, violations) in &results {
+                print!("{}", OutputFormatter::format_text(file_path, violations));
+            }
+            println!(
+                "{}",
+                OutputFormatter::format_summary(total_errors, total_warnings)
+            );
+        }
+    }
+
+    if total_errors > 0 {
+        let _ = std::io::stdout().flush();
+        exit(1);
+    }
+
+    Ok(())
+}
+
 fn main() -> Result<()> {
     miette::set_hook(Box::new(|_| {
         Box::new(
@@ -124,58 +182,7 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Check { path, format } => {
             let path = path.unwrap_or_else(|| Utf8PathBuf::from("migrations"));
-            // Load configuration with explicit error handling
-            let config = match Config::load() {
-                Ok(config) => config,
-                Err(diesel_guard::config::ConfigError::IoError(_))
-                    if !Utf8PathBuf::from("diesel-guard.toml").exists() =>
-                {
-                    // File doesn't exist - use defaults with warning
-                    eprintln!("Warning: No config file found. Using default configuration.");
-                    Config::default()
-                }
-                Err(e) => {
-                    // Config file exists but has errors - this is fatal
-                    return Err(e.into());
-                }
-            };
-
-            let checker = SafetyChecker::with_config(config);
-
-            let results = checker.check_path(&path)?;
-
-            if results.is_empty() {
-                println!("{}", OutputFormatter::format_summary(0, 0));
-                return Ok(());
-            }
-
-            let total_errors: usize = results
-                .iter()
-                .flat_map(|(_, v)| v)
-                .filter(|v| v.severity == Severity::Error)
-                .count();
-            let total_warnings: usize = results
-                .iter()
-                .flat_map(|(_, v)| v)
-                .filter(|v| v.severity == Severity::Warning)
-                .count();
-
-            if format.as_str() == "json" {
-                println!("{}", OutputFormatter::format_json(&results));
-            } else {
-                // text format
-                for (file_path, violations) in &results {
-                    print!("{}", OutputFormatter::format_text(file_path, violations));
-                }
-                println!(
-                    "{}",
-                    OutputFormatter::format_summary(total_errors, total_warnings)
-                );
-            }
-
-            if total_errors > 0 {
-                exit(1);
-            }
+            run_check(&path, &format)?;
         }
 
         Commands::DumpAst { sql, file } => {

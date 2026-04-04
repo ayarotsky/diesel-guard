@@ -1,5 +1,5 @@
 use camino::Utf8Path;
-use diesel_guard::{Config, SafetyChecker, Violation};
+use diesel_guard::{Config, SafetyChecker, ViolationList};
 use std::fs;
 use tempfile::TempDir;
 
@@ -46,13 +46,15 @@ fn test_custom_check_fires_alongside_builtin() {
     assert!(
         violations
             .iter()
-            .any(|v| v.operation == "CUSTOM: INDEX without CONCURRENTLY"),
+            .any(|(_, v)| v.operation == "CUSTOM: INDEX without CONCURRENTLY"),
         "Custom check violation should be present"
     );
 
     // Verify built-in violation is also present
     assert!(
-        violations.iter().any(|v| v.operation.contains("ADD INDEX")),
+        violations
+            .iter()
+            .any(|(_, v)| v.operation.contains("ADD INDEX")),
         "Built-in AddIndexCheck violation should be present"
     );
 }
@@ -89,7 +91,9 @@ fn test_disable_checks_works_for_custom_check() {
 
     // Custom check should be disabled — no "custom violation"
     assert!(
-        !violations.iter().any(|v| v.operation == "custom violation"),
+        !violations
+            .iter()
+            .any(|(_, v)| v.operation == "custom violation"),
         "Disabled custom check should not fire"
     );
 }
@@ -130,7 +134,10 @@ CREATE INDEX idx ON users(email);
     assert!(
         violations.is_empty(),
         "No violations should fire inside safety-assured block, got {:?}",
-        violations.iter().map(|v| &v.operation).collect::<Vec<_>>()
+        violations
+            .iter()
+            .map(|(_, v)| &v.operation)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -173,7 +180,7 @@ fn test_custom_check_in_migration_directory() {
     assert!(!results.is_empty());
     let violations: Vec<_> = results.iter().flat_map(|(_, v)| v).collect();
     assert!(
-        violations.iter().any(|v| v.operation == "CUSTOM DROP"),
+        violations.iter().any(|(_, v)| v.operation == "CUSTOM DROP"),
         "Custom check should fire on migration files"
     );
 }
@@ -277,7 +284,9 @@ fn test_unknown_check_name_warning_not_emitted_for_custom_check() {
         .check_sql("CREATE INDEX idx ON users(email);")
         .unwrap();
     assert!(
-        !violations.iter().any(|v| v.operation == "custom violation"),
+        !violations
+            .iter()
+            .any(|(_, v)| v.operation == "custom violation"),
         "Disabled custom check should not fire"
     );
 }
@@ -348,7 +357,7 @@ fn test_unknown_check_name_detected_after_custom_checks_loaded() {
 
 /// Run SQL through the real `examples/` directory with all built-in checks
 /// disabled so only example Rhai scripts produce violations.
-fn check_with_examples(sql: &str) -> Vec<Violation> {
+fn check_with_examples(sql: &str) -> ViolationList {
     let config = Config {
         custom_checks_dir: Some("examples".to_string()),
         disable_checks: vec![
@@ -382,8 +391,10 @@ fn check_with_examples(sql: &str) -> Vec<Violation> {
     SafetyChecker::with_config(config).check_sql(sql).unwrap()
 }
 
-fn has_violation_containing(violations: &[Violation], substring: &str) -> bool {
-    violations.iter().any(|v| v.operation.contains(substring))
+fn has_violation_containing(violations: &ViolationList, substring: &str) -> bool {
+    violations
+        .iter()
+        .any(|(_, v)| v.operation.contains(substring))
 }
 
 // -- require_concurrent_index.rhai --
@@ -394,7 +405,10 @@ fn test_example_require_concurrent_index_detects() {
     assert!(
         has_violation_containing(&violations, "INDEX without CONCURRENTLY"),
         "Expected violation for non-concurrent index, got: {:?}",
-        violations.iter().map(|v| &v.operation).collect::<Vec<_>>()
+        violations
+            .iter()
+            .map(|(_, v)| &v.operation)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -414,7 +428,7 @@ fn test_example_no_truncate_detects_single() {
     let violations = check_with_examples("TRUNCATE users;");
     let truncate_violations: Vec<_> = violations
         .iter()
-        .filter(|v| v.operation.starts_with("TRUNCATE:"))
+        .filter(|(_, v)| v.operation.starts_with("TRUNCATE:"))
         .collect();
     assert_eq!(
         truncate_violations.len(),
@@ -428,7 +442,7 @@ fn test_example_no_truncate_detects_multiple() {
     let violations = check_with_examples("TRUNCATE users, orders;");
     let truncate_violations: Vec<_> = violations
         .iter()
-        .filter(|v| v.operation.starts_with("TRUNCATE:"))
+        .filter(|(_, v)| v.operation.starts_with("TRUNCATE:"))
         .collect();
     assert_eq!(
         truncate_violations.len(),
@@ -454,7 +468,10 @@ fn test_example_require_if_exists_on_drop_detects() {
     assert!(
         has_violation_containing(&violations, "DROP TABLE without IF EXISTS"),
         "Expected violation for DROP TABLE without IF EXISTS, got: {:?}",
-        violations.iter().map(|v| &v.operation).collect::<Vec<_>>()
+        violations
+            .iter()
+            .map(|(_, v)| &v.operation)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -475,7 +492,10 @@ fn test_example_require_index_name_prefix_detects() {
     assert!(
         has_violation_containing(&violations, "Index naming violation"),
         "Expected violation for missing idx_ prefix, got: {:?}",
-        violations.iter().map(|v| &v.operation).collect::<Vec<_>>()
+        violations
+            .iter()
+            .map(|(_, v)| &v.operation)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -497,7 +517,10 @@ fn test_example_limit_columns_per_index_detects() {
     assert!(
         has_violation_containing(&violations, "Wide index"),
         "Expected violation for 4-column index, got: {:?}",
-        violations.iter().map(|v| &v.operation).collect::<Vec<_>>()
+        violations
+            .iter()
+            .map(|(_, v)| &v.operation)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -533,13 +556,16 @@ fn test_custom_check_returning_array_of_violations() {
     // Filter to only our custom violations
     let custom: Vec<_> = violations
         .iter()
-        .filter(|v| ["v1", "v2", "v3"].contains(&v.operation.as_str()))
+        .filter(|(_, v)| ["v1", "v2", "v3"].contains(&v.operation.as_str()))
         .collect();
     assert_eq!(
         custom.len(),
         3,
         "Script returning array of 3 maps should produce exactly 3 custom violations, got: {:?}",
-        violations.iter().map(|v| &v.operation).collect::<Vec<_>>()
+        violations
+            .iter()
+            .map(|(_, v)| &v.operation)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -575,7 +601,7 @@ fn test_custom_check_using_pg_constants() {
     assert!(
         violations_table
             .iter()
-            .any(|v| v.operation == "CUSTOM: DROP TABLE detected"),
+            .any(|(_, v)| v.operation == "CUSTOM: DROP TABLE detected"),
         "Script using pg::OBJECT_TABLE should fire on DROP TABLE"
     );
 
@@ -584,7 +610,7 @@ fn test_custom_check_using_pg_constants() {
     assert!(
         !violations_index
             .iter()
-            .any(|v| v.operation == "CUSTOM: DROP TABLE detected"),
+            .any(|(_, v)| v.operation == "CUSTOM: DROP TABLE detected"),
         "Script checking for OBJECT_TABLE should not fire on DROP INDEX"
     );
 }
@@ -626,7 +652,7 @@ fn test_multiple_custom_checks_loaded_in_sorted_order() {
 
     let custom_ops: Vec<&str> = violations
         .iter()
-        .map(|v| v.operation.as_str())
+        .map(|(_, v)| v.operation.as_str())
         .filter(|op| *op == "aaa_check" || *op == "zzz_check")
         .collect();
 
@@ -672,7 +698,7 @@ fn test_custom_check_name_conflicts_with_builtin() {
     assert!(
         !violations
             .iter()
-            .any(|v| v.operation.contains("ADD COLUMN") && !v.operation.contains("CUSTOM")),
+            .any(|(_, v)| v.operation.contains("ADD COLUMN") && !v.operation.contains("CUSTOM")),
         "Built-in AddColumnCheck should be disabled"
     );
 
@@ -680,7 +706,7 @@ fn test_custom_check_name_conflicts_with_builtin() {
     assert!(
         !violations
             .iter()
-            .any(|v| v.operation == "CUSTOM AddColumnCheck"),
+            .any(|(_, v)| v.operation == "CUSTOM AddColumnCheck"),
         "Custom check with same name as built-in should also be disabled"
     );
 }
@@ -715,7 +741,7 @@ fn test_custom_check_compilation_error_nonfatal() {
         .unwrap();
 
     assert!(
-        violations.iter().any(|v| v.operation == "valid_check"),
+        violations.iter().any(|(_, v)| v.operation == "valid_check"),
         "Valid check should still fire despite broken sibling script"
     );
 }
@@ -765,7 +791,7 @@ fn test_custom_check_can_read_postgres_version() {
     assert!(
         !violations
             .iter()
-            .any(|v| v.operation == "CUSTOM: needs pg14"),
+            .any(|(_, v)| v.operation == "CUSTOM: needs pg14"),
         "Version-aware custom check should not fire on pg14"
     );
 
@@ -781,7 +807,7 @@ fn test_custom_check_can_read_postgres_version() {
     assert!(
         violations
             .iter()
-            .any(|v| v.operation == "CUSTOM: needs pg14"),
+            .any(|(_, v)| v.operation == "CUSTOM: needs pg14"),
         "Version-aware custom check should fire on pg13"
     );
 
@@ -797,8 +823,66 @@ fn test_custom_check_can_read_postgres_version() {
     assert!(
         violations
             .iter()
-            .any(|v| v.operation == "CUSTOM: needs pg14"),
+            .any(|(_, v)| v.operation == "CUSTOM: needs pg14"),
         "Version-aware custom check should fire when no version is set"
+    );
+}
+
+// -- runtime error handling --
+
+#[test]
+fn test_custom_check_runtime_error_yields_script_error_violation() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("bad.rhai"), "let x = 1 / 0;").unwrap();
+    let config = Config {
+        custom_checks_dir: Some(dir.path().to_str().unwrap().to_string()),
+        ..Default::default()
+    };
+    let checker = SafetyChecker::with_config(config);
+    // SELECT doesn't trigger any built-in check, so the only violation comes from the script.
+    let violations = checker.check_sql("SELECT 1;").unwrap();
+    assert_eq!(
+        violations.len(),
+        1,
+        "expected 1 SCRIPT ERROR violation, got: {:?}",
+        violations
+            .iter()
+            .map(|(_, v)| &v.operation)
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        violations[0].1.operation.starts_with("SCRIPT ERROR:"),
+        "expected operation to start with 'SCRIPT ERROR:', got: {}",
+        violations[0].1.operation
+    );
+}
+
+#[test]
+fn test_custom_check_max_operations_yields_script_error() {
+    // An infinite loop hits the max_operations budget (ErrorTooManyOperations).
+    // This must surface as a SCRIPT ERROR violation — a broken script must not
+    // silently disable a safety check.
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("looping.rhai"), "loop {}").unwrap();
+    let config = Config {
+        custom_checks_dir: Some(dir.path().to_str().unwrap().to_string()),
+        ..Default::default()
+    };
+    let checker = SafetyChecker::with_config(config);
+    let violations = checker.check_sql("SELECT 1;").unwrap();
+    assert_eq!(
+        violations.len(),
+        1,
+        "ErrorTooManyOperations must produce a SCRIPT ERROR violation, got: {:?}",
+        violations
+            .iter()
+            .map(|(_, v)| &v.operation)
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        violations[0].1.operation.starts_with("SCRIPT ERROR:"),
+        "expected SCRIPT ERROR violation, got: {}",
+        violations[0].1.operation
     );
 }
 
@@ -810,7 +894,10 @@ fn test_example_no_unlogged_tables_detects() {
     assert!(
         has_violation_containing(&violations, "UNLOGGED TABLE"),
         "Expected violation for UNLOGGED TABLE, got: {:?}",
-        violations.iter().map(|v| &v.operation).collect::<Vec<_>>()
+        violations
+            .iter()
+            .map(|(_, v)| &v.operation)
+            .collect::<Vec<_>>()
     );
 }
 

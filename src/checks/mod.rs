@@ -82,6 +82,7 @@ mod helpers {
     }
 }
 
+use crate::ViolationList;
 use crate::parser::IgnoreRange;
 use crate::violation::Violation;
 pub use helpers::*;
@@ -210,6 +211,9 @@ impl Registry {
 
     /// Check statements with safety-assured context.
     ///
+    /// Returns `(line, violation)` pairs where `line` is the 1-indexed line number of
+    /// the statement that produced the violation.
+    ///
     /// Uses RawStmt.stmt_location (byte offset) to determine which line each
     /// statement falls on, then skips checks for statements in safety-assured blocks.
     pub fn check_stmts_with_context(
@@ -219,7 +223,7 @@ impl Registry {
         ignore_ranges: &[IgnoreRange],
         config: &Config,
         ctx: &MigrationContext,
-    ) -> Vec<Violation> {
+    ) -> ViolationList {
         // Build set of all ignored line numbers for fast lookup
         let ignored_lines: std::collections::HashSet<usize> = ignore_ranges
             .iter()
@@ -244,7 +248,11 @@ impl Registry {
             let stmt_line = byte_offset_to_line(sql, offset);
 
             if !ignored_lines.contains(&stmt_line) {
-                violations.extend(self.check_node(node, config, ctx));
+                violations.extend(
+                    self.check_node(node, config, ctx)
+                        .into_iter()
+                        .map(|v| (stmt_line, v)),
+                );
             }
         }
 
@@ -395,6 +403,121 @@ ALTER TABLE users DROP COLUMN email;
         assert_eq!(violations.len(), 1);
     }
 
+    // --- Line number accuracy ---
+
+    fn check_sql_violations(sql: &str) -> ViolationList {
+        let registry = Registry::new();
+        let result = pg_query::parse(sql).unwrap();
+        registry.check_stmts_with_context(
+            &result.protobuf.stmts,
+            sql,
+            &[],
+            &Config::default(),
+            &MigrationContext::default(),
+        )
+    }
+
+    #[test]
+    fn test_violation_line_number_on_line_1() {
+        let violations = check_sql_violations("ALTER TABLE users DROP COLUMN email;");
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].0, 1);
+    }
+
+    #[test]
+    fn test_violation_line_number_preceded_by_blank_lines() {
+        // stmt_location may point to byte 0 (before the newlines); the scanner
+        // must advance past whitespace to the ALTER keyword on line 3.
+        let violations = check_sql_violations("\n\nALTER TABLE users DROP COLUMN email;");
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].0, 3);
+    }
+
+    #[test]
+    fn test_violation_line_number_preceded_by_line_comment() {
+        let violations =
+            check_sql_violations("-- migration comment\nALTER TABLE users DROP COLUMN email;");
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].0, 2);
+    }
+
+    #[test]
+    fn test_violation_line_number_preceded_by_block_comment() {
+        let violations =
+            check_sql_violations("/* block comment */\nALTER TABLE users DROP COLUMN email;");
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].0, 2);
+    }
+
+    #[test]
+    fn test_violation_line_number_preceded_by_multiline_block_comment() {
+        let violations =
+            check_sql_violations("/*\n * file header\n */\nALTER TABLE users DROP COLUMN email;");
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].0, 4);
+    }
+
+    #[test]
+    fn test_violation_line_number_second_stmt_on_same_line() {
+        // Both statements are on line 1; the violation from the second should
+        // still report line 1, not 0 or 2.
+        let violations = check_sql_violations("SELECT 1; ALTER TABLE users DROP COLUMN email;");
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].0, 1);
+    }
+
+    #[test]
+    fn test_violation_line_number_stmt_inside_safety_assured_suppressed() {
+        let registry = Registry::new();
+        let sql = "-- safety-assured:start\nALTER TABLE users DROP COLUMN email;\n-- safety-assured:end\nALTER TABLE posts DROP COLUMN body;";
+        let result = pg_query::parse(sql).unwrap();
+        let ignore_ranges = vec![IgnoreRange {
+            start_line: 1,
+            end_line: 3,
+        }];
+        let violations = registry.check_stmts_with_context(
+            &result.protobuf.stmts,
+            sql,
+            &ignore_ranges,
+            &Config::default(),
+            &MigrationContext::default(),
+        );
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].0, 4);
+    }
+
+    #[test]
+    fn test_violation_line_number_stmt_after_safety_assured_end_not_suppressed() {
+        let registry = Registry::new();
+        // Statement is on line 4, one line after the block ends.
+        let sql = "-- safety-assured:start\nALTER TABLE users DROP COLUMN email;\n-- safety-assured:end\nALTER TABLE posts DROP COLUMN body;";
+        let result = pg_query::parse(sql).unwrap();
+        let ignore_ranges = vec![IgnoreRange {
+            start_line: 1,
+            end_line: 3,
+        }];
+        let violations = registry.check_stmts_with_context(
+            &result.protobuf.stmts,
+            sql,
+            &ignore_ranges,
+            &Config::default(),
+            &MigrationContext::default(),
+        );
+        assert_eq!(violations[0].0, 4);
+    }
+
+    #[test]
+    fn test_violation_line_number_after_unicode_comment() {
+        // Accented characters are multi-byte in UTF-8; byte_offset_to_line counts
+        // newlines by byte so the line number must still be correct.
+        let violations =
+            check_sql_violations("-- Ünïcödé comment\nALTER TABLE users DROP COLUMN email;");
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0].0, 2);
+    }
+
+    // --- byte_offset_to_line ---
+
     #[test]
     fn test_byte_offset_to_line() {
         let sql = "line1\nline2\nline3";
@@ -404,11 +527,26 @@ ALTER TABLE users DROP COLUMN email;
         assert_eq!(byte_offset_to_line(sql, 12), 3); // start of line3
     }
 
+    // --- first_token_at_or_after ---
+
     #[test]
     fn test_first_token_at_or_after_skips_comments() {
         let sql = "/* outer /* inner */ still outer */ SELECT 1;";
         let tokens = non_comment_token_starts(sql);
         let offset = first_token_at_or_after(&tokens, 0);
         assert_eq!(&sql[offset..offset + 6], "SELECT");
+    }
+
+    #[test]
+    fn test_first_token_at_or_after_empty_token_list() {
+        // non_comment_token_starts returns [] when pg_query::scan fails.
+        // The fallback must return the original offset unchanged.
+        assert_eq!(first_token_at_or_after(&[], 5), 5);
+    }
+
+    #[test]
+    fn test_first_token_at_or_after_offset_past_all_tokens() {
+        // When the offset is beyond the last token the fallback must kick in.
+        assert_eq!(first_token_at_or_after(&[0, 7, 14], 20), 20);
     }
 }

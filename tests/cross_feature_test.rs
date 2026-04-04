@@ -72,7 +72,7 @@ DROP TABLE unprotected_table;
     assert!(
         violations
             .iter()
-            .any(|v| v.operation.contains("DROP TABLE") && !v.operation.contains("CUSTOM")),
+            .any(|(_, v)| v.operation.contains("DROP TABLE") && !v.operation.contains("CUSTOM")),
         "Built-in DropTableCheck should fire on unprotected DROP TABLE"
     );
 
@@ -80,7 +80,7 @@ DROP TABLE unprotected_table;
     assert!(
         violations
             .iter()
-            .any(|v| v.operation == "CUSTOM: DROP TABLE"),
+            .any(|(_, v)| v.operation == "CUSTOM: DROP TABLE"),
         "Custom check should fire on unprotected DROP TABLE"
     );
 
@@ -124,7 +124,7 @@ fn test_disable_builtin_and_custom_checks_simultaneously() {
     assert!(
         violations
             .iter()
-            .any(|v| v.operation.contains("DROP TABLE")),
+            .any(|(_, v)| v.operation.contains("DROP TABLE")),
         "DropTableCheck should still fire (not disabled)"
     );
 
@@ -132,13 +132,15 @@ fn test_disable_builtin_and_custom_checks_simultaneously() {
     assert!(
         !violations
             .iter()
-            .any(|v| v.operation.contains("DROP COLUMN")),
+            .any(|(_, v)| v.operation.contains("DROP COLUMN")),
         "DropColumnCheck should be disabled"
     );
 
     // Custom my_check should NOT fire (disabled)
     assert!(
-        !violations.iter().any(|v| v.operation.contains("CUSTOM")),
+        !violations
+            .iter()
+            .any(|(_, v)| v.operation.contains("CUSTOM")),
         "Custom check my_check should be disabled"
     );
 }
