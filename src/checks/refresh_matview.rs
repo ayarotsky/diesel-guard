@@ -11,7 +11,7 @@
 //! though it takes longer, requires a unique index on the view, and cannot run inside a
 //! transaction block.
 
-use crate::checks::pg_helpers::{NodeEnum, range_var_name};
+use crate::checks::pg_helpers::{NodeEnum, concurrent_safe_alternative, range_var_name};
 use crate::checks::{Check, Config, MigrationContext};
 use crate::violation::Violation;
 
@@ -43,14 +43,7 @@ Considerations:
 - If it fails, the view data remains unchanged — no "partial" refresh state"#,
             );
 
-            let safe_alternative = if ctx.run_in_transaction {
-                format!(
-                    "{suggestion}\n\nNote: CONCURRENTLY cannot run inside a transaction block.\n{hint}",
-                    hint = ctx.no_transaction_hint
-                )
-            } else {
-                suggestion
-            };
+            let safe_alternative = concurrent_safe_alternative(suggestion, ctx);
 
             return vec![Violation::new(
                 "REFRESH MATERIALIZED VIEW without CONCURRENTLY",
@@ -84,7 +77,10 @@ Considerations:
 mod tests {
     use super::*;
     use crate::checks::test_utils::parse_sql;
-    use crate::{assert_detects_violation, assert_detects_violation_containing};
+    use crate::{
+        assert_allows_with_context, assert_detects_violation, assert_detects_violation_containing,
+        assert_detects_violation_with_context,
+    };
 
     #[test]
     fn test_detects_refresh_without_concurrently() {
@@ -107,52 +103,39 @@ mod tests {
 
     #[test]
     fn test_allows_refresh_with_concurrently_outside_transaction() {
-        let stmt = parse_sql("REFRESH MATERIALIZED VIEW CONCURRENTLY my_view;");
-        let violations = RefreshMatViewCheck.check(
-            &stmt,
-            &Config::default(),
-            &MigrationContext {
+        assert_allows_with_context!(
+            RefreshMatViewCheck,
+            "REFRESH MATERIALIZED VIEW CONCURRENTLY my_view;",
+            MigrationContext {
                 run_in_transaction: false,
                 ..MigrationContext::default()
-            },
-        );
-        assert_eq!(
-            violations.len(),
-            0,
-            "Expected no violations outside transaction"
+            }
         );
     }
 
     #[test]
     fn test_detects_concurrent_in_transaction() {
-        let stmt = parse_sql("REFRESH MATERIALIZED VIEW CONCURRENTLY my_view;");
-        let violations = RefreshMatViewCheck.check(
-            &stmt,
-            &Config::default(),
-            &MigrationContext {
+        assert_detects_violation_with_context!(
+            RefreshMatViewCheck,
+            "REFRESH MATERIALIZED VIEW CONCURRENTLY my_view;",
+            "REFRESH MATERIALIZED VIEW CONCURRENTLY inside a transaction",
+            MigrationContext {
                 run_in_transaction: true,
                 ..MigrationContext::default()
-            },
-        );
-        assert_eq!(violations.len(), 1, "Expected 1 violation");
-        assert_eq!(
-            violations[0].operation,
-            "REFRESH MATERIALIZED VIEW CONCURRENTLY inside a transaction"
+            }
         );
     }
 
     #[test]
     fn test_allows_concurrent_outside_transaction() {
-        let stmt = parse_sql("REFRESH MATERIALIZED VIEW CONCURRENTLY my_view;");
-        let violations = RefreshMatViewCheck.check(
-            &stmt,
-            &Config::default(),
-            &MigrationContext {
+        assert_allows_with_context!(
+            RefreshMatViewCheck,
+            "REFRESH MATERIALIZED VIEW CONCURRENTLY my_view;",
+            MigrationContext {
                 run_in_transaction: false,
                 ..MigrationContext::default()
-            },
+            }
         );
-        assert_eq!(violations.len(), 0, "Expected no violations");
     }
 
     #[test]

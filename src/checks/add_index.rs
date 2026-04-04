@@ -10,7 +10,7 @@
 //! Using CONCURRENTLY allows the index to be built while permitting concurrent writes,
 //! though it takes longer and cannot be run inside a transaction block.
 
-use crate::checks::pg_helpers::{NodeEnum, range_var_name};
+use crate::checks::pg_helpers::{NodeEnum, concurrent_safe_alternative, range_var_name};
 use crate::checks::{Check, Config, MigrationContext, unique_prefix};
 use crate::violation::Violation;
 
@@ -47,14 +47,7 @@ Considerations:
 - If it fails, it leaves behind an "invalid" index that should be dropped"#,
             );
 
-            let safe_alternative = if ctx.run_in_transaction {
-                format!(
-                    "{suggestion}\n\nNote: CONCURRENTLY cannot run inside a transaction block.\n{hint}",
-                    hint = ctx.no_transaction_hint
-                )
-            } else {
-                suggestion
-            };
+            let safe_alternative = concurrent_safe_alternative(suggestion, ctx);
 
             return vec![Violation::new(
                 "ADD INDEX without CONCURRENTLY",
@@ -87,7 +80,10 @@ Considerations:
 mod tests {
     use super::*;
     use crate::checks::test_utils::parse_sql;
-    use crate::{assert_detects_violation, assert_detects_violation_containing};
+    use crate::{
+        assert_allows_with_context, assert_detects_violation, assert_detects_violation_containing,
+        assert_detects_violation_with_context,
+    };
 
     #[test]
     fn test_detects_create_index_without_concurrently() {
@@ -110,70 +106,51 @@ mod tests {
 
     #[test]
     fn test_allows_create_index_with_concurrently_outside_transaction() {
-        let stmt = parse_sql("CREATE INDEX CONCURRENTLY idx_users_email ON users(email);");
-        let violations = AddIndexCheck.check(
-            &stmt,
-            &Config::default(),
-            &MigrationContext {
+        assert_allows_with_context!(
+            AddIndexCheck,
+            "CREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
+            MigrationContext {
                 run_in_transaction: false,
                 ..MigrationContext::default()
-            },
-        );
-        assert_eq!(
-            violations.len(),
-            0,
-            "Expected no violations outside transaction"
+            }
         );
     }
 
     #[test]
     fn test_allows_create_unique_index_with_concurrently_outside_transaction() {
-        let stmt = parse_sql("CREATE UNIQUE INDEX CONCURRENTLY idx_users_email ON users(email);");
-        let violations = AddIndexCheck.check(
-            &stmt,
-            &Config::default(),
-            &MigrationContext {
+        assert_allows_with_context!(
+            AddIndexCheck,
+            "CREATE UNIQUE INDEX CONCURRENTLY idx_users_email ON users(email);",
+            MigrationContext {
                 run_in_transaction: false,
                 ..MigrationContext::default()
-            },
-        );
-        assert_eq!(
-            violations.len(),
-            0,
-            "Expected no violations outside transaction"
+            }
         );
     }
 
     #[test]
     fn test_detects_concurrent_in_transaction() {
-        let stmt = parse_sql("CREATE INDEX CONCURRENTLY idx_users_email ON users(email);");
-        let violations = AddIndexCheck.check(
-            &stmt,
-            &Config::default(),
-            &MigrationContext {
+        assert_detects_violation_with_context!(
+            AddIndexCheck,
+            "CREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
+            "CREATE INDEX CONCURRENTLY inside a transaction",
+            MigrationContext {
                 run_in_transaction: true,
                 ..MigrationContext::default()
-            },
-        );
-        assert_eq!(violations.len(), 1, "Expected 1 violation");
-        assert_eq!(
-            violations[0].operation,
-            "CREATE INDEX CONCURRENTLY inside a transaction"
+            }
         );
     }
 
     #[test]
     fn test_allows_concurrent_outside_transaction() {
-        let stmt = parse_sql("CREATE INDEX CONCURRENTLY idx_users_email ON users(email);");
-        let violations = AddIndexCheck.check(
-            &stmt,
-            &Config::default(),
-            &MigrationContext {
+        assert_allows_with_context!(
+            AddIndexCheck,
+            "CREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
+            MigrationContext {
                 run_in_transaction: false,
                 ..MigrationContext::default()
-            },
+            }
         );
-        assert_eq!(violations.len(), 0, "Expected no violations");
     }
 
     #[test]

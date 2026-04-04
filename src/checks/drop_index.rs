@@ -10,7 +10,9 @@
 //! Using CONCURRENTLY (Postgres 9.2+) allows the index to be dropped while permitting
 //! concurrent queries, though it takes longer and cannot be run inside a transaction block.
 
-use crate::checks::pg_helpers::{NodeEnum, ObjectType, drop_object_names};
+use crate::checks::pg_helpers::{
+    NodeEnum, ObjectType, concurrent_safe_alternative, drop_object_names,
+};
 use crate::checks::{Check, Config, MigrationContext, if_exists_clause};
 use crate::violation::Violation;
 
@@ -46,14 +48,7 @@ Considerations:
 - Cannot be rolled back (no transaction support)"#,
                     );
 
-                    let safe_alternative = if ctx.run_in_transaction {
-                        format!(
-                            "{suggestion}\n\nNote: CONCURRENTLY cannot run inside a transaction block.\n{hint}",
-                            hint = ctx.no_transaction_hint
-                        )
-                    } else {
-                        suggestion
-                    };
+                    let safe_alternative = concurrent_safe_alternative(suggestion, ctx);
 
                     Violation::new(
                         "DROP INDEX without CONCURRENTLY",
@@ -93,7 +88,10 @@ Considerations:
 mod tests {
     use super::*;
     use crate::checks::test_utils::parse_sql;
-    use crate::{assert_allows, assert_detects_n_violations, assert_detects_violation};
+    use crate::{
+        assert_allows, assert_allows_with_context, assert_detects_n_violations,
+        assert_detects_violation, assert_detects_violation_with_context,
+    };
 
     #[test]
     fn test_detects_drop_index() {
@@ -152,52 +150,39 @@ mod tests {
 
     #[test]
     fn test_allows_drop_index_concurrently_outside_transaction() {
-        let stmt = parse_sql("DROP INDEX CONCURRENTLY idx_users_email;");
-        let violations = DropIndexCheck.check(
-            &stmt,
-            &Config::default(),
-            &MigrationContext {
+        assert_allows_with_context!(
+            DropIndexCheck,
+            "DROP INDEX CONCURRENTLY idx_users_email;",
+            MigrationContext {
                 run_in_transaction: false,
                 ..MigrationContext::default()
-            },
-        );
-        assert_eq!(
-            violations.len(),
-            0,
-            "Expected no violations outside transaction"
+            }
         );
     }
 
     #[test]
     fn test_detects_concurrent_in_transaction() {
-        let stmt = parse_sql("DROP INDEX CONCURRENTLY idx_users_email;");
-        let violations = DropIndexCheck.check(
-            &stmt,
-            &Config::default(),
-            &MigrationContext {
+        assert_detects_violation_with_context!(
+            DropIndexCheck,
+            "DROP INDEX CONCURRENTLY idx_users_email;",
+            "DROP INDEX CONCURRENTLY inside a transaction",
+            MigrationContext {
                 run_in_transaction: true,
                 ..MigrationContext::default()
-            },
-        );
-        assert_eq!(violations.len(), 1, "Expected 1 violation");
-        assert_eq!(
-            violations[0].operation,
-            "DROP INDEX CONCURRENTLY inside a transaction"
+            }
         );
     }
 
     #[test]
     fn test_allows_concurrent_outside_transaction() {
-        let stmt = parse_sql("DROP INDEX CONCURRENTLY idx_users_email;");
-        let violations = DropIndexCheck.check(
-            &stmt,
-            &Config::default(),
-            &MigrationContext {
+        assert_allows_with_context!(
+            DropIndexCheck,
+            "DROP INDEX CONCURRENTLY idx_users_email;",
+            MigrationContext {
                 run_in_transaction: false,
                 ..MigrationContext::default()
-            },
+            }
         );
-        assert_eq!(violations.len(), 0, "Expected no violations");
     }
 
     #[test]

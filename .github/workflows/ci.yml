@@ -61,9 +61,6 @@ jobs:
       - name: Check dependencies
         run: cargo deny check
 
-      - name: Build
-        run: just build-release
-
       - name: Run tests
         run: just test
 

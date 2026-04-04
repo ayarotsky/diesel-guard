@@ -11,6 +11,7 @@
 
 use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_constraint, constraint_columns_str,
+    constraint_display_name,
 };
 use crate::checks::{Check, Config, MigrationContext};
 use crate::violation::Violation;
@@ -38,11 +39,7 @@ impl Check for AddUniqueConstraintCheck {
 
                 let cols = constraint_columns_str(c);
 
-                let constraint_name = if c.conname.is_empty() {
-                    "<unnamed>".to_string()
-                } else {
-                    c.conname.clone()
-                };
+                let constraint_name = constraint_display_name(c);
 
                 let suggested_index_name = if c.conname.is_empty() {
                     format!("{table_name}_unique_idx")

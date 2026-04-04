@@ -253,3 +253,16 @@ pub fn ref_columns_constraint(c: &Constraint) -> String {
         .collect::<Vec<_>>()
         .join(", ")
 }
+
+/// Appends a transaction-cannot-run note when the migration runs inside a transaction block.
+/// Pass the already-built suggestion string; returns it unchanged when outside a transaction.
+pub fn concurrent_safe_alternative(suggestion: String, ctx: &super::MigrationContext) -> String {
+    if ctx.run_in_transaction {
+        format!(
+            "{suggestion}\n\nNote: CONCURRENTLY cannot run inside a transaction block.\n{}",
+            ctx.no_transaction_hint
+        )
+    } else {
+        suggestion
+    }
+}
