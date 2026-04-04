@@ -66,7 +66,7 @@ fn test_add_column_with_default_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ADD COLUMN with DEFAULT");
+    assert_eq!(violations[0].1.operation, "ADD COLUMN with DEFAULT");
 }
 
 #[test]
@@ -77,7 +77,7 @@ fn test_add_foreign_key_unsafe_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ADD FOREIGN KEY");
+    assert_eq!(violations[0].1.operation, "ADD FOREIGN KEY");
 }
 
 #[test]
@@ -88,7 +88,7 @@ fn test_add_exclude_constraint_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ADD EXCLUDE constraint");
+    assert_eq!(violations[0].1.operation, "ADD EXCLUDE constraint");
 }
 
 #[test]
@@ -99,7 +99,7 @@ fn test_add_check_constraint_unsafe_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ADD CHECK CONSTRAINT");
+    assert_eq!(violations[0].1.operation, "ADD CHECK CONSTRAINT");
 }
 
 #[test]
@@ -110,7 +110,7 @@ fn test_add_not_null_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ADD NOT NULL constraint");
+    assert_eq!(violations[0].1.operation, "ADD NOT NULL constraint");
 }
 
 #[test]
@@ -121,7 +121,7 @@ fn test_add_index_without_concurrently_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ADD INDEX without CONCURRENTLY");
+    assert_eq!(violations[0].1.operation, "ADD INDEX without CONCURRENTLY");
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn test_add_json_column_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ADD COLUMN with JSON type");
+    assert_eq!(violations[0].1.operation, "ADD COLUMN with JSON type");
 }
 
 #[test]
@@ -143,9 +143,9 @@ fn test_add_unique_index_without_concurrently_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ADD INDEX without CONCURRENTLY");
+    assert_eq!(violations[0].1.operation, "ADD INDEX without CONCURRENTLY");
     assert!(
-        violations[0].problem.contains("UNIQUE"),
+        violations[0].1.problem.contains("UNIQUE"),
         "Expected problem to mention UNIQUE"
     );
 }
@@ -158,7 +158,7 @@ fn test_alter_column_type_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ALTER COLUMN TYPE");
+    assert_eq!(violations[0].1.operation, "ALTER COLUMN TYPE");
 }
 
 #[test]
@@ -169,7 +169,7 @@ fn test_alter_column_type_with_using_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ALTER COLUMN TYPE");
+    assert_eq!(violations[0].1.operation, "ALTER COLUMN TYPE");
 }
 
 #[test]
@@ -180,7 +180,7 @@ fn test_char_type_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ADD COLUMN with CHAR type");
+    assert_eq!(violations[0].1.operation, "ADD COLUMN with CHAR type");
 }
 
 #[test]
@@ -191,7 +191,10 @@ fn test_create_table_without_pk_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "CREATE TABLE without PRIMARY KEY");
+    assert_eq!(
+        violations[0].1.operation,
+        "CREATE TABLE without PRIMARY KEY"
+    );
 }
 
 #[test]
@@ -202,7 +205,7 @@ fn test_create_extension_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "CREATE EXTENSION");
+    assert_eq!(violations[0].1.operation, "CREATE EXTENSION");
 }
 
 #[test]
@@ -213,7 +216,7 @@ fn test_add_unique_constraint_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ADD UNIQUE constraint");
+    assert_eq!(violations[0].1.operation, "ADD UNIQUE constraint");
 }
 
 #[test]
@@ -241,12 +244,12 @@ fn test_unnamed_constraint_detected() {
 
     // Note: Unnamed UNIQUE is caught by both AddUniqueConstraintCheck and UnnamedConstraintCheck
     assert_eq!(violations.len(), 6, "Expected 6 violations");
-    assert_eq!(violations[0].operation, "ADD UNIQUE constraint");
-    assert_eq!(violations[1].operation, "CONSTRAINT without name");
-    assert_eq!(violations[2].operation, "ADD CHECK CONSTRAINT");
-    assert_eq!(violations[3].operation, "CONSTRAINT without name");
-    assert_eq!(violations[4].operation, "ADD FOREIGN KEY");
-    assert_eq!(violations[5].operation, "CONSTRAINT without name");
+    assert_eq!(violations[0].1.operation, "ADD UNIQUE constraint");
+    assert_eq!(violations[1].1.operation, "CONSTRAINT without name");
+    assert_eq!(violations[2].1.operation, "ADD CHECK CONSTRAINT");
+    assert_eq!(violations[3].1.operation, "CONSTRAINT without name");
+    assert_eq!(violations[4].1.operation, "ADD FOREIGN KEY");
+    assert_eq!(violations[5].1.operation, "CONSTRAINT without name");
 }
 
 #[test]
@@ -257,7 +260,7 @@ fn test_drop_column_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "DROP COLUMN");
+    assert_eq!(violations[0].1.operation, "DROP COLUMN");
 }
 
 #[test]
@@ -268,7 +271,7 @@ fn test_drop_column_if_exists_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "DROP COLUMN");
+    assert_eq!(violations[0].1.operation, "DROP COLUMN");
 }
 
 #[test]
@@ -283,8 +286,8 @@ fn test_drop_multiple_columns_detected() {
         2,
         "Expected 2 violations (one per column)"
     );
-    assert_eq!(violations[0].operation, "DROP COLUMN");
-    assert_eq!(violations[1].operation, "DROP COLUMN");
+    assert_eq!(violations[0].1.operation, "DROP COLUMN");
+    assert_eq!(violations[1].1.operation, "DROP COLUMN");
 }
 
 #[test]
@@ -295,7 +298,7 @@ fn test_drop_index_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "DROP INDEX without CONCURRENTLY");
+    assert_eq!(violations[0].1.operation, "DROP INDEX without CONCURRENTLY");
 }
 
 #[test]
@@ -306,7 +309,7 @@ fn test_drop_table_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "DROP TABLE");
+    assert_eq!(violations[0].1.operation, "DROP TABLE");
 }
 
 #[test]
@@ -317,7 +320,7 @@ fn test_drop_database_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "DROP DATABASE");
+    assert_eq!(violations[0].1.operation, "DROP DATABASE");
 }
 
 #[test]
@@ -344,7 +347,10 @@ fn test_generated_column_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ADD COLUMN with GENERATED STORED");
+    assert_eq!(
+        violations[0].1.operation,
+        "ADD COLUMN with GENERATED STORED"
+    );
 }
 
 #[test]
@@ -356,7 +362,7 @@ fn test_refresh_matview_without_concurrently_detected() {
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
     assert_eq!(
-        violations[0].operation,
+        violations[0].1.operation,
         "REFRESH MATERIALIZED VIEW without CONCURRENTLY"
     );
 }
@@ -369,7 +375,7 @@ fn test_reindex_without_concurrently_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "REINDEX without CONCURRENTLY");
+    assert_eq!(violations[0].1.operation, "REINDEX without CONCURRENTLY");
 }
 
 #[test]
@@ -396,7 +402,7 @@ fn test_rename_column_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "RENAME COLUMN");
+    assert_eq!(violations[0].1.operation, "RENAME COLUMN");
 }
 
 #[test]
@@ -407,7 +413,7 @@ fn test_rename_schema_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "RENAME SCHEMA");
+    assert_eq!(violations[0].1.operation, "RENAME SCHEMA");
 }
 
 #[test]
@@ -418,7 +424,7 @@ fn test_rename_table_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "RENAME TABLE");
+    assert_eq!(violations[0].1.operation, "RENAME TABLE");
 }
 
 #[test]
@@ -429,7 +435,7 @@ fn test_add_serial_column_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ADD COLUMN with SERIAL");
+    assert_eq!(violations[0].1.operation, "ADD COLUMN with SERIAL");
 }
 
 #[test]
@@ -440,7 +446,7 @@ fn test_timestamp_type_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ADD COLUMN with TIMESTAMP");
+    assert_eq!(violations[0].1.operation, "ADD COLUMN with TIMESTAMP");
 }
 
 #[test]
@@ -459,15 +465,15 @@ fn test_short_int_pk_unsafe_detected() {
     // Check that we have violations from each check
     let short_int_violations: Vec<_> = violations
         .iter()
-        .filter(|v| v.operation == "PRIMARY KEY with short integer type")
+        .filter(|(_, v)| v.operation == "PRIMARY KEY with short integer type")
         .collect();
     let add_pk_violations: Vec<_> = violations
         .iter()
-        .filter(|v| v.operation == "ADD PRIMARY KEY")
+        .filter(|(_, v)| v.operation == "ADD PRIMARY KEY")
         .collect();
     let no_pk_violations: Vec<_> = violations
         .iter()
-        .filter(|v| v.operation == "CREATE TABLE without PRIMARY KEY")
+        .filter(|(_, v)| v.operation == "CREATE TABLE without PRIMARY KEY")
         .collect();
 
     assert_eq!(
@@ -495,7 +501,7 @@ fn test_truncate_table_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "TRUNCATE TABLE");
+    assert_eq!(violations[0].1.operation, "TRUNCATE TABLE");
 }
 
 #[test]
@@ -507,7 +513,7 @@ fn test_wide_index_detected() {
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
     assert_eq!(
-        violations[0].operation,
+        violations[0].1.operation,
         "CREATE INDEX with too many columns"
     );
 }
@@ -520,7 +526,7 @@ fn test_add_primary_key_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ADD PRIMARY KEY");
+    assert_eq!(violations[0].1.operation, "ADD PRIMARY KEY");
 }
 
 #[test]
@@ -531,7 +537,7 @@ fn test_drop_primary_key_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "DROP PRIMARY KEY");
+    assert_eq!(violations[0].1.operation, "DROP PRIMARY KEY");
 }
 
 #[test]
@@ -540,7 +546,7 @@ fn test_domain_check_constraint_alter_detected() {
     let path = fixture_path("domain_check_constraint_alter_unsafe");
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "ADD CHECK CONSTRAINT TO DOMAIN");
+    assert_eq!(violations[0].1.operation, "ADD CHECK CONSTRAINT TO DOMAIN");
 }
 
 #[test]
@@ -551,7 +557,7 @@ fn test_delete_without_where_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "DELETE without WHERE");
+    assert_eq!(violations[0].1.operation, "DELETE without WHERE");
 }
 
 #[test]
@@ -562,7 +568,7 @@ fn test_update_without_where_detected() {
     let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
-    assert_eq!(violations[0].operation, "UPDATE without WHERE");
+    assert_eq!(violations[0].1.operation, "UPDATE without WHERE");
 }
 
 #[test]
@@ -618,7 +624,10 @@ fn test_sqlx_suffix_format_detected() {
         1,
         "Expected 1 violation in up.sql"
     );
-    assert_eq!(add_column_result.1[0].operation, "ADD COLUMN with DEFAULT");
+    assert_eq!(
+        add_column_result.1[0].1.operation,
+        "ADD COLUMN with DEFAULT"
+    );
 
     // Find the DROP COLUMN violation from down.sql
     let drop_column_result = results
@@ -630,7 +639,7 @@ fn test_sqlx_suffix_format_detected() {
         1,
         "Expected 1 violation in down.sql"
     );
-    assert_eq!(drop_column_result.1[0].operation, "DROP COLUMN");
+    assert_eq!(drop_column_result.1[0].1.operation, "DROP COLUMN");
 }
 
 #[test]
@@ -686,7 +695,7 @@ fn test_sqlx_concurrently_without_no_transaction_detected() {
     assert_eq!(results.len(), 1, "Expected 1 file with violations");
     assert_eq!(results[0].1.len(), 1, "Expected 1 violation");
     assert_eq!(
-        results[0].1[0].operation,
+        results[0].1[0].1.operation,
         "CREATE INDEX CONCURRENTLY inside a transaction"
     );
 }
@@ -707,7 +716,10 @@ fn test_sqlx_add_index_without_concurrently_detected() {
 
     assert_eq!(results.len(), 1, "Expected 1 file with violations");
     assert_eq!(results[0].1.len(), 1, "Expected 1 violation");
-    assert_eq!(results[0].1[0].operation, "ADD INDEX without CONCURRENTLY");
+    assert_eq!(
+        results[0].1[0].1.operation,
+        "ADD INDEX without CONCURRENTLY"
+    );
 }
 
 #[test]
@@ -726,7 +738,10 @@ fn test_sqlx_drop_index_without_concurrently_detected() {
 
     assert_eq!(results.len(), 1, "Expected 1 file with violations");
     assert_eq!(results[0].1.len(), 1, "Expected 1 violation");
-    assert_eq!(results[0].1[0].operation, "DROP INDEX without CONCURRENTLY");
+    assert_eq!(
+        results[0].1[0].1.operation,
+        "DROP INDEX without CONCURRENTLY"
+    );
 }
 
 #[test]
@@ -748,7 +763,7 @@ fn test_sqlx_drop_index_concurrently_missing_directive_detected() {
     assert_eq!(results.len(), 1, "Expected 1 file with violations");
     assert_eq!(results[0].1.len(), 1, "Expected 1 violation");
     assert_eq!(
-        results[0].1[0].operation,
+        results[0].1[0].1.operation,
         "DROP INDEX CONCURRENTLY inside a transaction"
     );
 }
@@ -772,7 +787,7 @@ fn test_sqlx_reindex_concurrently_missing_directive_detected() {
     assert_eq!(results.len(), 1, "Expected 1 file with violations");
     assert_eq!(results[0].1.len(), 1, "Expected 1 violation");
     assert_eq!(
-        results[0].1[0].operation,
+        results[0].1[0].1.operation,
         "REINDEX CONCURRENTLY inside a transaction"
     );
 }
@@ -796,7 +811,7 @@ fn test_sqlx_refresh_matview_without_concurrently_detected() {
     assert_eq!(results.len(), 1, "Expected 1 file with violations");
     assert_eq!(results[0].1.len(), 1, "Expected 1 violation");
     assert_eq!(
-        results[0].1[0].operation,
+        results[0].1[0].1.operation,
         "REFRESH MATERIALIZED VIEW without CONCURRENTLY"
     );
 }
@@ -820,7 +835,7 @@ fn test_sqlx_refresh_matview_concurrently_missing_directive_detected() {
     assert_eq!(results.len(), 1, "Expected 1 file with violations");
     assert_eq!(results[0].1.len(), 1, "Expected 1 violation");
     assert_eq!(
-        results[0].1[0].operation,
+        results[0].1[0].1.operation,
         "REFRESH MATERIALIZED VIEW CONCURRENTLY inside a transaction"
     );
 }

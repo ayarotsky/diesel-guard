@@ -1,4 +1,5 @@
-use crate::violation::{Severity, Violation};
+use crate::ViolationList;
+use crate::violation::Severity;
 use colored::Colorize;
 use serde_json;
 use std::fmt::Write;
@@ -7,10 +8,12 @@ pub struct OutputFormatter;
 
 impl OutputFormatter {
     /// Format violations as colored text for terminal
-    pub fn format_text(file_path: &str, violations: &[Violation]) -> String {
+    pub fn format_text(file_path: &str, violations: &ViolationList) -> String {
         let mut output = String::new();
 
-        let has_errors = violations.iter().any(|v| v.severity == Severity::Error);
+        let has_errors = violations
+            .iter()
+            .any(|(_, v)| v.severity == Severity::Error);
         let header_icon = if has_errors { "❌" } else { "⚠️" };
         let header_label = if has_errors {
             "Unsafe migration detected in".red().bold()
@@ -27,20 +30,25 @@ impl OutputFormatter {
         )
         .unwrap();
 
-        for violation in violations {
+        for (line, violation) in violations {
             let (icon, label) = match violation.severity {
                 Severity::Error => ("❌", violation.operation.as_str().red().bold()),
                 Severity::Warning => ("⚠️ ", violation.operation.as_str().yellow().bold()),
             };
 
-            write!(output, "{icon} {label}\n\n").unwrap();
+            write!(
+                output,
+                "{icon} {label}  {}\n\n",
+                format!("(line {line})").dimmed()
+            )
+            .unwrap();
 
             writeln!(output, "{}", "Problem:".white().bold()).unwrap();
             write!(output, "  {}\n\n", violation.problem).unwrap();
 
             writeln!(output, "{}", "Safe alternative:".green().bold()).unwrap();
-            for line in violation.safe_alternative.lines() {
-                writeln!(output, "  {line}").unwrap();
+            for safe_line in violation.safe_alternative.lines() {
+                writeln!(output, "  {safe_line}").unwrap();
             }
 
             output.push('\n');
@@ -50,8 +58,43 @@ impl OutputFormatter {
     }
 
     /// Format violations as JSON
-    pub fn format_json(results: &[(String, Vec<Violation>)]) -> String {
-        serde_json::to_string_pretty(results).unwrap_or_else(|_| "{}".into())
+    pub fn format_json(results: &[(String, ViolationList)]) -> String {
+        use serde_json::{Value, json};
+        let output: Vec<Value> = results
+            .iter()
+            .map(|(file, violations)| {
+                json!({
+                    "file": file,
+                    "violations": violations.iter().map(|(line, v)| json!({
+                        "line": line,
+                        "operation": v.operation,
+                        "problem": v.problem,
+                        "safe_alternative": v.safe_alternative,
+                        "severity": v.severity,
+                    })).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        serde_json::to_string_pretty(&output).unwrap_or_else(|_| "[]".into())
+    }
+
+    /// Format violations as GitHub Actions workflow commands.
+    ///
+    /// Produces `::error` / `::warning` annotations that GitHub renders inline
+    /// on the diff when run inside a GitHub Actions workflow.
+    pub fn format_github(file_path: &str, violations: &ViolationList) -> String {
+        let mut output = String::new();
+        for (line, violation) in violations {
+            let level = match violation.severity {
+                Severity::Error => "error",
+                Severity::Warning => "warning",
+            };
+            let raw = format!("{}: {}", violation.operation, violation.problem);
+            let file = encode_property(file_path);
+            let message = encode_data(&raw);
+            writeln!(output, "::{level} file={file},line={line}::{message}").unwrap();
+        }
+        output
     }
 
     /// Format summary
@@ -76,4 +119,40 @@ impl OutputFormatter {
             ),
         }
     }
+}
+
+// Encodes a string for use as a workflow command property value (the `key=value`
+// pairs before `::`). GitHub Actions requires `%`, `\r`, `\n`, `:`, and `,` to
+// be percent-encoded so they don't break the `::cmd key=val,key=val::data` wire
+// format.
+// See https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#using-workflow-commands-to-access-toolkit-functions
+fn encode_property(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '%' => out.push_str("%25"),
+            '\r' => out.push_str("%0D"),
+            '\n' => out.push_str("%0A"),
+            ':' => out.push_str("%3A"),
+            ',' => out.push_str("%2C"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+// Encodes a string for use as workflow command data (the part after `::`).
+// Only `%`, `\r`, and `\n` need escaping here — `:` and `,` are allowed in
+// the data section and do not require encoding.
+fn encode_data(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '%' => out.push_str("%25"),
+            '\r' => out.push_str("%0D"),
+            '\n' => out.push_str("%0A"),
+            _ => out.push(c),
+        }
+    }
+    out
 }
