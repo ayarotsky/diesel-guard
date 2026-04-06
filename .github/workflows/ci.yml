@@ -44,7 +44,7 @@ jobs:
           key: ${{ runner.os }}-cargo-tools-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install just
-        uses: extractions/setup-just@v3
+        uses: extractions/setup-just@v4
 
       - name: Install cargo tools
         run: |
@@ -90,7 +90,7 @@ jobs:
           key: ${{ runner.os }}-cargo-tarpaulin-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install just
-        uses: extractions/setup-just@v3
+        uses: extractions/setup-just@v4
 
       - name: Install tarpaulin
         run: cargo install --locked cargo-tarpaulin || true
