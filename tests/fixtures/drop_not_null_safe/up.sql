@@ -1,2 +1,2 @@
--- Safe: Dropping NOT NULL is a metadata-only change
-ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+-- Safe: SET DEFAULT does not remove a NOT NULL constraint
+ALTER TABLE users ALTER COLUMN email SET DEFAULT 'noreply@example.com';

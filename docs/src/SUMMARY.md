@@ -21,6 +21,7 @@
   - [Dropping a Constraint](checks/dropping-constraint.md)
   - [Dropping a Database](checks/dropping-database.md)
   - [Dropping an Index](checks/dropping-index.md)
+  - [Dropping NOT NULL](checks/drop-not-null.md)
   - [Dropping a Primary Key](checks/dropping-primary-key.md)
   - [Dropping a Table](checks/dropping-table.md)
   - [Generated Columns](checks/generated-column.md)
