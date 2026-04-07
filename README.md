@@ -128,6 +128,7 @@ ALTER TABLE users DROP COLUMN legacy_field;
 - [Move fast and migrate things: how we automated migrations in Postgres](https://benchling.engineering/move-fast-and-migrate-things-how-we-automated-migrations-in-postgres-d60aba0fc3d4)
 - [PostgreSQL at scale: database schema changes without downtime](https://medium.com/paypal-tech/postgresql-at-scale-database-schema-changes-without-downtime-20d3749ed680)
 - [PostgreSQL Explicit Locking](https://www.postgresql.org/docs/current/explicit-locking.html)
+- [Adding a Scripting Engine to a Rust CLI with Rhai](https://dev.to/ayarotsky/adding-a-scripting-engine-to-a-rust-cli-with-rhai-56g1)
 
 ## Credits
 
