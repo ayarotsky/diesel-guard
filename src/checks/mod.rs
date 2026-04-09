@@ -21,6 +21,7 @@ mod drop_not_null;
 mod drop_primary_key;
 mod drop_table;
 mod generated_column;
+mod idempotency_guard;
 mod mutation_without_where;
 pub mod pg_helpers;
 mod refresh_matview;
@@ -59,6 +60,7 @@ pub use drop_not_null::DropNotNullCheck;
 pub use drop_primary_key::DropPrimaryKeyCheck;
 pub use drop_table::DropTableCheck;
 pub use generated_column::GeneratedColumnCheck;
+pub use idempotency_guard::IdempotencyCheck;
 pub use mutation_without_where::MutationWithoutWhereCheck;
 pub use refresh_matview::RefreshMatViewCheck;
 pub use reindex::ReindexCheck;
@@ -160,6 +162,7 @@ impl Registry {
         self.register_check(config, DropPrimaryKeyCheck);
         self.register_check(config, DropTableCheck);
         self.register_check(config, GeneratedColumnCheck);
+        self.register_check(config, IdempotencyCheck);
         self.register_check(config, MutationWithoutWhereCheck);
         self.register_check(config, RefreshMatViewCheck);
         self.register_check(config, ReindexCheck);
@@ -368,7 +371,11 @@ mod tests {
 
     #[test]
     fn test_check_with_safety_assured_block() {
-        let registry = Registry::new();
+        let config = Config {
+            enable_checks: vec!["DropColumnCheck".to_string()],
+            ..Default::default()
+        };
+        let registry = Registry::with_config(&config);
         let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
@@ -385,7 +392,7 @@ ALTER TABLE users DROP COLUMN email;
             &result.protobuf.stmts,
             sql,
             &ignore_ranges,
-            &Config::default(),
+            &config,
             &MigrationContext::default(),
         );
         assert_eq!(violations.len(), 0);
@@ -393,7 +400,11 @@ ALTER TABLE users DROP COLUMN email;
 
     #[test]
     fn test_check_without_safety_assured_block() {
-        let registry = Registry::new();
+        let config = Config {
+            enable_checks: vec!["DropColumnCheck".to_string()],
+            ..Default::default()
+        };
+        let registry = Registry::with_config(&config);
         let sql = "ALTER TABLE users DROP COLUMN email;";
 
         let result = pg_query::parse(sql).unwrap();
@@ -403,7 +414,7 @@ ALTER TABLE users DROP COLUMN email;
             &result.protobuf.stmts,
             sql,
             &ignore_ranges,
-            &Config::default(),
+            &config,
             &MigrationContext::default(),
         );
         assert_eq!(violations.len(), 1);
@@ -412,13 +423,17 @@ ALTER TABLE users DROP COLUMN email;
     // --- Line number accuracy ---
 
     fn check_sql_violations(sql: &str) -> ViolationList {
-        let registry = Registry::new();
+        let config = Config {
+            enable_checks: vec!["DropColumnCheck".to_string()],
+            ..Default::default()
+        };
+        let registry = Registry::with_config(&config);
         let result = pg_query::parse(sql).unwrap();
         registry.check_stmts_with_context(
             &result.protobuf.stmts,
             sql,
             &[],
-            &Config::default(),
+            &config,
             &MigrationContext::default(),
         )
     }
@@ -474,7 +489,11 @@ ALTER TABLE users DROP COLUMN email;
 
     #[test]
     fn test_violation_line_number_stmt_inside_safety_assured_suppressed() {
-        let registry = Registry::new();
+        let config = Config {
+            enable_checks: vec!["DropColumnCheck".to_string()],
+            ..Default::default()
+        };
+        let registry = Registry::with_config(&config);
         let sql = "-- safety-assured:start\nALTER TABLE users DROP COLUMN email;\n-- safety-assured:end\nALTER TABLE posts DROP COLUMN body;";
         let result = pg_query::parse(sql).unwrap();
         let ignore_ranges = vec![IgnoreRange {
@@ -485,7 +504,7 @@ ALTER TABLE users DROP COLUMN email;
             &result.protobuf.stmts,
             sql,
             &ignore_ranges,
-            &Config::default(),
+            &config,
             &MigrationContext::default(),
         );
         assert_eq!(violations.len(), 1);
@@ -494,7 +513,11 @@ ALTER TABLE users DROP COLUMN email;
 
     #[test]
     fn test_violation_line_number_stmt_after_safety_assured_end_not_suppressed() {
-        let registry = Registry::new();
+        let config = Config {
+            enable_checks: vec!["DropColumnCheck".to_string()],
+            ..Default::default()
+        };
+        let registry = Registry::with_config(&config);
         // Statement is on line 4, one line after the block ends.
         let sql = "-- safety-assured:start\nALTER TABLE users DROP COLUMN email;\n-- safety-assured:end\nALTER TABLE posts DROP COLUMN body;";
         let result = pg_query::parse(sql).unwrap();
@@ -506,7 +529,7 @@ ALTER TABLE users DROP COLUMN email;
             &result.protobuf.stmts,
             sql,
             &ignore_ranges,
-            &Config::default(),
+            &config,
             &MigrationContext::default(),
         );
         assert_eq!(violations[0].0, 4);

@@ -26,6 +26,7 @@
   - [Dropping a Primary Key](checks/dropping-primary-key.md)
   - [Dropping a Table](checks/dropping-table.md)
   - [Generated Columns](checks/generated-column.md)
+  - [Idempotency Guards](checks/idempotency-guards.md)
   - [JSON Fields](checks/json-field.md)
   - [Mutation without WHERE](checks/mutation-without-where.md)
   - [Wide Indexes](checks/multiple-column-index.md)
