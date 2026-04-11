@@ -8,6 +8,7 @@
 - [Checks](checks/overview.md)
   - [Add Check Constraint](checks/add-check-constraint.md)
   - [ADD COLUMN with DEFAULT](checks/add-column-default.md)
+  - [ADD COLUMN with IDENTITY](checks/add-identity-column.md)
   - [Adding an EXCLUDE Constraint](checks/add-exclude-constraint.md)
   - [Add Foreign Key](checks/add_foreign_key.md)
   - [Adding an Index](checks/adding-index.md)

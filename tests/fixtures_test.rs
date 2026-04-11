@@ -19,6 +19,7 @@ fn test_safe_fixtures_pass() {
         "add_check_constraint_safe",
         "add_column_safe",
         "add_foreign_key_safe",
+        "add_identity_column_safe",
         "add_index_safe",
         "add_json_column_safe",
         "add_primary_key_safe",
@@ -68,6 +69,17 @@ fn test_add_column_with_default_detected() {
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
     assert_eq!(violations[0].1.operation, "ADD COLUMN with DEFAULT");
+}
+
+#[test]
+fn test_add_identity_column_detected() {
+    let checker = SafetyChecker::new();
+    let path = fixture_path("add_identity_column_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(violations[0].1.operation, "ADD COLUMN with IDENTITY");
 }
 
 #[test]
@@ -605,14 +617,14 @@ fn test_check_entire_fixtures_directory() {
 
     assert_eq!(
         results.len(),
-        39,
-        "Expected violations in 39 files, got {}",
+        40,
+        "Expected violations in 40 files, got {}",
         results.len()
     );
 
     assert_eq!(
-        total_violations, 50,
-        "Expected 50 total violations: 36 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 6, short_int_pk_unsafe with 6 (4 short int + 1 add pk + 1 no pk), got {total_violations}"
+        total_violations, 51,
+        "Expected 51 total violations: 37 files with 1 each, drop_multiple_columns with 2, unnamed_constraint_unsafe with 6, short_int_pk_unsafe with 6 (4 short int + 1 add pk + 1 no pk), got {total_violations}"
     );
 }
 
