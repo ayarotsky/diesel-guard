@@ -2,8 +2,7 @@
 // Also flags CONCURRENTLY inside a transaction (PostgreSQL will error at runtime).
 // Inspect: diesel-guard dump-ast --sql "CREATE INDEX idx ON t(id);"
 
-let stmt = node.IndexStmt;
-if stmt == () { return; }
+let stmt = node.IndexStmt ?? return;
 
 if !stmt.concurrent {
     let idx_name = if stmt.idxname != "" { stmt.idxname } else { "(unnamed)" };

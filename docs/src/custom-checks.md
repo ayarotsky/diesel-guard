@@ -15,8 +15,7 @@ mkdir checks
 2. Write a check script (e.g., `checks/require_concurrent_index.rhai`):
 
 ```rhai
-let stmt = node.IndexStmt;
-if stmt == () { return; }
+let stmt = node.IndexStmt ?? return;
 
 if !stmt.concurrent {
     let idx_name = if stmt.idxname != "" { stmt.idxname } else { "(unnamed)" };
@@ -57,8 +56,8 @@ diesel-guard check
 - The `node` variable contains the pg_query AST for that statement (a nested map)
 - The `config` variable exposes the current `diesel-guard.toml` settings (e.g., `config.postgres_version`)
 - The `ctx` variable exposes per-migration metadata (e.g., `ctx.run_in_transaction`)
-- Scripts match on a specific node type: `let stmt = node.IndexStmt;`
-- If the node doesn't match, `node.IndexStmt` returns `()` — early-return with `if stmt == () { return; }`
+- Scripts match on a specific node type and exit immediately if it doesn't match: `let stmt = node.IndexStmt ?? return;`
+- Use `?.` for null-safe chained access: `let rel = node.CreateStmt?.relation ?? return;`
 - Return `()` for no violation, a map for one, or an array of maps for multiple
 - Map keys: `operation`, `problem`, `safe_alternative` (all required strings)
 
@@ -130,13 +129,36 @@ Key fields and how they map to Rhai (using `IndexStmt` as an example):
 | `IndexStmt.relation.relname` | `stmt.relation.relname` | Table name |
 | `IndexStmt.index_params` | `stmt.index_params` | Array of indexed columns |
 
+## Null-safe operators
+
+Scripts receive a different node type for every SQL statement. Use these two operators to handle mismatches cleanly:
+
+- **`?? return`** — exit immediately if the left side is `()`:
+  ```rhai
+  let stmt = node.IndexStmt ?? return;  // exit if not a CREATE INDEX
+  ```
+
+- **`?.`** — null-safe property access; returns `()` instead of erroring when the left side is `()`:
+  ```rhai
+  let rel = node.CreateStmt?.relation ?? return;  // chain two levels, exit if either is ()
+  ```
+  Inside a loop, use `?? continue` to skip the current iteration:
+  ```rhai
+  let stmt = node.TruncateStmt ?? return;
+  for rel in stmt.relations {
+      let name = rel.node?.RangeVar?.relname ?? continue;  // skip non-RangeVar nodes
+      // name is a valid string here
+  }
+  ```
+
+> **Note:** `??` only activates on `()`, not on `""`. Fields that default to an empty string when unset (e.g., `idxname` for unnamed indexes) still need an explicit `== ""` check.
+
 ## Return Values
 
 **No violation** — return `()` (either explicitly or by reaching the end of the script):
 
 ```rhai
-let stmt = node.IndexStmt;
-if stmt == () { return; }
+let stmt = node.IndexStmt ?? return;
 
 if stmt.concurrent {
     return;  // All good, CONCURRENTLY is used
@@ -158,8 +180,9 @@ if stmt.concurrent {
 ```rhai
 let violations = [];
 for rel in stmt.relations {
+    let name = rel.node?.RangeVar?.relname ?? continue;
     violations.push(#{
-        operation: "TRUNCATE: " + rel.node.RangeVar.relname,
+        operation: "TRUNCATE: " + name,
         problem: "TRUNCATE acquires ACCESS EXCLUSIVE lock.",
         safe_alternative: "Use batched DELETE instead."
     });
