@@ -1,3 +1,5 @@
+mod lsp;
+
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use diesel_guard::ast_dump;
@@ -88,6 +90,19 @@ EXAMPLES:
         force: bool,
     },
 
+    /// Start the Language Server Protocol server (for editor integration)
+    #[command(long_about = "Start the Language Server Protocol (LSP) server.
+
+Communicates over stdin/stdout using JSON-RPC. Editors spawn this process and
+send LSP messages to receive inline diagnostics for .sql migration files.
+
+EDITOR SETUP:
+  See https://ayarotsky.github.io/diesel-guard/editor-integration.html
+
+EXAMPLES:
+  diesel-guard lsp                    Start the LSP server (editors do this automatically)")]
+    Lsp,
+
     /// Dump the pg_query AST for SQL as JSON
     #[command(long_about = "Dump the pg_query AST for SQL as JSON.
 
@@ -166,7 +181,8 @@ fn run_check(path: &camino::Utf8Path, format: &str) -> Result<()> {
     Ok(())
 }
 
-fn main() -> Result<()> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<()> {
     miette::set_hook(Box::new(|_| {
         Box::new(
             miette::MietteHandlerOpts::new()
@@ -180,6 +196,10 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Lsp => {
+            lsp::run().await;
+        }
+
         Commands::Check { path, format } => {
             let path = path.unwrap_or_else(|| Utf8PathBuf::from("migrations"));
             run_check(&path, &format)?;
