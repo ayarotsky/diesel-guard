@@ -3,8 +3,7 @@
 // Inspect: diesel-guard dump-ast --sql "CREATE INDEX idx ON t(a, b, c, d);"
 
 let max_cols = 3;
-let stmt = node.IndexStmt;
-if stmt == () { return; }
+let stmt = node.IndexStmt ?? return;
 
 let col_count = stmt.index_params.len();
 

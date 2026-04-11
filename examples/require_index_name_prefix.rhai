@@ -2,13 +2,8 @@
 // Catches: CREATE INDEX users_email ON users(email);
 // Inspect: diesel-guard dump-ast --sql "CREATE INDEX users_email ON t(id);"
 
-let stmt = node.IndexStmt;
-if stmt == () { return; }
-
-let name = stmt.idxname;
-if name == "" { return; }  // Skip unnamed indexes
-
-if name.starts_with("idx_") { return; }
+let name = node.IndexStmt?.idxname ?? return;
+if name == "" || name.starts_with("idx_") { return; }
 
 #{
     operation: "Index naming violation: " + name,
