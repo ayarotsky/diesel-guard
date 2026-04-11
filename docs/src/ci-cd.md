@@ -38,7 +38,7 @@ This will:
 ```yaml
 - uses: ayarotsky/diesel-guard-action@v1
   with:
-    version: '0.9.0'
+    version: '0.10.0'
 ```
 
 ### Option 2: Manual Installation
