@@ -123,6 +123,11 @@ pub fn is_serial_pattern(col: &ColumnDef) -> bool {
     matches!(type_name.as_str(), "serial" | "bigserial" | "smallserial")
 }
 
+/// Check if column is an identity column (GENERATED ... AS IDENTITY).
+pub fn is_identity_pattern(col: &ColumnDef) -> bool {
+    column_has_constraint(col, ConstrType::ConstrIdentity as i32)
+}
+
 // ---------------------------------------------------------------------------
 // Higher-level iteration helpers
 // ---------------------------------------------------------------------------

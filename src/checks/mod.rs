@@ -3,6 +3,7 @@ mod add_column;
 mod add_domain_check_constraint;
 mod add_exclude_constraint;
 mod add_foreign_key;
+mod add_identity_column;
 mod add_index;
 mod add_json_column;
 mod add_not_null;
@@ -41,6 +42,7 @@ pub use add_column::AddColumnCheck;
 pub use add_domain_check_constraint::AddDomainCheckConstraintCheck;
 pub use add_exclude_constraint::AddExcludeConstraintCheck;
 pub use add_foreign_key::AddForeignKeyCheck;
+pub use add_identity_column::AddIdentityColumnCheck;
 pub use add_index::AddIndexCheck;
 pub use add_json_column::AddJsonColumnCheck;
 pub use add_not_null::AddNotNullCheck;
@@ -139,7 +141,10 @@ impl Registry {
     fn register_enabled_checks(&mut self, config: &Config) {
         self.register_check(config, AddCheckConstraintCheck);
         self.register_check(config, AddColumnCheck);
+        self.register_check(config, AddDomainCheckConstraintCheck);
+        self.register_check(config, AddExcludeConstraintCheck);
         self.register_check(config, AddForeignKeyCheck);
+        self.register_check(config, AddIdentityColumnCheck);
         self.register_check(config, AddIndexCheck);
         self.register_check(config, AddJsonColumnCheck);
         self.register_check(config, AddNotNullCheck);
@@ -151,8 +156,6 @@ impl Registry {
         self.register_check(config, CreateExtensionCheck);
         self.register_check(config, CreateTableSerialCheck);
         self.register_check(config, CreateTableWithoutPkCheck);
-        self.register_check(config, AddDomainCheckConstraintCheck);
-        self.register_check(config, AddExcludeConstraintCheck);
         self.register_check(config, DropColumnCheck);
         self.register_check(config, DropDatabaseCheck);
         self.register_check(config, DropIndexCheck);
