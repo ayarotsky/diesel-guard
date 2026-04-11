@@ -101,7 +101,7 @@ Pin the diesel-guard binary version for reproducible builds:
 ```yaml
 - uses: ayarotsky/diesel-guard-action@v1
   with:
-    version: '0.9.0'
+    version: '0.10.0'
 ```
 
 ## What It Detects
