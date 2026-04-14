@@ -42,12 +42,14 @@ fn test_custom_check_fires_alongside_builtin() {
         violations.len()
     );
 
-    // Verify custom violation is present
-    assert!(
-        violations
-            .iter()
-            .any(|(_, v)| v.operation == "CUSTOM: INDEX without CONCURRENTLY"),
-        "Custom check violation should be present"
+    // Verify custom violation is present with correct check_name
+    let custom = violations
+        .iter()
+        .find(|(_, v)| v.operation == "CUSTOM: INDEX without CONCURRENTLY")
+        .expect("Custom check violation should be present");
+    assert_eq!(
+        custom.1.check_name, "require_concurrent",
+        "check_name should be the .rhai file stem"
     );
 
     // Verify built-in violation is also present
@@ -665,6 +667,19 @@ fn test_multiple_custom_checks_loaded_in_sorted_order() {
         aaa_pos < zzz_pos,
         "aaa_check should appear before zzz_check (alphabetical order)"
     );
+
+    // Each violation must carry its own check's name
+    let aaa_violation = violations
+        .iter()
+        .find(|(_, v)| v.operation == "aaa_check")
+        .unwrap();
+    assert_eq!(aaa_violation.1.check_name, "aaa_check");
+
+    let zzz_violation = violations
+        .iter()
+        .find(|(_, v)| v.operation == "zzz_check")
+        .unwrap();
+    assert_eq!(zzz_violation.1.check_name, "zzz_check");
 }
 
 #[test]
