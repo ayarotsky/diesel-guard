@@ -67,6 +67,7 @@ impl OutputFormatter {
                     "file": file,
                     "violations": violations.iter().map(|(line, v)| json!({
                         "line": line,
+                        "check_name": v.check_name,
                         "operation": v.operation,
                         "problem": v.problem,
                         "safe_alternative": v.safe_alternative,

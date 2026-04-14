@@ -213,7 +213,7 @@ impl Registry {
                 check
                     .check(node, config, ctx)
                     .into_iter()
-                    .map(move |v| v.with_severity(severity))
+                    .map(move |v| v.with_severity(severity).with_check_name(check.name()))
             })
             .collect()
     }

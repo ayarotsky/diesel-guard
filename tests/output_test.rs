@@ -35,6 +35,10 @@ fn test_format_json_valid_structure() {
     let f = &violations[0];
     assert_eq!(f["line"].as_u64().unwrap(), 2);
     assert!(
+        f.get("check_name").is_some(),
+        "finding should have 'check_name' key"
+    );
+    assert!(
         f.get("operation").is_some(),
         "finding should have 'operation' key"
     );
@@ -358,6 +362,7 @@ fn test_format_json_end_to_end() {
         "file": "migrations/001/up.sql",
         "violations": [{
             "line": 2,
+            "check_name": "DropColumnCheck",
             "operation": "DROP COLUMN",
             "problem": "Dropping column 'email' from table 'users' requires an ACCESS EXCLUSIVE lock, blocking all operations. This typically triggers a table rewrite with duration depending on table size.",
             "safe_alternative": "1. Mark the column as unused in your application code first.\n\n2. Deploy the application without the column references.\n\n3. (Optional) Set column to NULL to reclaim space:\n   ALTER TABLE users ALTER COLUMN email DROP NOT NULL;\n   UPDATE users SET email = NULL;\n\n4. Drop the column in a later migration after confirming it's unused:\n   ALTER TABLE users DROP COLUMN email;\n\nNote: Postgres doesn't support DROP COLUMN CONCURRENTLY. The rewrite is unavoidable but staging the removal reduces risk.",

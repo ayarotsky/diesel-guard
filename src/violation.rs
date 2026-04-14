@@ -17,6 +17,7 @@ impl Default for Severity {
 #[derive(Debug, Clone, Serialize, Display)]
 #[display("{}: {}", operation, problem)]
 pub struct Violation {
+    pub check_name: String,
     pub operation: String,
     pub problem: String,
     pub safe_alternative: String,
@@ -31,6 +32,7 @@ impl Violation {
         safe_alternative: impl Into<String>,
     ) -> Self {
         Self {
+            check_name: String::new(),
             operation: operation.into(),
             problem: problem.into(),
             safe_alternative: safe_alternative.into(),
@@ -42,5 +44,28 @@ impl Violation {
     pub fn with_severity(mut self, severity: Severity) -> Self {
         self.severity = severity;
         self
+    }
+
+    #[must_use]
+    pub fn with_check_name(mut self, name: &str) -> Self {
+        self.check_name = name.to_string();
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_has_empty_check_name() {
+        let v = Violation::new("op", "prob", "alt");
+        assert_eq!(v.check_name, "");
+    }
+
+    #[test]
+    fn test_with_check_name() {
+        let v = Violation::new("op", "prob", "alt").with_check_name("AddIndexCheck");
+        assert_eq!(v.check_name, "AddIndexCheck");
     }
 }
