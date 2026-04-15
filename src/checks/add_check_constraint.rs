@@ -1,3 +1,12 @@
+//! Detection for ADD CHECK CONSTRAINT operations.
+//!
+//! This check identifies `ALTER TABLE` statements that add CHECK constraints,
+//! which acquires an ACCESS EXCLUSIVE lock and scans all existing rows to validate
+//! the constraint. Duration depends on table size.
+//!
+//! Use `NOT VALID` to add the constraint without scanning existing rows, then
+//! `VALIDATE CONSTRAINT` in a separate migration to check existing data.
+
 use crate::checks::Check;
 use crate::checks::pg_helpers::{alter_table_cmds, cmd_def_as_constraint, constraint_display_name};
 use crate::{Config, MigrationContext, Violation};

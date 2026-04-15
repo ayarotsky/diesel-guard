@@ -1,4 +1,5 @@
 use crate::ViolationList;
+use crate::safety_checker::CheckEntry;
 use crate::violation::Severity;
 use colored::Colorize;
 use serde_json;
@@ -96,6 +97,53 @@ impl OutputFormatter {
             writeln!(output, "::{level} file={file},line={line}::{message}").unwrap();
         }
         output
+    }
+
+    /// Format the list of checks as text or JSON
+    pub fn format_list_checks(checks: &[CheckEntry], format: &str) -> String {
+        if format == "json" {
+            use serde_json::json;
+            let output: Vec<_> = checks
+                .iter()
+                .map(|c| {
+                    json!({
+                        "name": c.name,
+                        "enabled": c.enabled,
+                        "severity": c.severity,
+                        "description": c.description,
+                    })
+                })
+                .collect();
+            serde_json::to_string_pretty(&output).unwrap_or_else(|_| "[]".into())
+        } else {
+            let name_width = checks
+                .iter()
+                .map(|c| c.name.len())
+                .max()
+                .unwrap_or(0)
+                .max(4);
+            let mut output = format!(
+                "{:<name_width$}  {:<7}  {:<8}  {}\n",
+                "NAME".bold(),
+                "ENABLED".bold(),
+                "SEVERITY".bold(),
+                "DESCRIPTION".bold(),
+            );
+            for c in checks {
+                let enabled_str = if c.enabled { "yes" } else { "no" };
+                let line = format!(
+                    "{:<name_width$}  {:<7}  {:<8}  {}",
+                    c.name, enabled_str, c.severity, c.description,
+                );
+                if c.enabled {
+                    output.push_str(&line);
+                } else {
+                    output.push_str(&line.dimmed().to_string());
+                }
+                output.push('\n');
+            }
+            output
+        }
     }
 
     /// Format summary

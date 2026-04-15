@@ -1,3 +1,12 @@
+//! Detection for ADD EXCLUDE CONSTRAINT operations.
+//!
+//! This check identifies `ALTER TABLE` statements that add EXCLUDE constraints,
+//! which acquires an ACCESS EXCLUSIVE lock and scans all existing rows to build
+//! the underlying index. Duration depends on table size.
+//!
+//! There is no `NOT VALID` option for EXCLUDE constraints. Consider creating the
+//! supporting index separately with `CREATE INDEX CONCURRENTLY` first.
+
 use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_constraint, constraint_display_name,
 };

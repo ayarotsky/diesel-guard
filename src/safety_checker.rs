@@ -2,12 +2,21 @@ use crate::ViolationList;
 use crate::adapters::{DieselAdapter, MigrationAdapter, SqlxAdapter};
 use crate::checks::{MigrationContext, Registry};
 use crate::config::Config;
+use crate::description_for_check;
 use crate::error::Result;
 use crate::parser;
 use crate::scripting;
 use camino::Utf8Path;
 use std::fs;
 use std::io::{self, BufRead, BufReader};
+
+/// Metadata for a single check as returned by [`SafetyChecker::list_checks`].
+pub struct CheckEntry {
+    pub name: String,
+    pub description: &'static str,
+    pub severity: &'static str,
+    pub enabled: bool,
+}
 
 pub struct SafetyChecker {
     registry: Registry,
@@ -204,6 +213,52 @@ impl SafetyChecker {
                 Ok(vec![(path.to_string(), violations)])
             }
         }
+    }
+
+    /// List all known checks (built-in + custom from `custom_checks_dir`) with their
+    /// metadata: description, effective severity, and whether they are enabled.
+    pub fn list_checks(&self) -> Vec<CheckEntry> {
+        let mut names: Vec<String> = Registry::builtin_check_names()
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+
+        // Collect custom check stems from custom_checks_dir
+        if let Some(ref dir) = self.config.custom_checks_dir {
+            let dir = Utf8Path::new(dir);
+            if dir.exists()
+                && let Ok(entries) = std::fs::read_dir(dir)
+            {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().and_then(|e| e.to_str()) == Some("rhai")
+                        && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
+                    {
+                        names.push(stem.to_string());
+                    }
+                }
+            }
+        }
+
+        names.sort();
+        names
+            .into_iter()
+            .map(|name| {
+                let severity = if self.config.is_check_warning(&name) {
+                    "warning"
+                } else {
+                    "error"
+                };
+                let enabled = self.config.is_check_enabled(&name);
+                let description = description_for_check(&name);
+                CheckEntry {
+                    name,
+                    description,
+                    severity,
+                    enabled,
+                }
+            })
+            .collect()
     }
 }
 

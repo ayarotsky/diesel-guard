@@ -1,3 +1,12 @@
+//! Detection for ADD FOREIGN KEY constraint operations.
+//!
+//! This check identifies `ALTER TABLE` statements that add FOREIGN KEY constraints,
+//! which acquires a SHARE ROW EXCLUSIVE lock on both tables and scans all existing
+//! rows to validate referential integrity. Duration depends on table size.
+//!
+//! Use `NOT VALID` to add the constraint without scanning existing rows, then
+//! `VALIDATE CONSTRAINT` in a separate migration to check existing data.
+
 use crate::checks::Check;
 use crate::checks::pg_helpers::{
     alter_table_cmds, cmd_def_as_constraint, constraint_display_name, fk_cols_constraint,
