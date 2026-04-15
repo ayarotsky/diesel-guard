@@ -346,9 +346,12 @@ fn test_format_summary_with_errors_and_warnings() {
 
 #[test]
 fn test_format_json_end_to_end() {
-    use diesel_guard::SafetyChecker;
+    use diesel_guard::{Config, SafetyChecker};
 
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["DropColumnCheck".to_string()],
+        ..Default::default()
+    });
     // Line 1: safe (no violation). Line 2: DROP COLUMN — exactly one violation.
     let sql = "SELECT 1;\nALTER TABLE users DROP COLUMN email;";
     let violations = checker.check_sql(sql).unwrap();
