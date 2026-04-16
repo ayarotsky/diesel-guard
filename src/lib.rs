@@ -11,8 +11,21 @@ pub mod violation;
 
 pub use adapters::{MigrationAdapter, MigrationContext, MigrationFile};
 pub use config::{Config, ConfigError};
-pub use safety_checker::SafetyChecker;
+pub use safety_checker::{CheckEntry, SafetyChecker};
 pub use violation::Violation;
+
+mod check_descriptions {
+    include!(concat!(env!("OUT_DIR"), "/check_descriptions.rs"));
+}
+
+/// Return the description for a built-in check by its struct name, or `""` for
+/// custom checks (which have no `//!` module doc in the generated table).
+pub fn description_for_check(name: &str) -> &'static str {
+    check_descriptions::CHECK_DESCRIPTIONS
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map_or("", |(_, d)| d)
+}
 
 /// A list of `(line_number, violation)` pairs produced by a single SQL file.
 ///

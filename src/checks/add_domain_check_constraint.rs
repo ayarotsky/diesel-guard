@@ -1,3 +1,12 @@
+//! Detection for ALTER DOMAIN ADD CONSTRAINT operations.
+//!
+//! This check identifies `ALTER DOMAIN` statements that add CHECK constraints,
+//! which validates all existing column values using the domain and acquires a lock
+//! on affected tables. Duration depends on data volume.
+//!
+//! Use `NOT VALID` to add the constraint without scanning existing rows, then
+//! `VALIDATE CONSTRAINT` in a separate migration to check existing data.
+
 use crate::checks::Check;
 use crate::checks::pg_helpers::constraint_display_name;
 use crate::{Config, MigrationContext, Violation};

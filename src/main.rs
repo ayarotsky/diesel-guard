@@ -88,6 +88,21 @@ EXAMPLES:
         force: bool,
     },
 
+    /// List all available checks with their status and description
+    #[command(long_about = "List all available checks (built-in and custom).
+
+Shows each check with its name, whether it is enabled, effective severity, and description.
+Severity reflects warn_checks from the active config.
+
+EXAMPLES:
+  diesel-guard list-checks
+  diesel-guard list-checks --format json")]
+    ListChecks {
+        /// Output format: \"text\" (default) or \"json\"
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
+
     /// Dump the pg_query AST for SQL as JSON
     #[command(long_about = "Dump the pg_query AST for SQL as JSON.
 
@@ -183,6 +198,16 @@ fn main() -> Result<()> {
         Commands::Check { path, format } => {
             let path = path.unwrap_or_else(|| Utf8PathBuf::from("migrations"));
             run_check(&path, &format)?;
+        }
+
+        Commands::ListChecks { format } => {
+            if !Utf8PathBuf::from("diesel-guard.toml").exists() {
+                eprintln!("Warning: No config file found. Using default configuration.");
+            }
+            let config = Config::load().map_err(|e| miette::miette!(e))?;
+            let checker = SafetyChecker::with_config(config);
+            let checks = checker.list_checks();
+            print!("{}", OutputFormatter::format_list_checks(&checks, &format));
         }
 
         Commands::DumpAst { sql, file } => {
