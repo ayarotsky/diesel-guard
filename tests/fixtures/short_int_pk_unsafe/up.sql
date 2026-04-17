@@ -1,4 +1,6 @@
 -- Unsafe: Short integer types in primary keys
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 -- These risk ID exhaustion
 
 -- INT exhausts at ~2.1 billion records

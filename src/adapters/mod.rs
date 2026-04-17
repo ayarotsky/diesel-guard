@@ -20,6 +20,7 @@ pub use sqlx::SqlxAdapter;
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 /// Per-migration context extracted by the adapter and passed to each check.
+#[non_exhaustive]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct MigrationContext {
     /// Whether the migration runs inside a transaction.
@@ -28,6 +29,10 @@ pub struct MigrationContext {
     /// Framework-specific hint for how to opt out of transactions.
     /// Empty string when no framework context is available (e.g. `check_sql`).
     pub no_transaction_hint: &'static str,
+    /// Whether the migration contains a `SET lock_timeout` statement.
+    pub has_lock_timeout: bool,
+    /// Whether the migration contains a `SET statement_timeout` statement.
+    pub has_statement_timeout: bool,
 }
 
 impl Default for MigrationContext {
@@ -35,6 +40,8 @@ impl Default for MigrationContext {
         Self {
             run_in_transaction: true,
             no_transaction_hint: "",
+            has_lock_timeout: false,
+            has_statement_timeout: false,
         }
     }
 }

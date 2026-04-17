@@ -155,6 +155,7 @@ mod tests {
             &MigrationContext {
                 run_in_transaction: true,
                 no_transaction_hint: "Create `metadata.toml` with `run_in_transaction = false`.",
+                ..Default::default()
             },
         );
         assert_eq!(violations.len(), 1);
@@ -181,6 +182,7 @@ mod tests {
             &MigrationContext {
                 run_in_transaction: false,
                 no_transaction_hint: "Create `metadata.toml` with `run_in_transaction = false`.",
+                ..Default::default()
             },
         );
         assert_eq!(violations.len(), 1);
@@ -201,6 +203,7 @@ mod tests {
             &MigrationContext {
                 run_in_transaction: true,
                 no_transaction_hint: "Add `-- no-transaction` as the first line of the migration file.",
+                ..Default::default()
             },
         );
         assert_eq!(violations.len(), 1);
@@ -219,6 +222,7 @@ mod tests {
             &MigrationContext {
                 run_in_transaction: true,
                 no_transaction_hint: "Create `metadata.toml` in the migration directory with `run_in_transaction = false`.",
+                ..Default::default()
             },
         );
         assert_eq!(violations.len(), 1);
