@@ -38,7 +38,7 @@ jobs:
           base-url-path: https://ayarotsky.github.io/diesel-guard/
           path-to-root: docs/book
           exclude-paths: print.html 404.html
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: ./docs/book
       - uses: actions/deploy-pages@v5
