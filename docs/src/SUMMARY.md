@@ -44,3 +44,4 @@
 - [Custom Checks](custom-checks.md)
 - [Safety-Assured Blocks](safety-assured.md)
 - [CI/CD Integration](ci-cd.md)
+- [Editor Integration](editor-integration.md)
