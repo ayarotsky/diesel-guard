@@ -13,12 +13,22 @@ use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_constraint, constraint_columns_str,
     fk_cols_constraint, ref_columns_constraint, ref_table_constraint,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct UnnamedConstraintCheck;
 
 impl Check for UnnamedConstraintCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "CONSTRAINT without name".into(),
+            problem: "Unnamed constraints receive auto-generated names from Postgres that can vary between \
+                      databases, making future migrations that reference the constraint unreliable.".into(),
+            safe_alternative: "Always name constraints explicitly using the CONSTRAINT keyword.".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
@@ -57,7 +67,7 @@ impl Check for UnnamedConstraintCheck {
                 };
 
                 Some(Violation::new(
-                    "CONSTRAINT without name",
+                    self.describe().operation,
                     format!(
                         "Adding unnamed {constraint_type} constraint on table '{table_name}' will receive an auto-generated name from Postgres. \
                         This makes future migrations difficult, as the generated name varies between databases and requires querying \

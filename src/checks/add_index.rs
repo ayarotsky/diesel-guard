@@ -11,12 +11,27 @@
 //! though it takes longer and cannot be run inside a transaction block.
 
 use crate::checks::pg_helpers::{NodeEnum, concurrent_safe_alternative, range_var_name};
-use crate::checks::{Check, Config, MigrationContext, unique_prefix};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext, unique_prefix};
 use crate::violation::Violation;
 
 pub struct AddIndexCheck;
 
 impl Check for AddIndexCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "ADD INDEX without CONCURRENTLY".into(),
+            problem:
+                "Creating an index without CONCURRENTLY acquires a SHARE lock, blocking writes \
+                      (INSERT, UPDATE, DELETE) for the duration of the index build."
+                    .into(),
+            safe_alternative:
+                "Use CREATE INDEX CONCURRENTLY to build the index without blocking writes. \
+                               Note: CONCURRENTLY cannot run inside a transaction block."
+                    .into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::IndexStmt(index_stmt) = node else {
             return vec![];
@@ -50,7 +65,7 @@ Considerations:
             let safe_alternative = concurrent_safe_alternative(suggestion, ctx);
 
             return vec![Violation::new(
-                "ADD INDEX without CONCURRENTLY",
+                self.describe().operation,
                 format!(
                     "Creating {unique_str}index '{index_name}' on table '{table_name}' without CONCURRENTLY acquires a SHARE lock, blocking writes \
                     (INSERT, UPDATE, DELETE). Duration depends on table size. Reads are still allowed."

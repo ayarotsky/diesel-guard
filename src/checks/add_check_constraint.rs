@@ -1,5 +1,5 @@
-use crate::checks::Check;
 use crate::checks::pg_helpers::{alter_table_cmds, cmd_def_as_constraint, constraint_display_name};
+use crate::checks::{Check, CheckDescription};
 use crate::{Config, MigrationContext, Violation};
 use pg_query::NodeEnum;
 use pg_query::protobuf::ConstrType;
@@ -7,6 +7,17 @@ use pg_query::protobuf::ConstrType;
 pub struct AddCheckConstraintCheck;
 
 impl Check for AddCheckConstraintCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "ADD CHECK CONSTRAINT".into(),
+            problem: "Adding a check constraint without NOT VALID scans the entire table to validate \
+                      existing rows, which can block autovacuum and cause performance issues on large tables.".into(),
+            safe_alternative: "Add the constraint with NOT VALID first, then validate in a separate migration \
+                               (acquires ShareUpdateExclusiveLock only, allowing concurrent reads and writes).".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
@@ -24,7 +35,7 @@ impl Check for AddCheckConstraintCheck {
             let constraint_name = constraint_display_name(constraint);
 
             Some(Violation::new(
-                "ADD CHECK CONSTRAINT",
+                self.describe().operation,
                 format!("Adding a check constraint '{constraint_name}' on table '{table_name}' without NOT VALID scans the entire table to validate existing rows,\
              which can block autovacuum. On larger tables this can cause performance issues."),
                 format!(

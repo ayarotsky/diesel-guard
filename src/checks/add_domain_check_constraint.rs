@@ -1,5 +1,5 @@
-use crate::checks::Check;
 use crate::checks::pg_helpers::constraint_display_name;
+use crate::checks::{Check, CheckDescription};
 use crate::{Config, MigrationContext, Violation};
 use pg_query::NodeEnum;
 use pg_query::protobuf::ConstrType;
@@ -7,6 +7,17 @@ use pg_query::protobuf::ConstrType;
 pub struct AddDomainCheckConstraintCheck;
 
 impl Check for AddDomainCheckConstraintCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "ADD CHECK CONSTRAINT TO DOMAIN".into(),
+            problem: "Adding a CHECK constraint to a domain without NOT VALID causes Postgres to \
+                      validate all columns using this domain across all tables, which can be a slow, \
+                      lock-holding full-scan operation.".into(),
+            safe_alternative: "Add the constraint with NOT VALID first, then validate in a separate migration.".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         // Only ALTER DOMAIN ADD CONSTRAINT is dangerous on existing domains.
         // CREATE DOMAIN is always safe: the domain is new, so no columns use it yet.
@@ -52,7 +63,7 @@ impl Check for AddDomainCheckConstraintCheck {
         let constraint_name = constraint_display_name(constraint);
 
         vec![Violation::new(
-            "ADD CHECK CONSTRAINT TO DOMAIN",
+            self.describe().operation,
             format!(
                 "Adding CHECK constraint '{constraint_name}' to domain '{domain_name}' without \
 NOT VALID causes Postgres to validate all columns using this domain across all tables, \

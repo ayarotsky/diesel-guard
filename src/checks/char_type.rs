@@ -22,12 +22,22 @@ use crate::checks::pg_helpers::{
     ColumnDef, NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_type_name,
     for_each_column_def, is_char_type,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct CharTypeCheck;
 
 impl Check for CharTypeCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "ADD COLUMN with CHAR type".into(),
+            problem: "CHAR is fixed-length and padded with spaces, which wastes storage and causes subtle \
+                      bugs with string comparisons. This is a best practice warning (no locking impact).".into(),
+            safe_alternative: "Use TEXT for variable-length strings, or VARCHAR(n) if a length constraint is needed.".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         // Handle CREATE TABLE via for_each_column_def
         if let NodeEnum::CreateStmt(_) = node {

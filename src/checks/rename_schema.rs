@@ -12,12 +12,23 @@
 //! busy database.
 
 use crate::checks::pg_helpers::{NodeEnum, ObjectType};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct RenameSchemaCheck;
 
 impl Check for RenameSchemaCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "RENAME SCHEMA".into(),
+            problem: "Renaming a schema breaks all application code, ORM models, and connection strings \
+                      that reference any object within the schema — every qualified reference fails immediately.".into(),
+            safe_alternative: "Use a search_path alias so both names resolve temporarily while updating all \
+                               application references.".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::RenameStmt(rename) = node else {
             return vec![];
@@ -31,7 +42,7 @@ impl Check for RenameSchemaCheck {
         let new_name = &rename.newname;
 
         vec![Violation::new(
-            "RENAME SCHEMA",
+            self.describe().operation,
             format!(
                 "Renaming schema '{old_name}' to '{new_name}' breaks all application code, ORM \
                 models, and connection strings that reference any object within the schema. Every \

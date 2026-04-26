@@ -1,8 +1,8 @@
-use crate::checks::Check;
 use crate::checks::pg_helpers::{
     alter_table_cmds, cmd_def_as_constraint, constraint_display_name, fk_cols_constraint,
     ref_columns_constraint, ref_table_constraint,
 };
+use crate::checks::{Check, CheckDescription};
 use crate::{Config, MigrationContext, Violation};
 use pg_query::NodeEnum;
 use pg_query::protobuf::ConstrType;
@@ -10,6 +10,18 @@ use pg_query::protobuf::ConstrType;
 pub struct AddForeignKeyCheck;
 
 impl Check for AddForeignKeyCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "ADD FOREIGN KEY".into(),
+            problem: "Adding a foreign key without NOT VALID scans the entire table to validate existing rows, \
+                      acquiring ShareRowExclusiveLock for the duration. On large tables this blocks writes and \
+                      is a common cause of migration-induced outages.".into(),
+            safe_alternative: "Add the foreign key with NOT VALID first, then validate in a separate migration \
+                               (acquires ShareUpdateExclusiveLock only, allowing concurrent reads and writes).".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
@@ -33,7 +45,7 @@ impl Check for AddForeignKeyCheck {
             let constraint_name = constraint_display_name(constraint);
 
             Some(Violation::new(
-                "ADD FOREIGN KEY",
+                self.describe().operation,
                 format!("Adding a foreign key constraint '{constraint_name}' on table '{table_name}' ({fk_cols}) without NOT VALID scans the entire table to validate existing rows,\
              acquiring ShareRowExclusiveLock for the duration. On large tables this blocks writes and is a common cause of migration-induced outages."),
                 format!(

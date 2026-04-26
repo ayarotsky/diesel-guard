@@ -15,12 +15,23 @@
 //! `disable_checks = ["TruncateTableCheck"]` (fully disabled).
 
 use crate::checks::pg_helpers::{NodeEnum, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct TruncateTableCheck;
 
 impl Check for TruncateTableCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "TRUNCATE TABLE".into(),
+            problem: "TRUNCATE acquires an ACCESS EXCLUSIVE lock, blocking all reads and writes. Unlike DELETE, \
+                      it cannot be batched or throttled, making it dangerous on large production tables.".into(),
+            safe_alternative: "Use batched DELETE statements instead, or silence with a safety-assured block if \
+                               the table is known to be small.".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::TruncateStmt(truncate) = node else {
             return vec![];
@@ -34,7 +45,7 @@ impl Check for TruncateTableCheck {
                     let table_name_str = range_var_name(rv);
 
                     Some(Violation::new(
-                        "TRUNCATE TABLE",
+                        self.describe().operation,
                         format!(
                             "TRUNCATE TABLE on '{table_name_str}' acquires an ACCESS EXCLUSIVE lock, blocking \
                             all reads and writes. Unlike DELETE, it cannot be batched or throttled. \

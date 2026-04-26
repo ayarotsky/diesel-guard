@@ -18,12 +18,23 @@ use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_has_constraint,
     column_type_name,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct GeneratedColumnCheck;
 
 impl Check for GeneratedColumnCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "ADD COLUMN with GENERATED STORED".into(),
+            problem: "Adding a stored generated column triggers a full table rewrite because Postgres must \
+                      compute and store the expression value for every existing row, acquiring an ACCESS EXCLUSIVE lock.".into(),
+            safe_alternative: "Add a regular nullable column, backfill with a trigger or batched UPDATE, \
+                               then optionally add NOT NULL.".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
@@ -41,7 +52,7 @@ impl Check for GeneratedColumnCheck {
                 let data_type = column_type_name(col);
 
                 Some(Violation::new(
-                    "ADD COLUMN with GENERATED STORED",
+                    self.describe().operation,
                     format!(
                         "Adding column '{column_name}' with GENERATED ALWAYS AS ... STORED on table '{table_name}' \
                         triggers a full table rewrite because Postgres must compute and store the expression \

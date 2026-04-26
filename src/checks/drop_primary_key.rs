@@ -14,7 +14,7 @@
 //! connections to verify constraint types with certainty.
 
 use crate::checks::pg_helpers::{AlterTableType, NodeEnum, alter_table_cmds};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 use regex::Regex;
 use std::sync::LazyLock;
@@ -39,6 +39,21 @@ impl DropPrimaryKeyCheck {
 }
 
 impl Check for DropPrimaryKeyCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "DROP PRIMARY KEY".into(),
+            problem:
+                "Dropping a primary key requires an ACCESS EXCLUSIVE lock, breaks foreign key \
+                      relationships in other tables, and removes the uniqueness constraint."
+                    .into(),
+            safe_alternative:
+                "Create the new primary key first, update all foreign keys, then drop the old key. \
+                               Consider using a transition period with both keys present."
+                    .into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
@@ -58,7 +73,7 @@ impl Check for DropPrimaryKeyCheck {
                 }
 
                 Some(Violation::new(
-                    "DROP PRIMARY KEY",
+                    self.describe().operation,
                     format!(
                         "Dropping primary key constraint '{constraint_name_str}' from table '{table_name}' requires an ACCESS EXCLUSIVE lock, blocking all operations. \
                         More critically, this breaks foreign key relationships in other tables and removes the uniqueness constraint."

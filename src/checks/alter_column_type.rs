@@ -12,12 +12,23 @@
 use crate::checks::pg_helpers::{
     AlterTableType, NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_type_name,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct AlterColumnTypeCheck;
 
 impl Check for AlterColumnTypeCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "ALTER COLUMN TYPE".into(),
+            problem: "Changing a column type typically requires an ACCESS EXCLUSIVE lock and may trigger a \
+                      full table rewrite, blocking all operations.".into(),
+            safe_alternative: "Use a multi-step approach: add a new column with the desired type, backfill in \
+                               batches, update application code, then drop the old column.".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
@@ -37,7 +48,7 @@ impl Check for AlterColumnTypeCheck {
                     .unwrap_or_default();
 
                 Some(Violation::new(
-                    "ALTER COLUMN TYPE",
+                    self.describe().operation,
                     format!(
                         "Changing column '{column_name}' type to '{new_type}' on table '{table_name}' typically requires an ACCESS EXCLUSIVE lock and \
                         may trigger a full table rewrite, blocking all operations. Duration depends on table size and the specific type change."

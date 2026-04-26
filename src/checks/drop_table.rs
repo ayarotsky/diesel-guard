@@ -12,12 +12,27 @@
 //! backups exist, and check for foreign key dependencies before dropping.
 
 use crate::checks::pg_helpers::{DropBehavior, NodeEnum, ObjectType, drop_object_names};
-use crate::checks::{Check, Config, MigrationContext, if_exists_clause};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext, if_exists_clause};
 use crate::violation::Violation;
 
 pub struct DropTableCheck;
 
 impl Check for DropTableCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "DROP TABLE".into(),
+            problem:
+                "DROP TABLE permanently deletes all data and acquires an ACCESS EXCLUSIVE lock. \
+                      This operation cannot be undone after the transaction commits."
+                    .into(),
+            safe_alternative:
+                "Verify the table is no longer in use, ensure backups exist, check for \
+                               foreign key dependencies, then wrap in a safety-assured block."
+                    .into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::DropStmt(drop_stmt) = node else {
             return vec![];
@@ -39,7 +54,7 @@ impl Check for DropTableCheck {
             .into_iter()
             .map(|name| {
                 Violation::new(
-                    "DROP TABLE",
+                    self.describe().operation,
                     format!(
                         "Dropping table '{name}' permanently deletes all data and acquires an ACCESS EXCLUSIVE lock. \
                         This operation cannot be undone after the transaction commits."

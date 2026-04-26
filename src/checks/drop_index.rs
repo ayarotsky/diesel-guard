@@ -13,12 +13,23 @@
 use crate::checks::pg_helpers::{
     NodeEnum, ObjectType, concurrent_safe_alternative, drop_object_names,
 };
-use crate::checks::{Check, Config, MigrationContext, if_exists_clause};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext, if_exists_clause};
 use crate::violation::Violation;
 
 pub struct DropIndexCheck;
 
 impl Check for DropIndexCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "DROP INDEX without CONCURRENTLY".into(),
+            problem: "Dropping an index without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock, blocking \
+                      all queries (SELECT, INSERT, UPDATE, DELETE) until complete.".into(),
+            safe_alternative: "Use DROP INDEX CONCURRENTLY to remove the index without blocking queries \
+                               (cannot run inside a transaction).".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::DropStmt(drop_stmt) = node else {
             return vec![];
@@ -51,7 +62,7 @@ Considerations:
                     let safe_alternative = concurrent_safe_alternative(suggestion, ctx);
 
                     Violation::new(
-                        "DROP INDEX without CONCURRENTLY",
+                        self.describe().operation,
                         format!(
                             "Dropping index '{name}'{if_exists_str} without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock, blocking all \
                             queries (SELECT, INSERT, UPDATE, DELETE) on the table until complete. Duration depends on system load and concurrent transactions."

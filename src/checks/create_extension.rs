@@ -11,12 +11,24 @@
 //! (Ansible, Terraform, etc.) with appropriate privileges before running migrations.
 
 use crate::checks::pg_helpers::NodeEnum;
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct CreateExtensionCheck;
 
 impl Check for CreateExtensionCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "CREATE EXTENSION".into(),
+            problem: "Creating an extension in a migration requires superuser privileges that application \
+                      database users typically lack in production. Extensions are infrastructure concerns that \
+                      should be managed outside application migrations.".into(),
+            safe_alternative: "Install the extension through infrastructure automation (Ansible, Terraform, etc.) \
+                               or database provisioning scripts before running migrations.".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::CreateExtensionStmt(ext) = node else {
             return vec![];
@@ -30,7 +42,7 @@ impl Check for CreateExtensionCheck {
         };
 
         vec![Violation::new(
-            "CREATE EXTENSION",
+            self.describe().operation,
             format!(
                 "Creating extension '{extension_name}' in a migration requires superuser privileges, which application \
                 database users typically lack in production. Extensions are infrastructure concerns that should be \

@@ -24,12 +24,24 @@ use crate::checks::pg_helpers::{
     NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_type_name, for_each_column_def,
     is_timestamp_without_tz,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct TimestampTypeCheck;
 
 impl Check for TimestampTypeCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "ADD COLUMN with TIMESTAMP".into(),
+            problem: "TIMESTAMP without time zone stores values without timezone context, causing issues \
+                      in multi-timezone applications and during DST transitions. This is a best practice \
+                      warning (no locking impact).".into(),
+            safe_alternative: "Use TIMESTAMPTZ (TIMESTAMP WITH TIME ZONE) which stores values in UTC \
+                               internally and converts on input/output based on session timezone.".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let is_create = matches!(node, NodeEnum::CreateStmt(_));
 

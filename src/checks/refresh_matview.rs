@@ -12,12 +12,23 @@
 //! transaction block.
 
 use crate::checks::pg_helpers::{NodeEnum, concurrent_safe_alternative, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct RefreshMatViewCheck;
 
 impl Check for RefreshMatViewCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "REFRESH MATERIALIZED VIEW without CONCURRENTLY".into(),
+            problem: "Refreshing a materialized view without CONCURRENTLY acquires an AccessExclusiveLock, \
+                      blocking all reads (SELECT) for the duration of the refresh.".into(),
+            safe_alternative: "Use REFRESH MATERIALIZED VIEW CONCURRENTLY (requires a unique index on the view, \
+                               cannot run inside a transaction).".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::RefreshMatViewStmt(stmt) = node else {
             return vec![];
@@ -46,7 +57,7 @@ Considerations:
             let safe_alternative = concurrent_safe_alternative(suggestion, ctx);
 
             return vec![Violation::new(
-                "REFRESH MATERIALIZED VIEW without CONCURRENTLY",
+                self.describe().operation,
                 format!(
                     "Refreshing materialized view '{view_name}' without CONCURRENTLY acquires an \
                     AccessExclusiveLock, blocking all reads (SELECT) for the duration of the refresh. \

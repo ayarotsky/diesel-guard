@@ -14,12 +14,27 @@
 use crate::checks::pg_helpers::{
     NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_type_name, is_json_type,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct AddJsonColumnCheck;
 
 impl Check for AddJsonColumnCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "ADD COLUMN with JSON type".into(),
+            problem:
+                "The JSON type has no equality operator, which can break existing SELECT DISTINCT, \
+                      GROUP BY, and UNION queries at runtime."
+                    .into(),
+            safe_alternative:
+                "Use JSONB instead: it has proper equality operators, supports GIN indexes, \
+                               and is faster to process."
+                    .into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
@@ -36,7 +51,7 @@ impl Check for AddJsonColumnCheck {
                 let column_name = &col.colname;
 
                 Some(Violation::new(
-                    "ADD COLUMN with JSON type",
+                    self.describe().operation,
                     format!(
                         "Adding column '{column_name}' with JSON type on table '{table_name}' can break existing SELECT DISTINCT queries. \
                         The JSON type has no equality operator, causing runtime errors for DISTINCT, GROUP BY, and UNION operations."

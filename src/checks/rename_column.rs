@@ -13,12 +13,27 @@
 //! and finally remove the old column in a subsequent migration.
 
 use crate::checks::pg_helpers::{NodeEnum, ObjectType, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct RenameColumnCheck;
 
 impl Check for RenameColumnCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "RENAME COLUMN".into(),
+            problem:
+                "Renaming a column causes immediate errors in running application instances that \
+                      still reference the old column name, causing downtime."
+                    .into(),
+            safe_alternative:
+                "Add a new column, backfill data, update application code to use the new column, \
+                               then drop the old column in a subsequent migration."
+                    .into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::RenameStmt(rename) = node else {
             return vec![];
@@ -38,7 +53,7 @@ impl Check for RenameColumnCheck {
         let new_name = &rename.newname;
 
         vec![Violation::new(
-            "RENAME COLUMN",
+            self.describe().operation,
             format!(
                 "Renaming column '{old_name}' to '{new_name}' in table '{table_name}' will cause immediate errors in running application instances. \
                 Any code referencing the old column name will fail after the rename is applied, causing downtime."

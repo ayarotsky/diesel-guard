@@ -18,12 +18,23 @@
 //! automation or DBA operations, not application migrations.
 
 use crate::checks::pg_helpers::NodeEnum;
-use crate::checks::{Check, Config, MigrationContext, if_exists_clause};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext, if_exists_clause};
 use crate::violation::Violation;
 
 pub struct DropDatabaseCheck;
 
 impl Check for DropDatabaseCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "DROP DATABASE".into(),
+            problem: "DROP DATABASE permanently deletes the entire database including all tables, data, \
+                      and objects. It cannot run inside a transaction and requires exclusive access.".into(),
+            safe_alternative: "Handle database lifecycle through infrastructure automation or DBA operations, \
+                               not application migrations.".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::DropdbStmt(drop_db) = node else {
             return vec![];
@@ -33,7 +44,7 @@ impl Check for DropDatabaseCheck {
         let if_exists_str = if_exists_clause(drop_db.missing_ok);
 
         vec![Violation::new(
-            "DROP DATABASE",
+            self.describe().operation,
             format!(
                 "Dropping database '{db_name}' permanently deletes the entire database \
                 including all tables, data, and objects. This operation requires \

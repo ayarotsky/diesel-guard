@@ -11,12 +11,23 @@
 //! separately, then add the NOT NULL constraint.
 
 use crate::checks::pg_helpers::{AlterTableType, NodeEnum, alter_table_cmds};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct AddNotNullCheck;
 
 impl Check for AddNotNullCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "ADD NOT NULL constraint".into(),
+            problem: "Adding NOT NULL to an existing column requires a full table scan to verify all values \
+                      are non-null, acquiring an ACCESS EXCLUSIVE lock and blocking all operations.".into(),
+            safe_alternative: "Add a CHECK constraint with NOT VALID, validate it separately \
+                               (ShareUpdateExclusiveLock only), then add NOT NULL (instant when CHECK exists).".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
@@ -31,7 +42,7 @@ impl Check for AddNotNullCheck {
                 let column_name = &cmd.name;
 
                 Some(Violation::new(
-                    "ADD NOT NULL constraint",
+                    self.describe().operation,
                     format!(
                         "Adding NOT NULL constraint to column '{column_name}' on table '{table_name}' requires a full table scan to verify \
                         all values are non-null, acquiring an ACCESS EXCLUSIVE lock and blocking all operations. \

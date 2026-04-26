@@ -12,12 +12,27 @@
 //! in application code, deploy without references, and drop in a later migration.
 
 use crate::checks::pg_helpers::{AlterTableType, NodeEnum, alter_table_cmds};
-use crate::checks::{Check, Config, MigrationContext, if_exists_clause};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext, if_exists_clause};
 use crate::violation::Violation;
 
 pub struct DropColumnCheck;
 
 impl Check for DropColumnCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "DROP COLUMN".into(),
+            problem:
+                "Dropping a column requires an ACCESS EXCLUSIVE lock and typically triggers a \
+                      table rewrite, blocking all operations for the duration."
+                    .into(),
+            safe_alternative:
+                "Mark the column unused in application code, deploy without references, \
+                               then drop in a later migration."
+                    .into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
@@ -33,7 +48,7 @@ impl Check for DropColumnCheck {
                 let if_exists = cmd.missing_ok;
 
                 Some(Violation::new(
-                    "DROP COLUMN",
+                    self.describe().operation,
                     format!(
                         "Dropping column '{column_name}' from table '{table_name}' requires an ACCESS EXCLUSIVE lock, blocking all operations. \
                         This typically triggers a table rewrite with duration depending on table size."

@@ -14,12 +14,23 @@
 use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_constraint, constraint_columns_str,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct AddPrimaryKeyCheck;
 
 impl Check for AddPrimaryKeyCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "ADD PRIMARY KEY".into(),
+            problem: "Adding a PRIMARY KEY via ALTER TABLE acquires an ACCESS EXCLUSIVE lock, blocking all reads \
+                      and writes. It implicitly creates a unique index (blocking) and validates all rows for uniqueness.".into(),
+            safe_alternative: "Create a UNIQUE INDEX CONCURRENTLY first, then add the PRIMARY KEY constraint \
+                               USING INDEX (fast, minimal lock, Postgres 11+).".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
@@ -49,7 +60,7 @@ impl Check for AddPrimaryKeyCheck {
                 let suggested_index_name = format!("{table_name}_pkey");
 
                 Some(Violation::new(
-                    "ADD PRIMARY KEY",
+                    self.describe().operation,
                     format!(
                         "Adding PRIMARY KEY constraint '{constraint_name}' on table '{table_name}' ({cols}) via ALTER TABLE acquires an ACCESS EXCLUSIVE lock, \
                         blocking all reads and writes. This also implicitly creates a unique index (blocking operation) and validates all rows for uniqueness."

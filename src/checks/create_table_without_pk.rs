@@ -7,7 +7,7 @@
 //! foreign key references.
 
 use crate::checks::pg_helpers::{ConstrType, NodeEnum, column_has_constraint, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 const CONSTR_PRIMARY: i32 = ConstrType::ConstrPrimary as i32;
@@ -15,6 +15,16 @@ const CONSTR_PRIMARY: i32 = ConstrType::ConstrPrimary as i32;
 pub struct CreateTableWithoutPkCheck;
 
 impl Check for CreateTableWithoutPkCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "CREATE TABLE without PRIMARY KEY".into(),
+            problem: "Tables without a primary key cannot use logical replication and have no guaranteed \
+                      way to uniquely identify rows for updates, deletes, or foreign key references.".into(),
+            safe_alternative: "Add a primary key: BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, or a UUID column.".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::CreateStmt(stmt) = node else {
             return vec![];
@@ -57,7 +67,7 @@ impl Check for CreateTableWithoutPkCheck {
             .unwrap_or_default();
 
         vec![Violation::new(
-            "CREATE TABLE without PRIMARY KEY",
+            self.describe().operation,
             format!(
                 "Table '{table_name}' is defined without a primary key. \
                 Tables without a primary key cannot use logical replication: replication slots \

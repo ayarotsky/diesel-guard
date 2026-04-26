@@ -14,12 +14,23 @@
 use crate::checks::pg_helpers::{
     NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_type_name, is_serial_pattern,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct AddSerialColumnCheck;
 
 impl Check for AddSerialColumnCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "ADD COLUMN with SERIAL".into(),
+            problem: "Adding a SERIAL column requires a full table rewrite to populate sequence values for \
+                      existing rows, acquiring an ACCESS EXCLUSIVE lock and blocking all operations.".into(),
+            safe_alternative: "Create a sequence, add the column without a default, backfill in batches, \
+                               set the default for new rows, then set sequence ownership.".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
@@ -37,7 +48,7 @@ impl Check for AddSerialColumnCheck {
                 let type_name = column_type_name(col);
 
                 Some(Violation::new(
-                    "ADD COLUMN with SERIAL",
+                    self.describe().operation,
                     format!(
                         "Adding column '{column_name}' with SERIAL type on table '{table_name}' requires a full table rewrite to populate sequence values for existing rows, \
                         which acquires an ACCESS EXCLUSIVE lock and blocks all operations. Duration depends on table size and number of indexes."

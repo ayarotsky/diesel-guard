@@ -13,12 +13,23 @@ use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_constraint, constraint_columns_str,
     constraint_display_name,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct AddUniqueConstraintCheck;
 
 impl Check for AddUniqueConstraintCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "ADD UNIQUE constraint".into(),
+            problem: "Adding a UNIQUE constraint via ALTER TABLE acquires an ACCESS EXCLUSIVE lock, blocking \
+                      all reads and writes during index creation.".into(),
+            safe_alternative: "Use CREATE UNIQUE INDEX CONCURRENTLY first, then optionally add the constraint \
+                               USING INDEX (no blocking reads or writes, cannot run inside a transaction).".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
@@ -48,7 +59,7 @@ impl Check for AddUniqueConstraintCheck {
                 };
 
                 Some(Violation::new(
-                    "ADD UNIQUE constraint",
+                    self.describe().operation,
                     format!(
                         "Adding UNIQUE constraint '{constraint_name}' on table '{table_name}' ({cols}) via ALTER TABLE acquires an ACCESS EXCLUSIVE lock, \
                         blocking all reads and writes during index creation. Duration depends on table size."

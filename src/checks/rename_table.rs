@@ -11,12 +11,27 @@
 //! compatibility with running instances and avoids dangerous locks.
 
 use crate::checks::pg_helpers::{NodeEnum, ObjectType, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct RenameTableCheck;
 
 impl Check for RenameTableCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "RENAME TABLE".into(),
+            problem:
+                "Renaming a table causes immediate errors in running application instances and \
+                      requires an ACCESS EXCLUSIVE lock that can block on busy tables."
+                    .into(),
+            safe_alternative:
+                "Use a multi-step dual-write migration: create new table, backfill, update \
+                               application code, then drop the old table."
+                    .into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::RenameStmt(rename) = node else {
             return vec![];
@@ -35,7 +50,7 @@ impl Check for RenameTableCheck {
         let new_table_name = &rename.newname;
 
         vec![Violation::new(
-            "RENAME TABLE",
+            self.describe().operation,
             format!(
                 "Renaming table '{old_table_name}' to '{new_table_name}' will cause immediate errors in running application instances. \
                 Any code referencing the old table name will fail after the rename is applied. \

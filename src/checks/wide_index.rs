@@ -10,7 +10,7 @@
 //! query patterns instead.
 
 use crate::checks::pg_helpers::{NodeEnum, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 const MAX_COLUMNS: usize = 3;
@@ -18,6 +18,18 @@ const MAX_COLUMNS: usize = 3;
 pub struct WideIndexCheck;
 
 impl Check for WideIndexCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "CREATE INDEX with too many columns".into(),
+            problem: "Wide indexes (4+ columns) are rarely effective because Postgres can only use them \
+                      efficiently when filtering on the leftmost columns in order. They also increase \
+                      storage costs and slow down writes.".into(),
+            safe_alternative: "Use partial indexes, separate narrower indexes for different queries, or a \
+                               covering index with INCLUDE for non-filter columns.".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::IndexStmt(index_stmt) = node else {
             return vec![];
@@ -57,7 +69,7 @@ impl Check for WideIndexCheck {
         let columns_list = column_names.join(", ");
 
         vec![Violation::new(
-            "CREATE INDEX with too many columns",
+            self.describe().operation,
             format!(
                 "Index '{index_name}' on table '{table_name}' has {column_count} columns ({columns_list}). \
                 Wide indexes (4+ columns) are rarely effective because Postgres can only use them efficiently \

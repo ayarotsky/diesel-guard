@@ -6,13 +6,24 @@
 //! lock held for a full-table write can cause severe contention on large tables.
 
 use crate::checks::pg_helpers::{NodeEnum, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 use pg_query::protobuf::RangeVar;
 
 pub struct MutationWithoutWhereCheck;
 
 impl Check for MutationWithoutWhereCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "DELETE without WHERE".into(),
+            problem: "A DELETE or UPDATE without a WHERE clause affects every row in the table, which \
+                      is almost always a mistake in a migration and can cause severe lock contention.".into(),
+            safe_alternative: "Add a WHERE clause to target only the intended rows, or use a safety-assured \
+                               block if a full-table mutation is intentional.".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         match node {
             NodeEnum::DeleteStmt(stmt) => check_mutation(

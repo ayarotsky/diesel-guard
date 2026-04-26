@@ -15,13 +15,24 @@ use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_has_constraint,
     column_type_name,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 use pg_query::protobuf::ColumnDef;
 
 pub struct AddColumnCheck;
 
 impl Check for AddColumnCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "ADD COLUMN with DEFAULT".into(),
+            problem: "Adding a column with a DEFAULT value requires a full table rewrite on Postgres < 11, \
+                      acquiring an ACCESS EXCLUSIVE lock and blocking all operations.".into(),
+            safe_alternative: "Add the column without a default, backfill in batches, then set the default \
+                               for new rows only. On Postgres 11+, constant defaults are safe.".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
@@ -45,7 +56,7 @@ impl Check for AddColumnCheck {
                 let data_type = column_type_name(col);
 
                 Some(Violation::new(
-                    "ADD COLUMN with DEFAULT",
+                    self.describe().operation,
                     format!(
                         "Adding column '{column_name}' with DEFAULT on table '{table_name}' requires a full table rewrite on Postgres < 11, \
                         which acquires an ACCESS EXCLUSIVE lock and blocks all operations. Duration depends on table size."

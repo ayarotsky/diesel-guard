@@ -1,12 +1,24 @@
 use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_constraint, constraint_display_name,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct AddExcludeConstraintCheck;
 
 impl Check for AddExcludeConstraintCheck {
+    fn describe(&self) -> CheckDescription {
+        CheckDescription {
+            operation: "ADD EXCLUDE constraint".into(),
+            problem: "Adding an exclusion constraint scans the entire table while holding a SHARE ROW EXCLUSIVE lock. \
+                      Unlike CHECK or FOREIGN KEY, there is no NOT VALID escape hatch — exclusion constraints must \
+                      be validated immediately.".into(),
+            safe_alternative: "Add the constraint during a low-traffic window, define it at table creation time, \
+                               or use application-level enforcement if the table is too large to lock safely.".into(),
+            script_path: None,
+        }
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
@@ -23,7 +35,7 @@ impl Check for AddExcludeConstraintCheck {
                 let constraint_name = constraint_display_name(c);
 
                 Some(Violation::new(
-                    "ADD EXCLUDE constraint",
+                    self.describe().operation,
                     format!(
                         "Adding exclusion constraint '{constraint_name}' on table '{table_name}' \
                         scans the entire table while holding a SHARE ROW EXCLUSIVE lock. \
