@@ -1,3 +1,4 @@
+use assert_cmd::Command;
 use camino::Utf8Path;
 use diesel_guard::{Config, ConfigError, SafetyChecker};
 use miette::Diagnostic as _;
@@ -724,4 +725,29 @@ another_unknown = 42
         "Unknown fields should be ignored by default, got: {config:?}"
     );
     assert_eq!(config.unwrap().framework, "diesel");
+}
+
+#[test]
+fn test_check_stdin_with_violations() {
+    // Tests the check_path("-") path (safety_checker.rs lines 247) via CLI stdin.
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+
+    let output = Command::cargo_bin("diesel-guard")
+        .unwrap()
+        .args(["check", "-"])
+        .current_dir(temp_dir.path())
+        .write_stdin("DROP TABLE users;")
+        .output()
+        .unwrap();
+
+    assert!(
+        !output.status.success(),
+        "Violations from stdin should cause non-zero exit"
+    );
+    // check_path("-") wraps the violations under the path "-"
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("DROP") || stdout.contains('-'),
+        "Expected violation output, got: {stdout}"
+    );
 }

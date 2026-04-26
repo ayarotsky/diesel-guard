@@ -8,13 +8,14 @@ use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, column_has_constraint, column_type_name, is_serial_pattern,
     range_var_name,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 use pg_query::protobuf::ColumnDef;
 
 const CONSTR_PRIMARY: i32 = ConstrType::ConstrPrimary as i32;
 
 pub struct CreateTableSerialCheck;
+impl_check_doc!(CreateTableSerialCheck, "create-table-serial");
 
 impl Check for CreateTableSerialCheck {
     fn check(&self, node: &NodeEnum, config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {

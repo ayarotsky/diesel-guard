@@ -7,12 +7,13 @@
 //! foreign key references.
 
 use crate::checks::pg_helpers::{ConstrType, NodeEnum, column_has_constraint, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 
 const CONSTR_PRIMARY: i32 = ConstrType::ConstrPrimary as i32;
 
 pub struct CreateTableWithoutPkCheck;
+impl_check_doc!(CreateTableWithoutPkCheck, "create-table-without-pk");
 
 impl Check for CreateTableWithoutPkCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {

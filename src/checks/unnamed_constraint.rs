@@ -13,10 +13,11 @@ use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_constraint, constraint_columns_str,
     fk_cols_constraint, ref_columns_constraint, ref_table_constraint,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 
 pub struct UnnamedConstraintCheck;
+impl_check_doc!(UnnamedConstraintCheck, "unnamed-constraint");
 
 impl Check for UnnamedConstraintCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {

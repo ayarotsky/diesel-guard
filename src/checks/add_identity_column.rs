@@ -19,10 +19,11 @@
 use crate::checks::pg_helpers::{
     NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_type_name, is_identity_pattern,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 
 pub struct AddIdentityColumnCheck;
+impl_check_doc!(AddIdentityColumnCheck, "add-identity-column");
 
 impl Check for AddIdentityColumnCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {

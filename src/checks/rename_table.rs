@@ -11,10 +11,11 @@
 //! compatibility with running instances and avoids dangerous locks.
 
 use crate::checks::pg_helpers::{NodeEnum, ObjectType, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 
 pub struct RenameTableCheck;
+impl_check_doc!(RenameTableCheck, "rename-table");
 
 impl Check for RenameTableCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {

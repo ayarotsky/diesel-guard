@@ -99,6 +99,11 @@ impl SafetyChecker {
         }
     }
 
+    /// Expose the registry for introspection (e.g. list-checks, explain).
+    pub fn registry(&self) -> &Registry {
+        &self.registry
+    }
+
     /// Build the migration adapter for the configured framework.
     fn adapter(&self) -> Result<Box<dyn MigrationAdapter>> {
         match self.config.framework.as_str() {
@@ -694,5 +699,68 @@ mod tests {
             "Both violations must reference line 3, got {:?}",
             violations.iter().map(|(l, _)| l).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn test_registry_returns_inner_registry() {
+        let checker = SafetyChecker::new();
+        assert_eq!(
+            checker.registry().active_check_names().len(),
+            Registry::builtin_check_names().len()
+        );
+    }
+
+    #[test]
+    fn test_default_creates_checker() {
+        let checker = SafetyChecker::default();
+        assert!(!checker.registry().active_check_names().is_empty());
+    }
+
+    #[test]
+    fn test_check_path_file_no_violations() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("migration.sql");
+        std::fs::write(&file, "CREATE TABLE users (id BIGINT);").unwrap();
+        let checker = SafetyChecker::with_config(Config {
+            enable_checks: vec!["DropTableCheck".to_string()],
+            ..Config::default()
+        });
+        let path = Utf8Path::from_path(&file).unwrap();
+        let results = checker.check_path(path).unwrap();
+        assert!(results.is_empty(), "Safe SQL should produce no violations");
+    }
+
+    #[test]
+    fn test_check_path_file_with_violations() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("migration.sql");
+        std::fs::write(&file, "DROP TABLE users;").unwrap();
+        let checker = SafetyChecker::with_config(Config {
+            enable_checks: vec!["DropTableCheck".to_string()],
+            ..Config::default()
+        });
+        let path = Utf8Path::from_path(&file).unwrap();
+        let results = checker.check_path(path).unwrap();
+        assert_eq!(results.len(), 1, "Expected one file with violations");
+        assert!(results[0].0.contains("migration.sql"));
+        assert!(!results[0].1.is_empty());
+    }
+
+    #[test]
+    fn test_check_sql_warns_on_duplicate_migration_disabled_checks() {
+        let checker = SafetyChecker::with_config(Config::default());
+        // Duplicate name in disable directive — warn_unknown_migration_disabled_checks deduplicates.
+        let sql = "-- diesel-guard:disable AddColumnCheck,AddColumnCheck\nALTER TABLE t ADD COLUMN x TEXT;";
+        // Should not panic or error; just runs (warning goes to stderr).
+        let _ = checker.check_sql(sql).unwrap();
+    }
+
+    #[test]
+    fn test_check_sql_warns_on_unknown_migration_disabled_check() {
+        let checker = SafetyChecker::with_config(Config::default());
+        // FakeCheck is not a known check name — triggers the eprintln warning path.
+        let sql =
+            "-- diesel-guard:disable FakeCheckThatDoesNotExist\nALTER TABLE t ADD COLUMN x TEXT;";
+        let _ = checker.check_sql(sql).unwrap();
     }
 }

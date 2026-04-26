@@ -6,11 +6,12 @@
 //! lock held for a full-table write can cause severe contention on large tables.
 
 use crate::checks::pg_helpers::{NodeEnum, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 use pg_query::protobuf::RangeVar;
 
 pub struct MutationWithoutWhereCheck;
+impl_check_doc!(MutationWithoutWhereCheck, "mutation-without-where");
 
 impl Check for MutationWithoutWhereCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {

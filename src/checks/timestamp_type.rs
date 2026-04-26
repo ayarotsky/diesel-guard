@@ -24,10 +24,11 @@ use crate::checks::pg_helpers::{
     NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_type_name, for_each_column_def,
     is_timestamp_without_tz,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 
 pub struct TimestampTypeCheck;
+impl_check_doc!(TimestampTypeCheck, "timestamp-type");
 
 impl Check for TimestampTypeCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {

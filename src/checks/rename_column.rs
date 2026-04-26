@@ -13,10 +13,11 @@
 //! and finally remove the old column in a subsequent migration.
 
 use crate::checks::pg_helpers::{NodeEnum, ObjectType, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 
 pub struct RenameColumnCheck;
+impl_check_doc!(RenameColumnCheck, "rename-column");
 
 impl Check for RenameColumnCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {

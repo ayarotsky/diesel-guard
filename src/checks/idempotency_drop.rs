@@ -1,8 +1,9 @@
 use crate::checks::pg_helpers::{DropBehavior, NodeEnum, ObjectType, drop_object_names};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 
 pub struct IdempotencyDropCheck;
+impl_check_doc!(IdempotencyDropCheck, "idempotency-guards");
 
 impl Check for IdempotencyDropCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {

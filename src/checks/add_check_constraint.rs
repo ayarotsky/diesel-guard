@@ -1,10 +1,11 @@
-use crate::checks::Check;
 use crate::checks::pg_helpers::{alter_table_cmds, cmd_def_as_constraint, constraint_display_name};
+use crate::checks::{Check, CheckDoc, impl_check_doc};
 use crate::{Config, MigrationContext, Violation};
 use pg_query::NodeEnum;
 use pg_query::protobuf::ConstrType;
 
 pub struct AddCheckConstraintCheck;
+impl_check_doc!(AddCheckConstraintCheck, "add-check-constraint");
 
 impl Check for AddCheckConstraintCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {

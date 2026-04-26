@@ -8,10 +8,11 @@
 //! This operation should be intentional and coordinated across application changes.
 
 use crate::checks::pg_helpers::{AlterTableType, NodeEnum, alter_table_cmds};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 
 pub struct DropNotNullCheck;
+impl_check_doc!(DropNotNullCheck, "drop-not-null");
 
 impl Check for DropNotNullCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {

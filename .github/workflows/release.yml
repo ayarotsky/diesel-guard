@@ -335,8 +335,10 @@ jobs:
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
+      - name: Verify package metadata
+        run: cargo package --package diesel-guard --no-verify
       - name: Publish to crates.io
-        run: cargo publish
+        run: cargo publish --package diesel-guard
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 

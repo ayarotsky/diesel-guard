@@ -3,7 +3,7 @@ pub mod ast_dump;
 pub mod checks;
 pub mod config;
 pub mod error;
-pub mod output;
+pub mod formatters;
 pub mod parser;
 pub mod safety_checker;
 pub mod scripting;

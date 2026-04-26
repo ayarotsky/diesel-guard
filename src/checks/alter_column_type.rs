@@ -12,10 +12,11 @@
 use crate::checks::pg_helpers::{
     AlterTableType, NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_type_name,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 
 pub struct AlterColumnTypeCheck;
+impl_check_doc!(AlterColumnTypeCheck, "alter-column-type");
 
 impl Check for AlterColumnTypeCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {

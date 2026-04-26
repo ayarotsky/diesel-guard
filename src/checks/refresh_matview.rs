@@ -12,10 +12,11 @@
 //! transaction block.
 
 use crate::checks::pg_helpers::{NodeEnum, concurrent_safe_alternative, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 
 pub struct RefreshMatViewCheck;
+impl_check_doc!(RefreshMatViewCheck, "refresh-materialized-view");
 
 impl Check for RefreshMatViewCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, ctx: &MigrationContext) -> Vec<Violation> {

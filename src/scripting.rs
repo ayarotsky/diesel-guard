@@ -1,4 +1,4 @@
-use crate::checks::{Check, MigrationContext};
+use crate::checks::{Check, CheckDoc, MigrationContext};
 use crate::config::Config;
 use crate::violation::Violation;
 use camino::Utf8Path;
@@ -19,7 +19,10 @@ pub struct CustomCheck {
     name: &'static str,
     engine: Arc<Engine>,
     ast: AST,
+    path: String,
 }
+
+impl CheckDoc for CustomCheck {}
 
 impl CustomCheck {
     fn internal_error(&self, err: &dyn std::fmt::Display) -> Vec<Violation> {
@@ -34,6 +37,24 @@ impl CustomCheck {
 impl Check for CustomCheck {
     fn name(&self) -> &'static str {
         self.name
+    }
+
+    fn script_path(&self) -> Option<&str> {
+        Some(&self.path)
+    }
+
+    fn describe(&self) -> Option<String> {
+        // clone_functions_only() strips the script body so call_fn won't
+        // try to evaluate statements that reference `node`.
+        let fns_ast = self.ast.clone_functions_only();
+        let mut scope = rhai::Scope::new();
+        if let Ok(result) =
+            self.engine
+                .call_fn::<rhai::Dynamic>(&mut scope, &fns_ast, "describe", ())
+        {
+            return result.into_string().ok();
+        }
+        None
     }
 
     fn check(&self, node: &NodeEnum, config: &Config, ctx: &MigrationContext) -> Vec<Violation> {
@@ -279,6 +300,7 @@ pub fn load_custom_checks(
                     name,
                     engine: Arc::clone(&engine),
                     ast,
+                    path: path.display().to_string(),
                 }));
             }
             Err(e) => {
@@ -329,7 +351,12 @@ mod tests {
         let engine = Arc::new(create_engine());
         let ast = engine.compile(script).expect("script should compile");
         let name: &'static str = Box::leak("test_check".to_string().into_boxed_str());
-        let check = CustomCheck { name, engine, ast };
+        let check = CustomCheck {
+            name,
+            engine,
+            ast,
+            path: String::new(),
+        };
 
         let stmts = crate::parser::parse(sql).expect("SQL should parse");
         let mut all_violations = Vec::new();
@@ -747,7 +774,12 @@ mod tests {
         let engine = Arc::new(create_engine());
         let ast = engine.compile("()").expect("script should compile");
         let name: &'static str = Box::leak("test_check".to_string().into_boxed_str());
-        CustomCheck { name, engine, ast }
+        CustomCheck {
+            name,
+            engine,
+            ast,
+            path: String::new(),
+        }
     }
 
     #[test]
@@ -806,5 +838,86 @@ mod tests {
             violations.is_empty(),
             "All pg constants should be accessible, got: {violations:?}"
         );
+    }
+
+    #[test]
+    fn test_describe_call_fn_debug() {
+        let engine = Arc::new(create_engine());
+        // Script with fn describe() AND body that references `node` (like a real check script).
+        // Verifies that clone_functions_only() lets call_fn succeed even though the body
+        // references the `node` variable that is only injected at check time.
+        let script = r#"
+fn describe() {
+    "This check validates something important."
+}
+let stmt = node.IndexStmt;
+if stmt == () { return; }
+#{ operation: "MY OPERATION", problem: "my problem", safe_alternative: "my safe alternative" }
+"#;
+        let ast = engine.compile(script).expect("script should compile");
+        let fns_ast = ast.clone_functions_only();
+        let mut scope = rhai::Scope::new();
+        let result = engine.call_fn::<rhai::Dynamic>(&mut scope, &fns_ast, "describe", ());
+        let result = result.expect("call_fn on fns-only AST should succeed");
+        assert_eq!(
+            result.into_string().ok(),
+            Some("This check validates something important.".to_string())
+        );
+    }
+
+    #[test]
+    fn test_describe_with_fn_describe_in_script() {
+        let engine = Arc::new(create_engine());
+        let script = r#"
+fn describe() {
+    "This check validates something important."
+}
+let stmt = node.IndexStmt;
+if stmt == () { return; }
+#{ operation: "MY OPERATION", problem: "my problem", safe_alternative: "my safe alternative" }
+"#;
+        let ast = engine.compile(script).expect("script should compile");
+        let name: &'static str = Box::leak("my_check".to_string().into_boxed_str());
+        let check = CustomCheck {
+            name,
+            engine,
+            ast,
+            path: "/path/my_check.rhai".to_string(),
+        };
+
+        assert_eq!(
+            check.describe(),
+            Some("This check validates something important.".to_string())
+        );
+    }
+
+    #[test]
+    fn test_describe_without_fn_describe_in_script_falls_back() {
+        let engine = Arc::new(create_engine());
+        let ast = engine.compile("()").expect("script should compile");
+        let name: &'static str = Box::leak("no_desc".to_string().into_boxed_str());
+        let check = CustomCheck {
+            name,
+            engine,
+            ast,
+            path: "/path/no_desc.rhai".to_string(),
+        };
+
+        assert_eq!(check.describe(), None);
+    }
+
+    #[test]
+    fn test_custom_check_script_path_returns_path() {
+        let engine = Arc::new(create_engine());
+        let ast = engine.compile("()").expect("script should compile");
+        let name: &'static str = Box::leak("path_check".to_string().into_boxed_str());
+        let check = CustomCheck {
+            name,
+            engine,
+            ast,
+            path: "/checks/my_check.rhai".to_string(),
+        };
+
+        assert_eq!(check.script_path(), Some("/checks/my_check.rhai"));
     }
 }

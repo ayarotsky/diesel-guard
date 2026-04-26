@@ -349,4 +349,11 @@ ALTER TABLE users DROP COLUMN email;
             "Failed to parse SQL: Unmatched 'safety-assured:end' at line 4. Each 'safety-assured:end' must have a matching 'safety-assured:start' before it."
         );
     }
+
+    #[test]
+    fn test_parse_disabled_checks_returns_none_for_empty_list() {
+        // After splitting "," by comma and filtering empty strings, the list is empty → None.
+        let result = CommentParser::parse_disabled_checks_line("-- diesel-guard:disable ,");
+        assert!(result.is_none());
+    }
 }
