@@ -14,7 +14,7 @@
 //! connections to verify constraint types with certainty.
 
 use crate::checks::pg_helpers::{AlterTableType, NodeEnum, alter_table_cmds};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 use regex::Regex;
 use std::sync::LazyLock;
@@ -30,6 +30,7 @@ static PRIMARY_KEY_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 pub struct DropPrimaryKeyCheck;
+impl_check_doc!(DropPrimaryKeyCheck, "drop-primary-key");
 
 impl DropPrimaryKeyCheck {
     /// Check if a constraint name likely refers to a primary key.

@@ -1,7 +1,7 @@
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use diesel_guard::ast_dump;
-use diesel_guard::output::OutputFormatter;
+use diesel_guard::formatters::{Formatter, GithubFormatter, JsonFormatter, TextFormatter};
 use diesel_guard::violation::Severity;
 use diesel_guard::{Config, SafetyChecker};
 use miette::{IntoDiagnostic, Result};
@@ -10,6 +10,34 @@ use std::io::Write;
 use std::process::exit;
 
 const CONFIG_TEMPLATE: &str = include_str!("../diesel-guard.toml.example");
+
+#[derive(clap::ValueEnum, Clone, Copy, Default)]
+enum Format {
+    #[default]
+    Text,
+    Json,
+    Github,
+}
+
+impl std::fmt::Display for Format {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Format::Text => write!(f, "text"),
+            Format::Json => write!(f, "json"),
+            Format::Github => write!(f, "github"),
+        }
+    }
+}
+
+impl Format {
+    fn formatter(self) -> Box<dyn Formatter> {
+        match self {
+            Format::Text => Box::new(TextFormatter),
+            Format::Json => Box::new(JsonFormatter),
+            Format::Github => Box::new(GithubFormatter),
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(
@@ -49,7 +77,7 @@ PATH can be:
 If PATH is omitted, defaults to \"migrations/\".
 
 diesel-guard looks for diesel-guard.toml in the current directory. If no config
-file is found, default settings are used with a warning.
+file is found, default settings are used.
 
 Exit codes:
   0  No errors found (warnings do not affect exit code)
@@ -65,9 +93,9 @@ EXAMPLES:
         /// Path to migration file or directory, or "-" for stdin (default: "migrations/")
         path: Option<Utf8PathBuf>,
 
-        /// Output format: "text" (default) or "json"
-        #[arg(long, default_value = "text")]
-        format: String,
+        /// Output format (default: text)
+        #[arg(long, default_value_t = Format::Text)]
+        format: Format,
     },
 
     /// Initialize diesel-guard configuration file
@@ -107,62 +135,71 @@ EXAMPLES:
         #[arg(long)]
         file: Option<Utf8PathBuf>,
     },
+
+    /// List all available checks
+    ListChecks {
+        /// Output format (default: text)
+        #[arg(long, default_value_t = Format::Text)]
+        format: Format,
+    },
+
+    /// Show full description of a specific check
+    Explain {
+        /// Check name (e.g. AddIndexCheck or require_concurrent)
+        check_name: String,
+
+        /// Output format (default: text)
+        #[arg(long, default_value_t = Format::Text)]
+        format: Format,
+    },
 }
 
-fn run_check(path: &camino::Utf8Path, format: &str) -> Result<()> {
-    if !Utf8PathBuf::from("diesel-guard.toml").exists() {
-        eprintln!("Warning: No config file found. Using default configuration.");
-    }
+fn run_check(path: &camino::Utf8Path, format: Format) -> Result<()> {
     let config = Config::load().map_err(|e| miette::miette!(e))?;
-
     let checker = SafetyChecker::with_config(config);
     let results = checker.check_path(path)?;
-
-    if results.is_empty() {
-        match format {
-            "json" => println!("[]"),
-            "github" => {}
-            _ => println!("{}", OutputFormatter::format_summary(0, 0)),
-        }
-        return Ok(());
-    }
-
     let total_errors: usize = results
         .iter()
         .flat_map(|(_, v)| v)
         .filter(|(_, v)| v.severity == Severity::Error)
         .count();
-
-    match format {
-        "json" => {
-            println!("{}", OutputFormatter::format_json(&results));
-        }
-        "github" => {
-            for (file_path, violations) in &results {
-                print!("{}", OutputFormatter::format_github(file_path, violations));
-            }
-        }
-        _ => {
-            let total_warnings: usize = results
-                .iter()
-                .flat_map(|(_, v)| v)
-                .filter(|(_, v)| v.severity == Severity::Warning)
-                .count();
-            for (file_path, violations) in &results {
-                print!("{}", OutputFormatter::format_text(file_path, violations));
-            }
-            println!(
-                "{}",
-                OutputFormatter::format_summary(total_errors, total_warnings)
-            );
-        }
-    }
-
+    print!("{}", format.formatter().format_results(&results));
     if total_errors > 0 {
         let _ = std::io::stdout().flush();
         exit(1);
     }
+    Ok(())
+}
 
+fn load_all_checks() -> Result<(Config, SafetyChecker)> {
+    let config = Config::load().map_err(|e| miette::miette!(e))?;
+    let checker = SafetyChecker::with_config(Config {
+        disable_checks: vec![],
+        enable_checks: vec![],
+        ..config.clone()
+    });
+    Ok((config, checker))
+}
+
+fn run_list_checks(format: Format) -> Result<()> {
+    let (config, checker) = load_all_checks()?;
+    let checks: Vec<_> = checker.registry().iter_checks().collect();
+    print!("{}", format.formatter().format_checks(&checks, &config));
+    Ok(())
+}
+
+fn run_explain(check_name: &str, format: Format) -> Result<()> {
+    let (config, checker) = load_all_checks()?;
+    let Some(check) = checker
+        .registry()
+        .iter_checks()
+        .find(|c| c.name() == check_name)
+    else {
+        eprintln!("Error: No check named '{check_name}'.");
+        eprintln!("Run --list-checks to see available checks.");
+        exit(1);
+    };
+    print!("{}", format.formatter().format_explain(check, &config));
     Ok(())
 }
 
@@ -184,7 +221,7 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Check { path, format } => {
             let path = path.unwrap_or_else(|| Utf8PathBuf::from("migrations"));
-            run_check(&path, &format)?;
+            run_check(&path, format)?;
         }
 
         Commands::DumpAst { sql, file } => {
@@ -203,10 +240,13 @@ fn main() -> Result<()> {
             println!("{json}");
         }
 
+        Commands::ListChecks { format } => run_list_checks(format)?,
+
+        Commands::Explain { check_name, format } => run_explain(&check_name, format)?,
+
         Commands::Init { force } => {
             let config_path = Utf8PathBuf::from("diesel-guard.toml");
 
-            // Check if config file already exists
             let file_existed = config_path.exists();
             if file_existed && !force {
                 eprintln!("Error: diesel-guard.toml already exists in current directory");
@@ -214,7 +254,6 @@ fn main() -> Result<()> {
                 exit(1);
             }
 
-            // Write config template to file
             fs::write(&config_path, CONFIG_TEMPLATE)
                 .into_diagnostic()
                 .map_err(|e| miette::miette!("Failed to write config file: {}", e))?;

@@ -12,10 +12,11 @@
 //! busy database.
 
 use crate::checks::pg_helpers::{NodeEnum, ObjectType};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 
 pub struct RenameSchemaCheck;
+impl_check_doc!(RenameSchemaCheck, "rename-schema");
 
 impl Check for RenameSchemaCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {

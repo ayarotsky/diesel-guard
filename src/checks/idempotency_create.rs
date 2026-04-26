@@ -1,8 +1,9 @@
 use crate::checks::pg_helpers::{NodeEnum, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 
 pub struct IdempotencyCreateCheck;
+impl_check_doc!(IdempotencyCreateCheck, "idempotency-guards");
 
 impl Check for IdempotencyCreateCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {

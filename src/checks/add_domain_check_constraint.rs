@@ -1,10 +1,11 @@
-use crate::checks::Check;
 use crate::checks::pg_helpers::constraint_display_name;
+use crate::checks::{Check, CheckDoc, impl_check_doc};
 use crate::{Config, MigrationContext, Violation};
 use pg_query::NodeEnum;
 use pg_query::protobuf::ConstrType;
 
 pub struct AddDomainCheckConstraintCheck;
+impl_check_doc!(AddDomainCheckConstraintCheck, "add-domain-check-constraint");
 
 impl Check for AddDomainCheckConstraintCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
@@ -119,5 +120,14 @@ mod tests {
     #[test]
     fn test_ignores_non_domain_nodes() {
         assert_allows!(AddDomainCheckConstraintCheck, "CREATE TABLE foo (id int);");
+    }
+
+    #[test]
+    fn test_allows_alter_domain_add_not_null_constraint() {
+        // NOT NULL is not a CHECK constraint — the check only flags CHECK without NOT VALID.
+        assert_allows!(
+            AddDomainCheckConstraintCheck,
+            "ALTER DOMAIN positive_int ADD CONSTRAINT c NOT NULL;"
+        );
     }
 }

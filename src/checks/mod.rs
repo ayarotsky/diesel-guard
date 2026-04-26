@@ -114,13 +114,46 @@ static BUILTIN_CHECK_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
     registry.checks.iter().map(|c| c.name()).collect()
 });
 
+/// Associates a check struct with its static markdown documentation.
+pub trait CheckDoc {
+    fn doc(&self) -> Option<&'static str> {
+        None
+    }
+}
+
+macro_rules! impl_check_doc {
+    ($struct:ty, $name:literal) => {
+        impl CheckDoc for $struct {
+            fn doc(&self) -> ::core::option::Option<&'static str> {
+                ::core::option::Option::Some(include_str!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/docs/src/checks/",
+                    $name,
+                    ".md"
+                )))
+            }
+        }
+    };
+}
+pub(crate) use impl_check_doc;
+
 /// Trait for implementing safety checks on SQL statements
-pub trait Check: Send + Sync {
+pub trait Check: Send + Sync + CheckDoc {
     /// The check's name, used for config-based disabling (e.g., "AddColumnCheck").
     /// Derived automatically from the struct name via `type_name`.
     fn name(&self) -> &'static str {
         let full = std::any::type_name::<Self>();
         full.rsplit("::").next().unwrap_or(full)
+    }
+
+    /// Returns the script path for custom Rhai checks; `None` for built-in checks.
+    fn script_path(&self) -> Option<&str> {
+        None
+    }
+
+    /// Returns a human-readable description for custom checks; `None` for built-in checks.
+    fn describe(&self) -> Option<String> {
+        None
     }
 
     /// Run the check on a pg_query AST node and return any violations found
@@ -196,6 +229,11 @@ impl Registry {
     /// Return the names of all currently active checks (built-in + custom, minus disabled).
     pub fn active_check_names(&self) -> Vec<&str> {
         self.checks.iter().map(|c| c.name()).collect()
+    }
+
+    /// Iterate over all currently active checks (built-in + custom, minus disabled).
+    pub fn iter_checks(&self) -> impl Iterator<Item = &dyn Check> + '_ {
+        self.checks.iter().map(Box::as_ref)
     }
 
     /// Register a check if it's enabled in configuration
@@ -591,5 +629,79 @@ ALTER TABLE users DROP COLUMN email;
     fn test_first_token_at_or_after_offset_past_all_tokens() {
         // When the offset is beyond the last token the fallback must kick in.
         assert_eq!(first_token_at_or_after(&[0, 7, 14], 20), 20);
+    }
+
+    struct Bare;
+    impl CheckDoc for Bare {}
+    impl Check for Bare {
+        fn check(&self, _: &NodeEnum, _: &Config, _: &MigrationContext) -> Vec<Violation> {
+            vec![]
+        }
+    }
+
+    #[test]
+    fn test_builtin_check_doc_default_returns_none() {
+        assert!(Bare.doc().is_none());
+    }
+
+    #[test]
+    fn test_builtin_check_script_path_returns_none() {
+        assert!(Bare.script_path().is_none());
+    }
+
+    #[test]
+    fn test_builtin_check_describe_returns_none() {
+        let check = AddPrimaryKeyCheck;
+        assert!(check.describe().is_none());
+    }
+
+    #[test]
+    fn test_iter_checks_yields_all_builtin_checks() {
+        let registry = Registry::new();
+        let count = registry.iter_checks().count();
+        assert_eq!(count, Registry::builtin_check_names().len());
+    }
+
+    #[test]
+    fn test_warning_severity_when_check_is_configured_as_warning() {
+        use crate::violation::Severity;
+        let config = Config {
+            warn_checks: vec!["DropTableCheck".to_string()],
+            ..Default::default()
+        };
+        let registry = Registry::with_config(&config);
+        let sql = "DROP TABLE users;";
+        let result = pg_query::parse(sql).unwrap();
+        let violations = registry.check_stmts_with_context(
+            &result.protobuf.stmts,
+            sql,
+            &[],
+            &config,
+            &MigrationContext::default(),
+        );
+        assert!(
+            violations
+                .iter()
+                .any(|(_, v)| v.severity == Severity::Warning),
+            "Expected at least one warning-severity violation"
+        );
+    }
+
+    #[test]
+    fn test_invalid_sql_returns_empty_token_list() {
+        // pg_query::scan fails on unterminated string literals; non_comment_token_starts returns vec![].
+        let unterminated = "'unterminated string";
+        let token_starts = non_comment_token_starts(unterminated);
+        assert!(
+            token_starts.is_empty(),
+            "Scanner should return empty on scan error"
+        );
+    }
+
+    #[test]
+    fn test_registry_default_equals_new() {
+        let r1 = Registry::new();
+        let r2 = Registry::default();
+        assert_eq!(r1.checks.len(), r2.checks.len());
     }
 }

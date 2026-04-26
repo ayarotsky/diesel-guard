@@ -1,4 +1,4 @@
-# CHAR Fields
+# CHAR Type
 
 **Check name:** `CharTypeCheck`
 

@@ -104,4 +104,30 @@ mod tests {
         let msg = "error at position 1";
         assert_eq!(parse_byte_position(msg), Some(0)); // 1-based → 0-based
     }
+
+    #[test]
+    fn test_with_file_context_extracts_position_from_message() {
+        // ParseError with span=None but message containing "at position N" → span derived from message.
+        let err = DieselGuardError::ParseError {
+            msg: "syntax error at or near \"X\" at position 5".to_string(),
+            src: None,
+            span: None,
+        };
+        let result = err.with_file_context("migration.sql", "SELECT @X;".to_string());
+        match result {
+            DieselGuardError::ParseError { src, span, .. } => {
+                assert!(src.is_some(), "source should be attached");
+                let span = span.expect("span should be derived from message position");
+                assert_eq!(span.offset(), 4); // position 5 → 0-based offset 4
+            }
+            other => panic!("Expected ParseError, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_with_file_context_passes_through_non_parse_errors() {
+        let err = DieselGuardError::IoError(std::io::Error::other("disk full"));
+        let result = err.with_file_context("migration.sql", "SELECT 1;".to_string());
+        assert!(matches!(result, DieselGuardError::IoError(_)));
+    }
 }

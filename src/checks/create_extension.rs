@@ -11,10 +11,11 @@
 //! (Ansible, Terraform, etc.) with appropriate privileges before running migrations.
 
 use crate::checks::pg_helpers::NodeEnum;
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 
 pub struct CreateExtensionCheck;
+impl_check_doc!(CreateExtensionCheck, "create-extension");
 
 impl Check for CreateExtensionCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {

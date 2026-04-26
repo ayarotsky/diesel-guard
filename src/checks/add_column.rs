@@ -15,11 +15,12 @@ use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_has_constraint,
     column_type_name,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 use pg_query::protobuf::ColumnDef;
 
 pub struct AddColumnCheck;
+impl_check_doc!(AddColumnCheck, "add-column-default");
 
 impl Check for AddColumnCheck {
     fn check(&self, node: &NodeEnum, config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {

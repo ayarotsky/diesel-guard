@@ -221,7 +221,7 @@ pub fn for_each_column_def(node: &NodeEnum) -> Vec<(String, &ColumnDef)> {
     }
 }
 
-/// Get the display name for a constraint — falls back to "<unnamed>" if no name is set.
+/// Get the display name for a constraint — falls back to `"<unnamed>"` if no name is set.
 pub fn constraint_display_name(c: &Constraint) -> String {
     if c.conname.is_empty() {
         "<unnamed>".to_string()

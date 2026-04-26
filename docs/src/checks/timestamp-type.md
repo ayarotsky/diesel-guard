@@ -1,4 +1,4 @@
-# TIMESTAMP Fields
+# TIMESTAMP Type
 
 **Check name:** `TimestampTypeCheck`
 

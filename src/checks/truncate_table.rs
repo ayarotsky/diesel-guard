@@ -15,10 +15,11 @@
 //! `disable_checks = ["TruncateTableCheck"]` (fully disabled).
 
 use crate::checks::pg_helpers::{NodeEnum, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 
 pub struct TruncateTableCheck;
+impl_check_doc!(TruncateTableCheck, "truncate-table");
 
 impl Check for TruncateTableCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {

@@ -11,10 +11,11 @@
 //! though it takes longer and cannot be run inside a transaction block.
 
 use crate::checks::pg_helpers::{NodeEnum, concurrent_safe_alternative, range_var_name};
-use crate::checks::{Check, Config, MigrationContext, unique_prefix};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc, unique_prefix};
 use crate::violation::Violation;
 
 pub struct AddIndexCheck;
+impl_check_doc!(AddIndexCheck, "add-index");
 
 impl Check for AddIndexCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, ctx: &MigrationContext) -> Vec<Violation> {
@@ -244,6 +245,16 @@ mod tests {
         assert!(
             violations[0].safe_alternative.contains("metadata.toml"),
             "Expected Diesel safe alternative message"
+        );
+    }
+
+    #[test]
+    fn test_unnamed_index_shows_placeholder_in_violation() {
+        assert_detects_violation_containing!(
+            AddIndexCheck,
+            "CREATE INDEX ON users(email);",
+            "ADD INDEX without CONCURRENTLY",
+            "<unnamed>"
         );
     }
 }

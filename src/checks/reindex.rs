@@ -12,10 +12,11 @@
 //! inside a transaction block.
 
 use crate::checks::pg_helpers::{Node, NodeEnum, concurrent_safe_alternative};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 
 pub struct ReindexCheck;
+impl_check_doc!(ReindexCheck, "reindex");
 
 /// Map reindex object to its SQL keyword.
 /// Values from pg_query protobuf ReindexObjectType enum.
@@ -115,8 +116,8 @@ mod tests {
     use super::*;
     use crate::checks::test_utils::parse_sql;
     use crate::{
-        assert_allows_with_context, assert_detects_violation, assert_detects_violation_containing,
-        assert_detects_violation_with_context,
+        assert_allows, assert_allows_with_context, assert_detects_violation,
+        assert_detects_violation_containing, assert_detects_violation_with_context,
     };
 
     #[test]
@@ -325,5 +326,11 @@ mod tests {
             violations[0].safe_alternative.contains("metadata.toml"),
             "Expected Diesel safe alternative message"
         );
+    }
+
+    #[test]
+    fn test_ignores_reindex_system() {
+        // REINDEX SYSTEM doesn't support CONCURRENTLY, so the check skips it entirely.
+        assert_allows!(ReindexCheck, "REINDEX SYSTEM mydb;");
     }
 }

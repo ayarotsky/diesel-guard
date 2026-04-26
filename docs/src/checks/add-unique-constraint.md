@@ -68,4 +68,4 @@ ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY USING INDEX users_pkey;
 
 **Important:** The CONCURRENTLY approach requires a migration without a transaction block (same `metadata.toml` or `-- no-transaction` directive as above).
 
-**Note:** This approach requires Postgres 11+. For earlier versions, you must use the unsafe `ALTER TABLE ADD PRIMARY KEY` during a maintenance window.
+**Note:** This approach requires Postgres 9.1+.

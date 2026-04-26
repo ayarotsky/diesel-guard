@@ -10,12 +10,13 @@
 //! query patterns instead.
 
 use crate::checks::pg_helpers::{NodeEnum, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
 
 const MAX_COLUMNS: usize = 3;
 
 pub struct WideIndexCheck;
+impl_check_doc!(WideIndexCheck, "wide-index");
 
 impl Check for WideIndexCheck {
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
@@ -100,7 +101,7 @@ Note: Multi-column indexes are occasionally useful (e.g., for composite foreign 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assert_allows, assert_detects_violation};
+    use crate::{assert_allows, assert_detects_violation, assert_detects_violation_containing};
 
     #[test]
     fn test_detects_index_with_four_columns() {
@@ -158,6 +159,26 @@ mod tests {
         assert_allows!(
             WideIndexCheck,
             "CREATE TABLE users (id SERIAL PRIMARY KEY);"
+        );
+    }
+
+    #[test]
+    fn test_detects_unnamed_wide_index() {
+        assert_detects_violation_containing!(
+            WideIndexCheck,
+            "CREATE INDEX ON users(a, b, c, d);",
+            "CREATE INDEX with too many columns",
+            "<unnamed>"
+        );
+    }
+
+    #[test]
+    fn test_detects_expression_wide_index() {
+        assert_detects_violation_containing!(
+            WideIndexCheck,
+            "CREATE INDEX idx ON users(UPPER(email), b, c, d);",
+            "CREATE INDEX with too many columns",
+            "<expr>"
         );
     }
 }
