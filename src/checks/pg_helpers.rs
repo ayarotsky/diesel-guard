@@ -60,7 +60,7 @@ pub fn constraint_columns_str(c: &Constraint) -> String {
     c.keys
         .iter()
         .filter_map(|n| match &n.node {
-            Some(NodeEnum::String(s)) => Some(s.sval.clone()),
+            Some(NodeEnum::String(s)) => Some(s.sval.as_str()),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -169,7 +169,7 @@ pub fn drop_object_names(objects: &[Node]) -> Vec<String> {
                     .items
                     .iter()
                     .filter_map(|n| match &n.node {
-                        Some(NodeEnum::String(s)) => Some(s.sval.clone()),
+                        Some(NodeEnum::String(s)) => Some(s.sval.as_str()),
                         _ => None,
                     })
                     .collect::<Vec<_>>()
@@ -235,7 +235,7 @@ pub fn fk_cols_constraint(c: &Constraint) -> String {
     c.fk_attrs
         .iter()
         .filter_map(|n| match &n.node {
-            Some(NodeEnum::String(s)) => Some(s.sval.clone()),
+            Some(NodeEnum::String(s)) => Some(s.sval.as_str()),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -252,7 +252,7 @@ pub fn ref_columns_constraint(c: &Constraint) -> String {
     c.pk_attrs
         .iter()
         .filter_map(|n| match &n.node {
-            Some(NodeEnum::String(s)) => Some(s.sval.clone()),
+            Some(NodeEnum::String(s)) => Some(s.sval.as_str()),
             _ => None,
         })
         .collect::<Vec<_>>()

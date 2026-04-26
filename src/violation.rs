@@ -1,17 +1,12 @@
 use derive_more::Display;
 use serde::Serialize;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
+    #[default]
     Error,
     Warning,
-}
-
-impl Default for Severity {
-    fn default() -> Self {
-        Self::Error
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Display)]

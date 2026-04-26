@@ -131,13 +131,9 @@ impl SqlxAdapter {
     ) -> Option<MigrationFile> {
         let file_stem = path.file_stem().unwrap_or("");
 
-        let timestamp_part = if let Some(part) = file_stem.strip_suffix(".up") {
-            part
-        } else if let Some(part) = file_stem.strip_suffix(".down") {
-            part
-        } else {
-            return None;
-        };
+        let timestamp_part = file_stem
+            .strip_suffix(".up")
+            .or_else(|| file_stem.strip_suffix(".down"))?;
 
         let timestamp = self.parse_timestamp(timestamp_part)?;
 
