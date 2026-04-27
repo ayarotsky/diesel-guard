@@ -18,18 +18,34 @@ use crate::violation::Violation;
 pub struct AlterColumnTypeCheck;
 
 impl Check for AlterColumnTypeCheck {
-    fn describe(&self) -> CheckDescription {
-        CheckDescription {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
             operation: "ALTER COLUMN TYPE".into(),
-            problem: "Changing a column type typically requires an ACCESS EXCLUSIVE lock and may trigger a \
-                      full table rewrite, blocking all operations.".into(),
-            safe_alternative: "Use a multi-step approach: add a new column with the desired type, backfill in \
-                               batches, update application code, then drop the old column.".into(),
+            problem: "Changing column '<column>' type to '<type>' on table '<table>' typically requires \
+                      an ACCESS EXCLUSIVE lock and may trigger a full table rewrite, blocking all operations. \
+                      Duration depends on table size and the specific type change.".into(),
+            safe_alternative: "For safer type changes, consider a multi-step approach:\n\n\
+                               1. Add a new column with the desired type:\n   \
+                               ALTER TABLE <table> ADD COLUMN <column>_new <type>;\n\n\
+                               2. Backfill data in batches (outside migration):\n   \
+                               UPDATE <table> SET <column>_new = <column>::<type>;\n\n\
+                               3. Deploy application code to use the new column.\n\n\
+                               4. Drop the old column in a later migration:\n   \
+                               ALTER TABLE <table> DROP COLUMN <column>;\n\n\
+                               5. Rename the new column:\n   \
+                               ALTER TABLE <table> RENAME COLUMN <column>_new TO <column>;\n\n\
+                               Note: Some type changes are safe:\n\
+                               - VARCHAR(n) to VARCHAR(m) where m > n (Postgres 9.2+)\n\
+                               - VARCHAR to TEXT\n\
+                               - Numeric precision increases\n\n\
+                               Always test on a production-sized dataset to verify the impact.".into(),
             script_path: None,
-        }
+        }]
     }
 
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
@@ -48,34 +64,15 @@ impl Check for AlterColumnTypeCheck {
                     .unwrap_or_default();
 
                 Some(Violation::new(
-                    self.describe().operation,
-                    format!(
-                        "Changing column '{column_name}' type to '{new_type}' on table '{table_name}' typically requires an ACCESS EXCLUSIVE lock and \
-                        may trigger a full table rewrite, blocking all operations. Duration depends on table size and the specific type change."
-                    ),
-                    format!(r"For safer type changes, consider a multi-step approach:
-
-1. Add a new column with the desired type:
-   ALTER TABLE {table_name} ADD COLUMN {column_name}_new {new_type};
-
-2. Backfill data in batches (outside migration):
-   UPDATE {table_name} SET {column_name}_new = {column_name}::{new_type};
-
-3. Deploy application code to use the new column.
-
-4. Drop the old column in a later migration:
-   ALTER TABLE {table_name} DROP COLUMN {column_name};
-
-5. Rename the new column:
-   ALTER TABLE {table_name} RENAME COLUMN {column_name}_new TO {column_name};
-
-Note: Some type changes are safe:
-- VARCHAR(n) to VARCHAR(m) where m > n (Postgres 9.2+)
-- VARCHAR to TEXT
-- Numeric precision increases
-
-Always test on a production-sized dataset to verify the impact."
-                    ),
+                    desc.operation.clone(),
+                    desc.problem
+                        .replace("<table>", &table_name)
+                        .replace("<column>", column_name)
+                        .replace("<type>", &new_type),
+                    desc.safe_alternative
+                        .replace("<table>", &table_name)
+                        .replace("<column>", column_name)
+                        .replace("<type>", &new_type),
                 ))
             })
             .collect()

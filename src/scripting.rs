@@ -37,7 +37,7 @@ impl Check for CustomCheck {
         self.name
     }
 
-    fn describe(&self) -> CheckDescription {
+    fn describe(&self) -> Vec<CheckDescription> {
         // clone_functions_only() strips the script body so call_fn won't
         // try to evaluate statements that reference `node`.
         let fns_ast = self.ast.clone_functions_only();
@@ -52,19 +52,19 @@ impl Check for CustomCheck {
                     .and_then(|v| v.clone().into_string().ok())
                     .unwrap_or_default()
             };
-            return CheckDescription {
+            return vec![CheckDescription {
                 operation: get("operation"),
                 problem: get("problem"),
                 safe_alternative: get("safe_alternative"),
                 script_path: Some(self.path.clone()),
-            };
+            }];
         }
-        CheckDescription {
+        vec![CheckDescription {
             operation: String::new(),
             problem: String::new(),
             safe_alternative: String::new(),
             script_path: Some(self.path.clone()),
-        }
+        }]
     }
 
     fn check(&self, node: &NodeEnum, config: &Config, ctx: &MigrationContext) -> Vec<Violation> {
@@ -906,10 +906,10 @@ if stmt == () { return; }
         };
 
         let desc = check.describe();
-        assert_eq!(desc.operation, "MY OPERATION");
-        assert_eq!(desc.problem, "my problem");
-        assert_eq!(desc.safe_alternative, "my safe alternative");
-        assert_eq!(desc.script_path, Some("/path/my_check.rhai".to_string()));
+        assert_eq!(desc[0].operation, "MY OPERATION");
+        assert_eq!(desc[0].problem, "my problem");
+        assert_eq!(desc[0].safe_alternative, "my safe alternative");
+        assert_eq!(desc[0].script_path, Some("/path/my_check.rhai".to_string()));
     }
 
     #[test]
@@ -925,7 +925,7 @@ if stmt == () { return; }
         };
 
         let desc = check.describe();
-        assert_eq!(desc.operation, "");
-        assert_eq!(desc.script_path, Some("/path/no_desc.rhai".to_string()));
+        assert_eq!(desc[0].operation, "");
+        assert_eq!(desc[0].script_path, Some("/path/no_desc.rhai".to_string()));
     }
 }

@@ -20,18 +20,37 @@ use crate::violation::Violation;
 pub struct AddPrimaryKeyCheck;
 
 impl Check for AddPrimaryKeyCheck {
-    fn describe(&self) -> CheckDescription {
-        CheckDescription {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
             operation: "ADD PRIMARY KEY".into(),
-            problem: "Adding a PRIMARY KEY via ALTER TABLE acquires an ACCESS EXCLUSIVE lock, blocking all reads \
-                      and writes. It implicitly creates a unique index (blocking) and validates all rows for uniqueness.".into(),
-            safe_alternative: "Create a UNIQUE INDEX CONCURRENTLY first, then add the PRIMARY KEY constraint \
-                               USING INDEX (fast, minimal lock, Postgres 11+).".into(),
+            problem: "Adding PRIMARY KEY constraint '<name>' on table '<table>' (<cols>) via ALTER TABLE \
+                      acquires an ACCESS EXCLUSIVE lock, blocking all reads and writes. This also implicitly \
+                      creates a unique index (blocking operation) and validates all rows for uniqueness.".into(),
+            safe_alternative: "Use CREATE UNIQUE INDEX CONCURRENTLY first, then add the constraint:\n\n\
+                               1. Create the unique index concurrently (no blocking):\n   \
+                               CREATE UNIQUE INDEX CONCURRENTLY <index> ON <table> (<cols>);\n\n\
+                               2. Add PRIMARY KEY constraint using the existing index (fast, minimal blocking):\n   \
+                               ALTER TABLE <table> ADD CONSTRAINT <name> PRIMARY KEY USING INDEX <index>;\n\n\
+                               Benefits:\n\
+                               - Table remains readable and writable during index creation\n\
+                               - No blocking of SELECT, INSERT, UPDATE, or DELETE operations\n\
+                               - Index creation can be canceled if needed\n\
+                               - Safe for production deployments on large tables\n\n\
+                               Considerations:\n\
+                               - Requires Postgres 11+ for PRIMARY KEY USING INDEX\n\
+                               - Cannot run CONCURRENTLY inside a transaction block\n\
+                               For Diesel migrations: Create metadata.toml with run_in_transaction = false\n\
+                               For SQLx migrations: Add -- no-transaction directive at the top of the file\n\
+                               - Takes longer than non-concurrent creation\n\
+                               - May fail if duplicate or NULL values exist (leaves behind invalid index that should be dropped)\n\n\
+                               Note: Ensure all columns in the primary key have NOT NULL constraints before creating the index.".into(),
             script_path: None,
-        }
+        }]
     }
 
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
@@ -60,36 +79,16 @@ impl Check for AddPrimaryKeyCheck {
                 let suggested_index_name = format!("{table_name}_pkey");
 
                 Some(Violation::new(
-                    self.describe().operation,
-                    format!(
-                        "Adding PRIMARY KEY constraint '{constraint_name}' on table '{table_name}' ({cols}) via ALTER TABLE acquires an ACCESS EXCLUSIVE lock, \
-                        blocking all reads and writes. This also implicitly creates a unique index (blocking operation) and validates all rows for uniqueness."
-                    ),
-                    format!(
-                        r"Use CREATE UNIQUE INDEX CONCURRENTLY first, then add the constraint:
-
-1. Create the unique index concurrently (no blocking):
-   CREATE UNIQUE INDEX CONCURRENTLY {suggested_index_name} ON {table_name} ({cols});
-
-2. Add PRIMARY KEY constraint using the existing index (fast, minimal blocking):
-   ALTER TABLE {table_name} ADD CONSTRAINT {constraint_name} PRIMARY KEY USING INDEX {suggested_index_name};
-
-Benefits:
-- Table remains readable and writable during index creation
-- No blocking of SELECT, INSERT, UPDATE, or DELETE operations
-- Index creation can be canceled if needed
-- Safe for production deployments on large tables
-
-Considerations:
-- Requires Postgres 11+ for PRIMARY KEY USING INDEX
-- Cannot run CONCURRENTLY inside a transaction block
-  For Diesel migrations: Create metadata.toml with run_in_transaction = false
-  For SQLx migrations: Add -- no-transaction directive at the top of the file
-- Takes longer than non-concurrent creation
-- May fail if duplicate or NULL values exist (leaves behind invalid index that should be dropped)
-
-Note: Ensure all columns in the primary key have NOT NULL constraints before creating the index."
-                    ),
+                    desc.operation.clone(),
+                    desc.problem
+                        .replace("<table>", &table_name)
+                        .replace("<name>", &constraint_name)
+                        .replace("<cols>", &cols),
+                    desc.safe_alternative
+                        .replace("<table>", &table_name)
+                        .replace("<name>", &constraint_name)
+                        .replace("<cols>", &cols)
+                        .replace("<index>", &suggested_index_name),
                 ))
             })
             .collect()

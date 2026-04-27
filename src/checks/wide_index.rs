@@ -18,16 +18,29 @@ const MAX_COLUMNS: usize = 3;
 pub struct WideIndexCheck;
 
 impl Check for WideIndexCheck {
-    fn describe(&self) -> CheckDescription {
-        CheckDescription {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
             operation: "CREATE INDEX with too many columns".into(),
-            problem: "Wide indexes (4+ columns) are rarely effective because Postgres can only use them \
-                      efficiently when filtering on the leftmost columns in order. They also increase \
-                      storage costs and slow down writes.".into(),
-            safe_alternative: "Use partial indexes, separate narrower indexes for different queries, or a \
-                               covering index with INCLUDE for non-filter columns.".into(),
+            problem: "Index '<index>' on table '<table>' has <count> columns (<cols>). Wide indexes \
+                      (4+ columns) are rarely effective because Postgres can only use them efficiently \
+                      when filtering on leftmost columns in order. They also increase storage costs and \
+                      slow down writes.".into(),
+            safe_alternative: "Consider these alternatives:\n\n\
+                               1. Use a partial index for specific query patterns:\n   \
+                               CREATE INDEX <index> ON <table>(<first_col>)\n   \
+                               WHERE <condition>;\n\n\
+                               2. Create separate narrower indexes for different queries:\n   \
+                               CREATE INDEX idx_<table>_<first_col> ON <table>(<first_col>);\n   \
+                               CREATE INDEX idx_<table>_<second_col> ON <table>(<second_col>);\n\n\
+                               3. Rethink your query patterns - do you really need to filter on all <count> columns?\n\n\
+                               4. Use a covering index (INCLUDE clause) if you need extra columns for data:\n   \
+                               CREATE INDEX <index> ON <table>(<first_col>)\n   \
+                               INCLUDE (<other_cols>);\n\n\
+                               Note: Multi-column indexes are occasionally useful (e.g., for composite foreign \
+                               keys or specific query patterns). If you've verified this index is necessary, use \
+                               a safety-assured block.".into(),
             script_path: None,
-        }
+        }]
     }
 
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
@@ -67,44 +80,37 @@ impl Check for WideIndexCheck {
             index_stmt.idxname.clone()
         };
         let columns_list = column_names.join(", ");
+        let first_col = column_names
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "column1".to_string());
+        let second_col = column_names
+            .get(1)
+            .cloned()
+            .unwrap_or_else(|| "column2".to_string());
+        let other_cols = column_names
+            .iter()
+            .skip(1)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ");
 
         vec![Violation::new(
-            self.describe().operation,
-            format!(
-                "Index '{index_name}' on table '{table_name}' has {column_count} columns ({columns_list}). \
-                Wide indexes (4+ columns) are rarely effective because Postgres can only use them efficiently \
-                when filtering on leftmost columns in order. They also increase storage costs and slow down writes."
-            ),
-            format!(
-                r"Consider these alternatives:
-
-1. Use a partial index for specific query patterns:
-   CREATE INDEX {index} ON {table}({first_col})
-   WHERE <condition>;
-
-2. Create separate narrower indexes for different queries:
-   CREATE INDEX idx_{table}_{first_col} ON {table}({first_col});
-   CREATE INDEX idx_{table}_{second_col} ON {table}({second_col});
-
-3. Rethink your query patterns - do you really need to filter on all {count} columns?
-
-4. Use a covering index (INCLUDE clause) if you need extra columns for data:
-   CREATE INDEX {index} ON {table}({first_col})
-   INCLUDE ({other_cols});
-
-Note: Multi-column indexes are occasionally useful (e.g., for composite foreign keys or specific query patterns). If you've verified this index is necessary, use a safety-assured block.",
-                index = index_name,
-                table = table_name,
-                first_col = column_names.first().unwrap_or(&"column1".to_string()),
-                second_col = column_names.get(1).unwrap_or(&"column2".to_string()),
-                other_cols = column_names
-                    .iter()
-                    .skip(1)
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                count = column_count,
-            ),
+            self.describe()[0].operation.clone(),
+            self.describe()[0]
+                .problem
+                .replace("<index>", &index_name)
+                .replace("<table>", &table_name)
+                .replace("<count>", &column_count.to_string())
+                .replace("<cols>", &columns_list),
+            self.describe()[0]
+                .safe_alternative
+                .replace("<index>", &index_name)
+                .replace("<table>", &table_name)
+                .replace("<count>", &column_count.to_string())
+                .replace("<first_col>", &first_col)
+                .replace("<second_col>", &second_col)
+                .replace("<other_cols>", &other_cols),
         )]
     }
 }

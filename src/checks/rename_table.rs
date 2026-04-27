@@ -17,22 +17,33 @@ use crate::violation::Violation;
 pub struct RenameTableCheck;
 
 impl Check for RenameTableCheck {
-    fn describe(&self) -> CheckDescription {
-        CheckDescription {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
             operation: "RENAME TABLE".into(),
-            problem:
-                "Renaming a table causes immediate errors in running application instances and \
-                      requires an ACCESS EXCLUSIVE lock that can block on busy tables."
-                    .into(),
-            safe_alternative:
-                "Use a multi-step dual-write migration: create new table, backfill, update \
-                               application code, then drop the old table."
-                    .into(),
+            problem: "Renaming table '<old>' to '<new>' will cause immediate errors in running \
+                      application instances. Any code referencing the old table name will fail after \
+                      the rename is applied. Additionally, this operation requires an ACCESS EXCLUSIVE \
+                      lock which can block on busy tables.".into(),
+            safe_alternative: "Use a multi-step migration to safely rename the table:\n\n\
+                               1. Create the new table with the same structure:\n   \
+                               CREATE TABLE <new> (LIKE <old> INCLUDING ALL);\n\n\
+                               2. Update your application code to write to both tables.\n\n\
+                               3. Backfill data from the old table to the new table in batches:\n   \
+                               INSERT INTO <new> SELECT * FROM <old> WHERE id > last_id LIMIT 10000;\n\n\
+                               4. Update your application code to read from the new table.\n\n\
+                               5. Deploy the updated application code.\n\n\
+                               6. Update your application code to stop writing to the old table.\n\n\
+                               7. Drop the old table in a later migration:\n   \
+                               DROP TABLE <old>;\n\n\
+                               This approach avoids dangerous locks and maintains compatibility with \
+                               running instances throughout the migration.".into(),
             script_path: None,
-        }
+        }]
     }
 
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let NodeEnum::RenameStmt(rename) = node else {
             return vec![];
         };
@@ -50,34 +61,13 @@ impl Check for RenameTableCheck {
         let new_table_name = &rename.newname;
 
         vec![Violation::new(
-            self.describe().operation,
-            format!(
-                "Renaming table '{old_table_name}' to '{new_table_name}' will cause immediate errors in running application instances. \
-                Any code referencing the old table name will fail after the rename is applied. \
-                Additionally, this operation requires an ACCESS EXCLUSIVE lock which can block on busy tables."
-            ),
-            format!(
-                r"Use a multi-step migration to safely rename the table:
-
-1. Create the new table with the same structure:
-   CREATE TABLE {new_table_name} (LIKE {old_table_name} INCLUDING ALL);
-
-2. Update your application code to write to both tables.
-
-3. Backfill data from the old table to the new table in batches:
-   INSERT INTO {new_table_name} SELECT * FROM {old_table_name} WHERE id > last_id LIMIT 10000;
-
-4. Update your application code to read from the new table.
-
-5. Deploy the updated application code.
-
-6. Update your application code to stop writing to the old table.
-
-7. Drop the old table in a later migration:
-   DROP TABLE {old_table_name};
-
-This approach avoids dangerous locks and maintains compatibility with running instances throughout the migration."
-            ),
+            desc.operation.clone(),
+            desc.problem
+                .replace("<old>", &old_table_name)
+                .replace("<new>", new_table_name),
+            desc.safe_alternative
+                .replace("<old>", &old_table_name)
+                .replace("<new>", new_table_name),
         )]
     }
 }

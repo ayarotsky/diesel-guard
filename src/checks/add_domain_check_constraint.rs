@@ -7,18 +7,24 @@ use pg_query::protobuf::ConstrType;
 pub struct AddDomainCheckConstraintCheck;
 
 impl Check for AddDomainCheckConstraintCheck {
-    fn describe(&self) -> CheckDescription {
-        CheckDescription {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
             operation: "ADD CHECK CONSTRAINT TO DOMAIN".into(),
-            problem: "Adding a CHECK constraint to a domain without NOT VALID causes Postgres to \
-                      validate all columns using this domain across all tables, which can be a slow, \
-                      lock-holding full-scan operation.".into(),
-            safe_alternative: "Add the constraint with NOT VALID first, then validate in a separate migration.".into(),
+            problem: "Adding CHECK constraint '<name>' to domain '<domain>' without NOT VALID causes \
+                      Postgres to validate all columns using this domain across all tables, which can \
+                      be a slow, lock-holding full-scan operation.".into(),
+            safe_alternative: "Add the constraint with NOT VALID first, then validate in a separate migration:\n\n\
+                               1. Add without validation (fast, no full scan):\n   \
+                               ALTER DOMAIN <domain> ADD CONSTRAINT <name> CHECK <expr> NOT VALID;\n\n\
+                               2. Validate in a separate migration:\n   \
+                               ALTER DOMAIN <domain> VALIDATE CONSTRAINT <name>;".into(),
             script_path: None,
-        }
+        }]
     }
 
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         // Only ALTER DOMAIN ADD CONSTRAINT is dangerous on existing domains.
         // CREATE DOMAIN is always safe: the domain is new, so no columns use it yet.
         let NodeEnum::AlterDomainStmt(stmt) = node else {
@@ -63,19 +69,13 @@ impl Check for AddDomainCheckConstraintCheck {
         let constraint_name = constraint_display_name(constraint);
 
         vec![Violation::new(
-            self.describe().operation,
-            format!(
-                "Adding CHECK constraint '{constraint_name}' to domain '{domain_name}' without \
-NOT VALID causes Postgres to validate all columns using this domain across all tables, \
-which can be a slow, lock-holding full-scan operation."
-            ),
-            format!(
-                "Add the constraint with NOT VALID first, then validate in a separate migration:\n\n\
-1. Add without validation (fast, no full scan):\n   \
-ALTER DOMAIN {domain_name} ADD CONSTRAINT {constraint_name} CHECK <expr> NOT VALID;\n\n\
-2. Validate in a separate migration:\n   \
-ALTER DOMAIN {domain_name} VALIDATE CONSTRAINT {constraint_name};"
-            ),
+            desc.operation.clone(),
+            desc.problem
+                .replace("<domain>", &domain_name)
+                .replace("<name>", &constraint_name),
+            desc.safe_alternative
+                .replace("<domain>", &domain_name)
+                .replace("<name>", &constraint_name),
         )]
     }
 }

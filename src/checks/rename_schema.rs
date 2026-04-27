@@ -18,18 +18,27 @@ use crate::violation::Violation;
 pub struct RenameSchemaCheck;
 
 impl Check for RenameSchemaCheck {
-    fn describe(&self) -> CheckDescription {
-        CheckDescription {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
             operation: "RENAME SCHEMA".into(),
-            problem: "Renaming a schema breaks all application code, ORM models, and connection strings \
-                      that reference any object within the schema — every qualified reference fails immediately.".into(),
-            safe_alternative: "Use a search_path alias so both names resolve temporarily while updating all \
-                               application references.".into(),
+            problem: "Renaming schema '<old>' to '<new>' breaks all application code, ORM models, and \
+                      connection strings that reference any object within the schema. Every qualified \
+                      reference of the form '<old>.<object>' across the entire application will fail \
+                      immediately after the rename is applied.".into(),
+            safe_alternative: "Avoid renaming schemas in production. If a rename is unavoidable:\n\n\
+                               1. Add a search_path alias so both names resolve temporarily:\n   \
+                               ALTER DATABASE mydb SET search_path TO <new>, <old>;\n\n\
+                               2. Update all application code, ORM models, and connection strings to use \
+                               the new schema name.\n\n\
+                               3. Deploy the updated application.\n\n\
+                               4. Remove the search_path alias once all references have been updated.".into(),
             script_path: None,
-        }
+        }]
     }
 
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let NodeEnum::RenameStmt(rename) = node else {
             return vec![];
         };
@@ -42,25 +51,13 @@ impl Check for RenameSchemaCheck {
         let new_name = &rename.newname;
 
         vec![Violation::new(
-            self.describe().operation,
-            format!(
-                "Renaming schema '{old_name}' to '{new_name}' breaks all application code, ORM \
-                models, and connection strings that reference any object within the schema. Every \
-                qualified reference of the form '{old_name}.<object>' across the entire application \
-                will fail immediately after the rename is applied."
-            ),
-            format!(
-                r"Avoid renaming schemas in production. If a rename is unavoidable:
-
-1. Add a search_path alias so both names resolve temporarily:
-   ALTER DATABASE mydb SET search_path TO {new_name}, {old_name};
-
-2. Update all application code, ORM models, and connection strings to use the new schema name.
-
-3. Deploy the updated application.
-
-4. Remove the search_path alias once all references have been updated."
-            ),
+            desc.operation.clone(),
+            desc.problem
+                .replace("<old>", old_name)
+                .replace("<new>", new_name),
+            desc.safe_alternative
+                .replace("<old>", old_name)
+                .replace("<new>", new_name),
         )]
     }
 }

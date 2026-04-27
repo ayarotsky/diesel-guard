@@ -124,8 +124,8 @@ pub trait Check: Send + Sync {
         full.rsplit("::").next().unwrap_or(full)
     }
 
-    /// Return the canonical description of this check: what it detects and how to fix it.
-    fn describe(&self) -> CheckDescription;
+    /// Return all canonical descriptions for this check (one per distinct violation type).
+    fn describe(&self) -> Vec<CheckDescription>;
 
     /// Run the check on a pg_query AST node and return any violations found
     fn check(&self, node: &NodeEnum, config: &Config, ctx: &MigrationContext) -> Vec<Violation>;

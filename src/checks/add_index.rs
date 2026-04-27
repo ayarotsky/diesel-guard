@@ -17,22 +17,35 @@ use crate::violation::Violation;
 pub struct AddIndexCheck;
 
 impl Check for AddIndexCheck {
-    fn describe(&self) -> CheckDescription {
-        CheckDescription {
-            operation: "ADD INDEX without CONCURRENTLY".into(),
-            problem:
-                "Creating an index without CONCURRENTLY acquires a SHARE lock, blocking writes \
-                      (INSERT, UPDATE, DELETE) for the duration of the index build."
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![
+            CheckDescription {
+                operation: "ADD INDEX without CONCURRENTLY".into(),
+                problem: "Creating <unique>index '<index>' on table '<table>' without CONCURRENTLY acquires \
+                          a SHARE lock, blocking writes (INSERT, UPDATE, DELETE). Duration depends on table size. \
+                          Reads are still allowed."
                     .into(),
-            safe_alternative:
-                "Use CREATE INDEX CONCURRENTLY to build the index without blocking writes. \
-                               Note: CONCURRENTLY cannot run inside a transaction block."
+                safe_alternative:
+                    "Use CREATE INDEX CONCURRENTLY to build the index without blocking writes. \
+                                   Note: CONCURRENTLY cannot run inside a transaction block."
+                        .into(),
+                script_path: None,
+            },
+            CheckDescription {
+                operation: "CREATE INDEX CONCURRENTLY inside a transaction".into(),
+                problem: "Creating <unique>index '<index>' on table '<table>' with CONCURRENTLY cannot run \
+                          inside a transaction block. PostgreSQL will raise an error at runtime."
                     .into(),
-            script_path: None,
-        }
+                safe_alternative:
+                    "Disable transaction wrapping for this migration (see your framework's documentation)."
+                        .into(),
+                script_path: None,
+            },
+        ]
     }
 
     fn check(&self, node: &NodeEnum, _config: &Config, ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
         let NodeEnum::IndexStmt(index_stmt) = node else {
             return vec![];
         };
@@ -65,11 +78,12 @@ Considerations:
             let safe_alternative = concurrent_safe_alternative(suggestion, ctx);
 
             return vec![Violation::new(
-                self.describe().operation,
-                format!(
-                    "Creating {unique_str}index '{index_name}' on table '{table_name}' without CONCURRENTLY acquires a SHARE lock, blocking writes \
-                    (INSERT, UPDATE, DELETE). Duration depends on table size. Reads are still allowed."
-                ),
+                descriptions[0].operation.clone(),
+                descriptions[0]
+                    .problem
+                    .replace("<unique>", unique_str)
+                    .replace("<index>", &index_name)
+                    .replace("<table>", &table_name),
                 safe_alternative,
             )];
         }
@@ -81,11 +95,12 @@ Considerations:
 
         // CREATE INDEX CONCURRENTLY inside a transaction — PostgreSQL will error at runtime
         vec![Violation::new(
-            "CREATE INDEX CONCURRENTLY inside a transaction",
-            format!(
-                "Creating {unique_str}index '{index_name}' on table '{table_name}' with CONCURRENTLY cannot run inside a transaction block. \
-                PostgreSQL will raise an error at runtime."
-            ),
+            descriptions[1].operation.clone(),
+            descriptions[1]
+                .problem
+                .replace("<unique>", unique_str)
+                .replace("<index>", &index_name)
+                .replace("<table>", &table_name),
             ctx.no_transaction_hint,
         )]
     }

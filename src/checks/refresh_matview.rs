@@ -18,18 +18,32 @@ use crate::violation::Violation;
 pub struct RefreshMatViewCheck;
 
 impl Check for RefreshMatViewCheck {
-    fn describe(&self) -> CheckDescription {
-        CheckDescription {
-            operation: "REFRESH MATERIALIZED VIEW without CONCURRENTLY".into(),
-            problem: "Refreshing a materialized view without CONCURRENTLY acquires an AccessExclusiveLock, \
-                      blocking all reads (SELECT) for the duration of the refresh.".into(),
-            safe_alternative: "Use REFRESH MATERIALIZED VIEW CONCURRENTLY (requires a unique index on the view, \
-                               cannot run inside a transaction).".into(),
-            script_path: None,
-        }
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![
+            CheckDescription {
+                operation: "REFRESH MATERIALIZED VIEW without CONCURRENTLY".into(),
+                problem: "Refreshing materialized view '<view>' without CONCURRENTLY acquires an \
+                          AccessExclusiveLock, blocking all reads (SELECT) for the duration of the refresh. \
+                          Duration depends on view complexity and underlying data size.".into(),
+                safe_alternative: "Use REFRESH MATERIALIZED VIEW CONCURRENTLY (requires a unique index on the view, \
+                                   cannot run inside a transaction).".into(),
+                script_path: None,
+            },
+            CheckDescription {
+                operation: "REFRESH MATERIALIZED VIEW CONCURRENTLY inside a transaction".into(),
+                problem: "Refreshing materialized view '<view>' with CONCURRENTLY cannot run inside a \
+                          transaction block. PostgreSQL will raise an error at runtime."
+                    .into(),
+                safe_alternative:
+                    "Disable transaction wrapping for this migration (see your framework's documentation)."
+                        .into(),
+                script_path: None,
+            },
+        ]
     }
 
     fn check(&self, node: &NodeEnum, _config: &Config, ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
         let NodeEnum::RefreshMatViewStmt(stmt) = node else {
             return vec![];
         };
@@ -57,12 +71,8 @@ Considerations:
             let safe_alternative = concurrent_safe_alternative(suggestion, ctx);
 
             return vec![Violation::new(
-                self.describe().operation,
-                format!(
-                    "Refreshing materialized view '{view_name}' without CONCURRENTLY acquires an \
-                    AccessExclusiveLock, blocking all reads (SELECT) for the duration of the refresh. \
-                    Duration depends on view complexity and underlying data size."
-                ),
+                descriptions[0].operation.clone(),
+                descriptions[0].problem.replace("<view>", &view_name),
                 safe_alternative,
             )];
         }
@@ -74,11 +84,8 @@ Considerations:
 
         // REFRESH MATERIALIZED VIEW CONCURRENTLY inside a transaction — PostgreSQL will error at runtime
         vec![Violation::new(
-            "REFRESH MATERIALIZED VIEW CONCURRENTLY inside a transaction",
-            format!(
-                "Refreshing materialized view '{view_name}' with CONCURRENTLY cannot run inside a \
-                transaction block. PostgreSQL will raise an error at runtime."
-            ),
+            descriptions[1].operation.clone(),
+            descriptions[1].problem.replace("<view>", &view_name),
             ctx.no_transaction_hint,
         )]
     }

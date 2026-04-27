@@ -7,53 +7,55 @@ use pg_query::protobuf::ConstrType;
 pub struct AddCheckConstraintCheck;
 
 impl Check for AddCheckConstraintCheck {
-    fn describe(&self) -> CheckDescription {
-        CheckDescription {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
             operation: "ADD CHECK CONSTRAINT".into(),
-            problem: "Adding a check constraint without NOT VALID scans the entire table to validate \
-                      existing rows, which can block autovacuum and cause performance issues on large tables.".into(),
-            safe_alternative: "Add the constraint with NOT VALID first, then validate in a separate migration \
-                               (acquires ShareUpdateExclusiveLock only, allowing concurrent reads and writes).".into(),
+            problem: "Adding a check constraint '<name>' on table '<table>' without NOT VALID scans \
+                      the entire table to validate existing rows, which can block autovacuum. On larger \
+                      tables this can cause performance issues.".into(),
+            safe_alternative: "For a safer check constraint addition on large tables:\n\n\
+                               1. Create a check constraint without any immediate validation:\n   \
+                               ALTER TABLE <table> ADD CONSTRAINT <name> CHECK <expr> NOT VALID;\n\n\
+                               2. Step 2 (separate migration, acquires ShareUpdateExclusiveLock only)\n  \
+                               ALTER TABLE <table> VALIDATE CONSTRAINT <name>;\n\n\
+                               Benefits:\n\
+                               - Table remains readable and writable during constraint creation\n\
+                               - No blocking of SELECT, INSERT, UPDATE, or DELETE operations\n\
+                               - Safe for production deployments on large tables\n".into(),
             script_path: None,
-        }
+        }]
     }
 
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
-        cmds.iter().filter_map(|cmd| {
-            let constraint = cmd_def_as_constraint(cmd)?;
-            if constraint.contype != ConstrType::ConstrCheck as i32 {
-                return None;
-            }
+        cmds.iter()
+            .filter_map(|cmd| {
+                let constraint = cmd_def_as_constraint(cmd)?;
+                if constraint.contype != ConstrType::ConstrCheck as i32 {
+                    return None;
+                }
 
-            if !constraint.initially_valid {
-                return None;
-            }
+                if !constraint.initially_valid {
+                    return None;
+                }
 
-            let constraint_name = constraint_display_name(constraint);
+                let constraint_name = constraint_display_name(constraint);
 
-            Some(Violation::new(
-                self.describe().operation,
-                format!("Adding a check constraint '{constraint_name}' on table '{table_name}' without NOT VALID scans the entire table to validate existing rows,\
-             which can block autovacuum. On larger tables this can cause performance issues."),
-                format!(
-                    r"For a safer check constraint addition on large tables:
-
-1. Create a check constraint without any immediate validation:
-   ALTER TABLE {table_name} ADD CONSTRAINT {constraint_name} CHECK <expr> NOT VALID;
-
-2. Step 2 (separate migration, acquires ShareUpdateExclusiveLock only)
-  ALTER TABLE {table_name} VALIDATE CONSTRAINT {constraint_name};
-
-Benefits:
-- Table remains readable and writable during constraint creation
-- No blocking of SELECT, INSERT, UPDATE, or DELETE operations
-- Safe for production deployments on large tables
-",
-                )))
-        }).collect()
+                Some(Violation::new(
+                    desc.operation.clone(),
+                    desc.problem
+                        .replace("<table>", &table_name)
+                        .replace("<name>", &constraint_name),
+                    desc.safe_alternative
+                        .replace("<table>", &table_name)
+                        .replace("<name>", &constraint_name),
+                ))
+            })
+            .collect()
     }
 }
 

@@ -1,6 +1,7 @@
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use diesel_guard::ast_dump;
+use diesel_guard::checks::CheckDescription;
 use diesel_guard::output::OutputFormatter;
 use diesel_guard::violation::Severity;
 use diesel_guard::{Config, SafetyChecker};
@@ -200,7 +201,7 @@ fn run_list_checks(format: &str) -> Result<()> {
         let json: Vec<_> = checks
             .iter()
             .map(|c| {
-                let check_type = if c.describe().script_path.is_some() {
+                let check_type = if c.describe()[0].script_path.is_some() {
                     "custom"
                 } else {
                     "builtin"
@@ -222,7 +223,7 @@ fn run_list_checks(format: &str) -> Result<()> {
     } else {
         println!("{:<40} {:<10} {:<10} ENABLED", "NAME", "TYPE", "SEVERITY");
         for check in &checks {
-            let check_type = if check.describe().script_path.is_some() {
+            let check_type = if check.describe()[0].script_path.is_some() {
                 "custom"
             } else {
                 "builtin"
@@ -270,8 +271,8 @@ fn run_explain(check_name: &str, format: &str) -> Result<()> {
         exit(1);
     };
 
-    let desc = check.describe();
-    let check_type = if desc.script_path.is_some() {
+    let descriptions = check.describe();
+    let check_type = if descriptions[0].script_path.is_some() {
         "custom"
     } else {
         "builtin"
@@ -284,59 +285,89 @@ fn run_explain(check_name: &str, format: &str) -> Result<()> {
     };
 
     if format == "json" {
-        let operation = if desc.operation.is_empty() {
-            serde_json::Value::Null
-        } else {
-            serde_json::Value::String(desc.operation)
-        };
-        let problem = if desc.problem.is_empty() {
-            serde_json::Value::Null
-        } else {
-            serde_json::Value::String(desc.problem)
-        };
-        let safe_alternative = if desc.safe_alternative.is_empty() {
-            serde_json::Value::Null
-        } else {
-            serde_json::Value::String(desc.safe_alternative)
-        };
-        let mut obj = serde_json::json!({
-            "name": check.name(),
-            "type": check_type,
-            "severity": severity,
-            "enabled": enabled,
-            "operation": operation,
-            "problem": problem,
-            "safe_alternative": safe_alternative,
-        });
-        if let Some(path) = &desc.script_path {
-            obj["script_path"] = serde_json::Value::String(path.clone());
-        }
-        println!("{}", serde_json::to_string_pretty(&obj).unwrap());
+        print_explain_json(check.name(), check_type, severity, enabled, &descriptions);
     } else {
-        let enabled_str = if enabled { "enabled" } else { "disabled" };
-        println!(
-            "{} ({} | {} | {})\n",
-            check.name(),
-            check_type,
-            severity,
-            enabled_str
-        );
-        if desc.operation.is_empty() && desc.script_path.is_some() {
-            println!("No description available. Add fn describe() to the script:");
-            println!("  {}", desc.script_path.as_deref().unwrap_or(""));
-        } else {
-            println!("Operation: {}\n", desc.operation);
-            println!("Problem:");
-            for line in desc.problem.lines() {
-                println!("  {line}");
-            }
-            println!("\nSafe alternative:");
-            for line in desc.safe_alternative.lines() {
-                println!("  {line}");
-            }
-        }
+        print_explain_text(check.name(), check_type, severity, enabled, &descriptions);
     }
     Ok(())
+}
+
+fn print_explain_json(
+    check_name: &str,
+    check_type: &str,
+    severity: &str,
+    enabled: bool,
+    descriptions: &[CheckDescription],
+) {
+    let descs_json: Vec<_> = descriptions
+        .iter()
+        .map(|desc| {
+            serde_json::json!({
+                "operation": json_string_or_null(&desc.operation),
+                "problem": json_string_or_null(&desc.problem),
+                "safe_alternative": json_string_or_null(&desc.safe_alternative),
+            })
+        })
+        .collect();
+    let mut obj = serde_json::json!({
+        "name": check_name,
+        "type": check_type,
+        "severity": severity,
+        "enabled": enabled,
+        "descriptions": descs_json,
+    });
+    if let Some(path) = &descriptions[0].script_path {
+        obj["script_path"] = serde_json::Value::String(path.clone());
+    }
+    println!("{}", serde_json::to_string_pretty(&obj).unwrap());
+}
+
+fn json_string_or_null(value: &str) -> serde_json::Value {
+    if value.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::Value::String(value.to_string())
+    }
+}
+
+fn print_explain_text(
+    check_name: &str,
+    check_type: &str,
+    severity: &str,
+    enabled: bool,
+    descriptions: &[CheckDescription],
+) {
+    let enabled_str = if enabled { "enabled" } else { "disabled" };
+    println!("{check_name} ({check_type} | {severity} | {enabled_str})\n");
+    let first = &descriptions[0];
+    if first.operation.is_empty() && first.script_path.is_some() {
+        println!("No description available. Add fn describe() to the script:");
+        println!("  {}", first.script_path.as_deref().unwrap_or(""));
+        return;
+    }
+    if descriptions.len() == 1 {
+        println!("Operation: {}\n", first.operation);
+        print_description_body(first);
+        return;
+    }
+    for (i, desc) in descriptions.iter().enumerate() {
+        println!("[{}] {}\n", i + 1, desc.operation);
+        print_description_body(desc);
+        if i + 1 < descriptions.len() {
+            println!();
+        }
+    }
+}
+
+fn print_description_body(description: &CheckDescription) {
+    println!("Problem:");
+    for line in description.problem.lines() {
+        println!("  {line}");
+    }
+    println!("\nSafe alternative:");
+    for line in description.safe_alternative.lines() {
+        println!("  {line}");
+    }
 }
 
 fn main() -> Result<()> {

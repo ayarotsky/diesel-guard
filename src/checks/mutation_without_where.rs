@@ -13,66 +13,53 @@ use pg_query::protobuf::RangeVar;
 pub struct MutationWithoutWhereCheck;
 
 impl Check for MutationWithoutWhereCheck {
-    fn describe(&self) -> CheckDescription {
-        CheckDescription {
-            operation: "DELETE without WHERE".into(),
-            problem: "A DELETE or UPDATE without a WHERE clause affects every row in the table, which \
-                      is almost always a mistake in a migration and can cause severe lock contention.".into(),
-            safe_alternative: "Add a WHERE clause to target only the intended rows, or use a safety-assured \
-                               block if a full-table mutation is intentional.".into(),
-            script_path: None,
-        }
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![
+            CheckDescription {
+                operation: "DELETE without WHERE".into(),
+                problem: "DELETE on '<table>' has no WHERE clause and will remove every row in the table. \
+                          This is almost always a mistake in a migration. The lock held for a full-table delete \
+                          can cause severe contention on large tables.".into(),
+                safe_alternative: "Add a WHERE clause to target only the rows you intend to remove:\n\n\
+                                   DELETE FROM <table> WHERE <condition>;\n\n\
+                                   If a full-table delete is intentional, wrap it in a safety-assured block:\n\n  \
+                                   -- safety-assured:start\n  \
+                                   -- Safe because: table is a temporary staging table, always empty in production\n  \
+                                   DELETE FROM <table>;\n  \
+                                   -- safety-assured:end".into(),
+                script_path: None,
+            },
+            CheckDescription {
+                operation: "UPDATE without WHERE".into(),
+                problem: "UPDATE on '<table>' has no WHERE clause and will modify every row in the table. \
+                          This is almost always a mistake in a migration. A full-table update holds a \
+                          ROW EXCLUSIVE lock for the duration and rewrites every row, which can cause severe \
+                          contention and bloat on large tables.".into(),
+                safe_alternative: "Add a WHERE clause to target only the rows you intend to update:\n\n\
+                                   UPDATE <table> SET ... WHERE <condition>;\n\n\
+                                   If updating every row is intentional (e.g. a one-time backfill), add a \
+                                   safety-assured block:\n\n  \
+                                   -- safety-assured:start\n  \
+                                   -- Safe because: one-time backfill, table has fewer than 10k rows\n  \
+                                   UPDATE <table> SET ...;\n  \
+                                   -- safety-assured:end".into(),
+                script_path: None,
+            },
+        ]
     }
 
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
         match node {
             NodeEnum::DeleteStmt(stmt) => check_mutation(
                 stmt.where_clause.is_some(),
                 stmt.relation.as_ref(),
-                "DELETE without WHERE",
-                |table| {
-                    format!(
-                        "DELETE on '{table}' has no WHERE clause and will remove every row in the \
-                        table. This is almost always a mistake in a migration. The lock held for \
-                        a full-table delete can cause severe contention on large tables."
-                    )
-                },
-                |table| {
-                    format!(
-                        "Add a WHERE clause to target only the rows you intend to remove:\n\n\
-                        DELETE FROM {table} WHERE <condition>;\n\n\
-                        If a full-table delete is intentional, wrap it in a safety-assured block:\n\n  \
-                        -- safety-assured:start\n  \
-                        -- Safe because: table is a temporary staging table, always empty in production\n  \
-                        DELETE FROM {table};\n  \
-                        -- safety-assured:end"
-                    )
-                },
+                &descriptions[0],
             ),
             NodeEnum::UpdateStmt(stmt) => check_mutation(
                 stmt.where_clause.is_some(),
                 stmt.relation.as_ref(),
-                "UPDATE without WHERE",
-                |table| {
-                    format!(
-                        "UPDATE on '{table}' has no WHERE clause and will modify every row in the \
-                        table. This is almost always a mistake in a migration. A full-table update \
-                        holds a ROW EXCLUSIVE lock for the duration and rewrites every row, which \
-                        can cause severe contention and bloat on large tables."
-                    )
-                },
-                |table| {
-                    format!(
-                        "Add a WHERE clause to target only the rows you intend to update:\n\n\
-                        UPDATE {table} SET ... WHERE <condition>;\n\n\
-                        If updating every row is intentional (e.g. a one-time backfill), \
-                        add a safety-assured block:\n\n  \
-                        -- safety-assured:start\n  \
-                        -- Safe because: one-time backfill, table has fewer than 10k rows\n  \
-                        UPDATE {table} SET ...;\n  \
-                        -- safety-assured:end"
-                    )
-                },
+                &descriptions[1],
             ),
             _ => vec![],
         }
@@ -82,18 +69,16 @@ impl Check for MutationWithoutWhereCheck {
 fn check_mutation(
     where_clause_present: bool,
     relation: Option<&RangeVar>,
-    operation: &'static str,
-    problem: impl FnOnce(&str) -> String,
-    safe_alternative: impl FnOnce(&str) -> String,
+    desc: &CheckDescription,
 ) -> Vec<Violation> {
     if where_clause_present {
         return vec![];
     }
     let table = relation.map(range_var_name).unwrap_or_default();
     vec![Violation::new(
-        operation,
-        problem(&table),
-        safe_alternative(&table),
+        desc.operation.clone(),
+        desc.problem.replace("<table>", &table),
+        desc.safe_alternative.replace("<table>", &table),
     )]
 }
 

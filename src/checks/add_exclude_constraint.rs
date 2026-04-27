@@ -7,19 +7,25 @@ use crate::violation::Violation;
 pub struct AddExcludeConstraintCheck;
 
 impl Check for AddExcludeConstraintCheck {
-    fn describe(&self) -> CheckDescription {
-        CheckDescription {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
             operation: "ADD EXCLUDE constraint".into(),
-            problem: "Adding an exclusion constraint scans the entire table while holding a SHARE ROW EXCLUSIVE lock. \
-                      Unlike CHECK or FOREIGN KEY, there is no NOT VALID escape hatch — exclusion constraints must \
-                      be validated immediately.".into(),
-            safe_alternative: "Add the constraint during a low-traffic window, define it at table creation time, \
-                               or use application-level enforcement if the table is too large to lock safely.".into(),
+            problem: "Adding exclusion constraint '<name>' on table '<table>' scans the entire table \
+                      while holding a SHARE ROW EXCLUSIVE lock. Unlike CHECK or FOREIGN KEY constraints, \
+                      there is no NOT VALID escape hatch — exclusion constraints must be validated immediately.".into(),
+            safe_alternative: "There is no non-blocking path for adding an exclusion constraint to an existing table.\n\n\
+                               Options:\n\
+                               - Add the constraint during a low-traffic window and accept the full-table scan cost\n\
+                               - Define the constraint at table creation time to avoid scanning existing rows:\n  \
+                               CREATE TABLE <table> (..., CONSTRAINT <name> EXCLUDE USING <method> (<elements>));\n\
+                               - Use application-level enforcement if the table is too large to lock safely".into(),
             script_path: None,
-        }
+        }]
     }
 
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
@@ -35,22 +41,13 @@ impl Check for AddExcludeConstraintCheck {
                 let constraint_name = constraint_display_name(c);
 
                 Some(Violation::new(
-                    self.describe().operation,
-                    format!(
-                        "Adding exclusion constraint '{constraint_name}' on table '{table_name}' \
-                        scans the entire table while holding a SHARE ROW EXCLUSIVE lock. \
-                        Unlike CHECK or FOREIGN KEY constraints, there is no NOT VALID escape hatch — \
-                        exclusion constraints must be validated immediately."
-                    ),
-                    format!(
-                        r"There is no non-blocking path for adding an exclusion constraint to an existing table.
-
-Options:
-- Add the constraint during a low-traffic window and accept the full-table scan cost
-- Define the constraint at table creation time to avoid scanning existing rows:
-  CREATE TABLE {table_name} (..., CONSTRAINT {constraint_name} EXCLUDE USING <method> (<elements>));
-- Use application-level enforcement if the table is too large to lock safely"
-                    ),
+                    desc.operation.clone(),
+                    desc.problem
+                        .replace("<table>", &table_name)
+                        .replace("<name>", &constraint_name),
+                    desc.safe_alternative
+                        .replace("<table>", &table_name)
+                        .replace("<name>", &constraint_name),
                 ))
             })
             .collect()

@@ -18,22 +18,28 @@ use crate::violation::Violation;
 pub struct DropColumnCheck;
 
 impl Check for DropColumnCheck {
-    fn describe(&self) -> CheckDescription {
-        CheckDescription {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
             operation: "DROP COLUMN".into(),
-            problem:
-                "Dropping a column requires an ACCESS EXCLUSIVE lock and typically triggers a \
-                      table rewrite, blocking all operations for the duration."
-                    .into(),
-            safe_alternative:
-                "Mark the column unused in application code, deploy without references, \
-                               then drop in a later migration."
-                    .into(),
+            problem: "Dropping column '<column>' from table '<table>' requires an ACCESS EXCLUSIVE lock, \
+                      blocking all operations. This typically triggers a table rewrite with duration \
+                      depending on table size.".into(),
+            safe_alternative: "1. Mark the column as unused in your application code first.\n\n\
+                               2. Deploy the application without the column references.\n\n\
+                               3. (Optional) Set column to NULL to reclaim space:\n   \
+                               ALTER TABLE <table> ALTER COLUMN <column> DROP NOT NULL;\n   \
+                               UPDATE <table> SET <column> = NULL;\n\n\
+                               4. Drop the column in a later migration after confirming it's unused:\n   \
+                               ALTER TABLE <table> DROP COLUMN <column><if_exists>;\n\n\
+                               Note: Postgres doesn't support DROP COLUMN CONCURRENTLY. The rewrite is \
+                               unavoidable but staging the removal reduces risk.".into(),
             script_path: None,
-        }
+        }]
     }
 
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
@@ -48,27 +54,14 @@ impl Check for DropColumnCheck {
                 let if_exists = cmd.missing_ok;
 
                 Some(Violation::new(
-                    self.describe().operation,
-                    format!(
-                        "Dropping column '{column_name}' from table '{table_name}' requires an ACCESS EXCLUSIVE lock, blocking all operations. \
-                        This typically triggers a table rewrite with duration depending on table size."
-                    ),
-                    format!(r"1. Mark the column as unused in your application code first.
-
-2. Deploy the application without the column references.
-
-3. (Optional) Set column to NULL to reclaim space:
-   ALTER TABLE {table} ALTER COLUMN {column} DROP NOT NULL;
-   UPDATE {table} SET {column} = NULL;
-
-4. Drop the column in a later migration after confirming it's unused:
-   ALTER TABLE {table} DROP COLUMN {column}{if_exists};
-
-Note: Postgres doesn't support DROP COLUMN CONCURRENTLY. The rewrite is unavoidable but staging the removal reduces risk.",
-                        table = table_name,
-                        column = column_name,
-                        if_exists = if_exists_clause(if_exists)
-                    ),
+                    desc.operation.clone(),
+                    desc.problem
+                        .replace("<table>", &table_name)
+                        .replace("<column>", column_name),
+                    desc.safe_alternative
+                        .replace("<table>", &table_name)
+                        .replace("<column>", column_name)
+                        .replace("<if_exists>", if_exists_clause(if_exists)),
                 ))
             })
             .collect()

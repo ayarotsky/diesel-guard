@@ -19,18 +19,32 @@ use crate::violation::Violation;
 pub struct DropIndexCheck;
 
 impl Check for DropIndexCheck {
-    fn describe(&self) -> CheckDescription {
-        CheckDescription {
-            operation: "DROP INDEX without CONCURRENTLY".into(),
-            problem: "Dropping an index without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock, blocking \
-                      all queries (SELECT, INSERT, UPDATE, DELETE) until complete.".into(),
-            safe_alternative: "Use DROP INDEX CONCURRENTLY to remove the index without blocking queries \
-                               (cannot run inside a transaction).".into(),
-            script_path: None,
-        }
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![
+            CheckDescription {
+                operation: "DROP INDEX without CONCURRENTLY".into(),
+                problem: "Dropping index '<index>'<if_exists> without CONCURRENTLY acquires an ACCESS \
+                          EXCLUSIVE lock, blocking all queries (SELECT, INSERT, UPDATE, DELETE) on the table \
+                          until complete. Duration depends on system load and concurrent transactions.".into(),
+                safe_alternative: "Use DROP INDEX CONCURRENTLY to remove the index without blocking queries \
+                                   (cannot run inside a transaction).".into(),
+                script_path: None,
+            },
+            CheckDescription {
+                operation: "DROP INDEX CONCURRENTLY inside a transaction".into(),
+                problem: "Dropping index '<index>'<if_exists> with CONCURRENTLY cannot run inside a \
+                          transaction block. PostgreSQL will raise an error at runtime."
+                    .into(),
+                safe_alternative:
+                    "Disable transaction wrapping for this migration (see your framework's documentation)."
+                        .into(),
+                script_path: None,
+            },
+        ]
     }
 
     fn check(&self, node: &NodeEnum, _config: &Config, ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
         let NodeEnum::DropStmt(drop_stmt) = node else {
             return vec![];
         };
@@ -62,11 +76,11 @@ Considerations:
                     let safe_alternative = concurrent_safe_alternative(suggestion, ctx);
 
                     Violation::new(
-                        self.describe().operation,
-                        format!(
-                            "Dropping index '{name}'{if_exists_str} without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock, blocking all \
-                            queries (SELECT, INSERT, UPDATE, DELETE) on the table until complete. Duration depends on system load and concurrent transactions."
-                        ),
+                        descriptions[0].operation.clone(),
+                        descriptions[0]
+                            .problem
+                            .replace("<index>", &name)
+                            .replace("<if_exists>", if_exists_str),
                         safe_alternative,
                     )
                 })
@@ -83,11 +97,11 @@ Considerations:
             .into_iter()
             .map(|name| {
                 Violation::new(
-                    "DROP INDEX CONCURRENTLY inside a transaction",
-                    format!(
-                        "Dropping index '{name}'{if_exists_str} with CONCURRENTLY cannot run inside a transaction block. \
-                        PostgreSQL will raise an error at runtime."
-                    ),
+                    descriptions[1].operation.clone(),
+                    descriptions[1]
+                        .problem
+                        .replace("<index>", &name)
+                        .replace("<if_exists>", if_exists_str),
                     ctx.no_transaction_hint,
                 )
             })
