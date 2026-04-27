@@ -13,13 +13,39 @@ use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_constraint, constraint_columns_str,
     fk_cols_constraint, ref_columns_constraint, ref_table_constraint,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct UnnamedConstraintCheck;
 
 impl Check for UnnamedConstraintCheck {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
+            operation: "CONSTRAINT without name".into(),
+            problem: "Adding unnamed <type> constraint on table '<table>' will receive an auto-generated \
+                      name from Postgres. This makes future migrations difficult, as the generated name \
+                      varies between databases and requires querying the database to find the constraint \
+                      name before modifying or dropping it.".into(),
+            safe_alternative: "Always name constraints explicitly using the CONSTRAINT keyword:\n\n\
+                               Instead of:\n   \
+                               ALTER TABLE <table> ADD <type> <cols>;\n\n\
+                               Use:\n   \
+                               ALTER TABLE <table> ADD CONSTRAINT <table>_<suggested> <type> <cols>;\n\n\
+                               Named constraints make future migrations predictable and maintainable:\n   \
+                               -- Easy to reference in later migrations\n   \
+                               ALTER TABLE <table> DROP CONSTRAINT <table>_<suggested>;\n\n\
+                               Note: Choose descriptive names that indicate the table, columns, and constraint type.\n\
+                               Common patterns:\n  \
+                               - UNIQUE: <table>_<column>_key or <table>_<column1>_<column2>_key\n  \
+                               - FOREIGN KEY: <table>_<column>_fkey\n  \
+                               - CHECK: <table>_<column>_check or <table>_<description>_check".into(),
+            script_path: None,
+        }]
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
@@ -50,47 +76,28 @@ impl Check for UnnamedConstraintCheck {
                             format!("({fk_cols}) REFERENCES {ref_table}({ref_cols})"),
                         )
                     }
-                    x if x == ConstrType::ConstrCheck as i32 => {
-                        ("CHECK", "(...)".to_string())
-                    }
+                    x if x == ConstrType::ConstrCheck as i32 => ("CHECK", "(...)".to_string()),
                     _ => return None,
                 };
 
                 Some(Violation::new(
-                    "CONSTRAINT without name",
-                    format!(
-                        "Adding unnamed {constraint_type} constraint on table '{table_name}' will receive an auto-generated name from Postgres. \
-                        This makes future migrations difficult, as the generated name varies between databases and requires querying \
-                        the database to find the constraint name before modifying or dropping it."
-                    ),
-                    format!(
-                        r"Always name constraints explicitly using the CONSTRAINT keyword:
-
-Instead of:
-   ALTER TABLE {table} ADD {constraint_type} {columns};
-
-Use:
-   ALTER TABLE {table} ADD CONSTRAINT {table}_{suggested_name} {constraint_type} {columns};
-
-Named constraints make future migrations predictable and maintainable:
-   -- Easy to reference in later migrations
-   ALTER TABLE {table} DROP CONSTRAINT {table}_{suggested_name};
-
-Note: Choose descriptive names that indicate the table, columns, and constraint type.
-Common patterns:
-  - UNIQUE: {table}_<column>_key or {table}_<column1>_<column2>_key
-  - FOREIGN KEY: {table}_<column>_fkey
-  - CHECK: {table}_<column>_check or {table}_<description>_check",
-                        table = table_name,
-                        constraint_type = constraint_type,
-                        columns = columns_desc,
-                        suggested_name = match constraint_type {
-                            "UNIQUE" => "column_key",
-                            "FOREIGN KEY" => "column_fkey",
-                            "CHECK" => "column_check",
-                            _ => "constraint",
-                        }
-                    ),
+                    desc.operation.clone(),
+                    desc.problem
+                        .replace("<table>", &table_name)
+                        .replace("<type>", constraint_type),
+                    desc.safe_alternative
+                        .replace("<table>", &table_name)
+                        .replace("<type>", constraint_type)
+                        .replace("<cols>", &columns_desc)
+                        .replace(
+                            "<suggested>",
+                            match constraint_type {
+                                "UNIQUE" => "column_key",
+                                "FOREIGN KEY" => "column_fkey",
+                                "CHECK" => "column_check",
+                                _ => "constraint",
+                            },
+                        ),
                 ))
             })
             .collect()

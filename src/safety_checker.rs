@@ -91,6 +91,11 @@ impl SafetyChecker {
         Self { registry, config }
     }
 
+    /// Expose the registry for introspection (e.g. list-checks, explain).
+    pub fn registry(&self) -> &Registry {
+        &self.registry
+    }
+
     /// Build the migration adapter for the configured framework.
     fn adapter(&self) -> Result<Box<dyn MigrationAdapter>> {
         match self.config.framework.as_str() {

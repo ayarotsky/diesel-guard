@@ -11,13 +11,37 @@
 //! separately, then add the NOT NULL constraint.
 
 use crate::checks::pg_helpers::{AlterTableType, NodeEnum, alter_table_cmds};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct AddNotNullCheck;
 
 impl Check for AddNotNullCheck {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
+            operation: "ADD NOT NULL constraint".into(),
+            problem: "Adding NOT NULL constraint to column '<column>' on table '<table>' requires a full \
+                      table scan to verify all values are non-null, acquiring an ACCESS EXCLUSIVE lock and \
+                      blocking all operations. Duration depends on table size.".into(),
+            safe_alternative: "For safer constraint addition on large tables:\n\n\
+                               1. Add a CHECK constraint without validating existing rows:\n   \
+                               ALTER TABLE <table> ADD CONSTRAINT <column>_not_null CHECK (<column> IS NOT NULL) NOT VALID;\n\n\
+                               2. Validate the constraint separately (uses SHARE UPDATE EXCLUSIVE lock):\n   \
+                               ALTER TABLE <table> VALIDATE CONSTRAINT <column>_not_null;\n\n\
+                               3. Add the NOT NULL constraint (instant if CHECK constraint exists):\n   \
+                               ALTER TABLE <table> ALTER COLUMN <column> SET NOT NULL;\n\n\
+                               4. Optionally drop the redundant CHECK constraint:\n   \
+                               ALTER TABLE <table> DROP CONSTRAINT <column>_not_null;\n\n\
+                               Note: The VALIDATE step allows concurrent reads and writes, only blocking \
+                               other schema changes. On Postgres 12+, NOT NULL constraints are more efficient, \
+                               but the CHECK approach still provides better control over large migrations.".into(),
+            script_path: None,
+        }]
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
@@ -31,28 +55,13 @@ impl Check for AddNotNullCheck {
                 let column_name = &cmd.name;
 
                 Some(Violation::new(
-                    "ADD NOT NULL constraint",
-                    format!(
-                        "Adding NOT NULL constraint to column '{column_name}' on table '{table_name}' requires a full table scan to verify \
-                        all values are non-null, acquiring an ACCESS EXCLUSIVE lock and blocking all operations. \
-                        Duration depends on table size."
-                    ),
-                    format!(r"For safer constraint addition on large tables:
-
-1. Add a CHECK constraint without validating existing rows:
-   ALTER TABLE {table_name} ADD CONSTRAINT {column_name}_not_null CHECK ({column_name} IS NOT NULL) NOT VALID;
-
-2. Validate the constraint separately (uses SHARE UPDATE EXCLUSIVE lock):
-   ALTER TABLE {table_name} VALIDATE CONSTRAINT {column_name}_not_null;
-
-3. Add the NOT NULL constraint (instant if CHECK constraint exists):
-   ALTER TABLE {table_name} ALTER COLUMN {column_name} SET NOT NULL;
-
-4. Optionally drop the redundant CHECK constraint:
-   ALTER TABLE {table_name} DROP CONSTRAINT {column_name}_not_null;
-
-Note: The VALIDATE step allows concurrent reads and writes, only blocking other schema changes. On Postgres 12+, NOT NULL constraints are more efficient, but the CHECK approach still provides better control over large migrations."
-                    ),
+                    desc.operation.clone(),
+                    desc.problem
+                        .replace("<table>", &table_name)
+                        .replace("<column>", column_name),
+                    desc.safe_alternative
+                        .replace("<table>", &table_name)
+                        .replace("<column>", column_name),
                 ))
             })
             .collect()

@@ -7,7 +7,7 @@
 //! foreign key references.
 
 use crate::checks::pg_helpers::{ConstrType, NodeEnum, column_has_constraint, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 const CONSTR_PRIMARY: i32 = ConstrType::ConstrPrimary as i32;
@@ -15,6 +15,26 @@ const CONSTR_PRIMARY: i32 = ConstrType::ConstrPrimary as i32;
 pub struct CreateTableWithoutPkCheck;
 
 impl Check for CreateTableWithoutPkCheck {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
+            operation: "CREATE TABLE without PRIMARY KEY".into(),
+            problem: "Table '<table>' is defined without a primary key. Tables without a primary key cannot \
+                      use logical replication: replication slots require a primary key or an explicit REPLICA \
+                      IDENTITY setting. They are also harder to work with because there is no guaranteed way \
+                      to uniquely identify a row for updates, deletes, or foreign key references.".into(),
+            safe_alternative: "Add a primary key to the table definition.\n\n\
+                               Option 1 — identity column (recommended):\n   \
+                               CREATE TABLE <table> (\n     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n     ...\n   );\n\n\
+                               Option 2 — UUID:\n   \
+                               CREATE TABLE <table> (\n     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n     ...\n   );\n\n\
+                               Option 3 — separate constraint:\n   \
+                               CREATE TABLE <table> (\n     id BIGINT GENERATED ALWAYS AS IDENTITY,\n     ...,\n     PRIMARY KEY (id)\n   );\n\n\
+                               If the table is intentionally without a primary key (e.g., a log table where you\n\
+                               will set REPLICA IDENTITY FULL), use a safety-assured block to bypass this check.".into(),
+            script_path: None,
+        }]
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let NodeEnum::CreateStmt(stmt) = node else {
             return vec![];
@@ -55,41 +75,13 @@ impl Check for CreateTableWithoutPkCheck {
             .as_ref()
             .map(range_var_name)
             .unwrap_or_default();
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
 
         vec![Violation::new(
-            "CREATE TABLE without PRIMARY KEY",
-            format!(
-                "Table '{table_name}' is defined without a primary key. \
-                Tables without a primary key cannot use logical replication: replication slots \
-                require a primary key or an explicit REPLICA IDENTITY setting. \
-                They are also harder to work with — without a PK there is no guaranteed way \
-                to uniquely identify a row for updates, deletes, or foreign key references."
-            ),
-            format!(
-                r"Add a primary key to the table definition.
-
-Option 1 — identity column (recommended):
-   CREATE TABLE {table_name} (
-     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-     ...
-   );
-
-Option 2 — UUID:
-   CREATE TABLE {table_name} (
-     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-     ...
-   );
-
-Option 3 — separate constraint:
-   CREATE TABLE {table_name} (
-     id BIGINT GENERATED ALWAYS AS IDENTITY,
-     ...,
-     PRIMARY KEY (id)
-   );
-
-If the table is intentionally without a primary key (e.g., a log table where you
-will set REPLICA IDENTITY FULL), use a safety-assured block to bypass this check."
-            ),
+            desc.operation.clone(),
+            desc.problem.replace("<table>", &table_name),
+            desc.safe_alternative.replace("<table>", &table_name),
         )]
     }
 }

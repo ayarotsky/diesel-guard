@@ -8,13 +8,28 @@
 //! This operation should be intentional and coordinated across application changes.
 
 use crate::checks::pg_helpers::{AlterTableType, NodeEnum, alter_table_cmds};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct DropNotNullCheck;
 
 impl Check for DropNotNullCheck {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
+            operation: "DROP NOT NULL".into(),
+            problem: "Removing NOT NULL constraint from column '<column>' on table '<table>' changes a contract \
+                      that application code may depend on. Once NULL values are written to this column, any \
+                      code that reads it without handling NULL will fail at runtime.".into(),
+            safe_alternative: "Ensure this change is intentional and coordinated with application code changes. \
+                               Update all code paths that read '<table>.<column>' to handle NULL values before \
+                               or alongside this migration.".into(),
+            script_path: None,
+        }]
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
@@ -28,18 +43,13 @@ impl Check for DropNotNullCheck {
                 let column_name = &cmd.name;
 
                 Some(Violation::new(
-                    "DROP NOT NULL",
-                    format!(
-                        "Removing NOT NULL constraint from column '{column_name}' on table \
-                        '{table_name}' changes a contract that application code may depend on. \
-                        Once NULL values are written to this column, any code that reads it \
-                        without handling NULL will fail at runtime."
-                    ),
-                    format!(
-                        "Ensure this change is intentional and coordinated with application \
-                        code changes. Update all code paths that read '{column_name}' to handle \
-                        NULL values before or alongside this migration."
-                    ),
+                    desc.operation.clone(),
+                    desc.problem
+                        .replace("<table>", &table_name)
+                        .replace("<column>", column_name),
+                    desc.safe_alternative
+                        .replace("<table>", &table_name)
+                        .replace("<column>", column_name),
                 ))
             })
             .collect()

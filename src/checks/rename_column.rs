@@ -13,13 +13,36 @@
 //! and finally remove the old column in a subsequent migration.
 
 use crate::checks::pg_helpers::{NodeEnum, ObjectType, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct RenameColumnCheck;
 
 impl Check for RenameColumnCheck {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
+            operation: "RENAME COLUMN".into(),
+            problem: "Renaming column '<old>' to '<new>' in table '<table>' will cause immediate \
+                      errors in running application instances. Any code referencing the old column name \
+                      will fail after the rename is applied, causing downtime.".into(),
+            safe_alternative: "1. Add a new column with the desired name (allows NULL initially):\n   \
+                               ALTER TABLE <table> ADD COLUMN <new> <data_type>;\n\n\
+                               2. Backfill the new column with data from the old column:\n   \
+                               UPDATE <table> SET <new> = <old>;\n\n\
+                               3. Add NOT NULL constraint if needed (after backfill):\n   \
+                               ALTER TABLE <table> ALTER COLUMN <new> SET NOT NULL;\n\n\
+                               4. Update your application code to reference the new column name.\n\n\
+                               5. Deploy the updated application code.\n\n\
+                               6. Drop the old column in a subsequent migration:\n   \
+                               ALTER TABLE <table> DROP COLUMN <old>;\n\n\
+                               This approach maintains compatibility with running instances during the transition.".into(),
+            script_path: None,
+        }]
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let NodeEnum::RenameStmt(rename) = node else {
             return vec![];
         };
@@ -38,30 +61,15 @@ impl Check for RenameColumnCheck {
         let new_name = &rename.newname;
 
         vec![Violation::new(
-            "RENAME COLUMN",
-            format!(
-                "Renaming column '{old_name}' to '{new_name}' in table '{table_name}' will cause immediate errors in running application instances. \
-                Any code referencing the old column name will fail after the rename is applied, causing downtime."
-            ),
-            format!(
-                r"1. Add a new column with the desired name (allows NULL initially):
-   ALTER TABLE {table_name} ADD COLUMN {new_name} <data_type>;
-
-2. Backfill the new column with data from the old column:
-   UPDATE {table_name} SET {new_name} = {old_name};
-
-3. Add NOT NULL constraint if needed (after backfill):
-   ALTER TABLE {table_name} ALTER COLUMN {new_name} SET NOT NULL;
-
-4. Update your application code to reference the new column name.
-
-5. Deploy the updated application code.
-
-6. Drop the old column in a subsequent migration:
-   ALTER TABLE {table_name} DROP COLUMN {old_name};
-
-This approach maintains compatibility with running instances during the transition."
-            ),
+            desc.operation.clone(),
+            desc.problem
+                .replace("<table>", &table_name)
+                .replace("<old>", old_name)
+                .replace("<new>", new_name),
+            desc.safe_alternative
+                .replace("<table>", &table_name)
+                .replace("<old>", old_name)
+                .replace("<new>", new_name),
         )]
     }
 }

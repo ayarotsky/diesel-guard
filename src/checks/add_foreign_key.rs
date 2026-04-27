@@ -1,8 +1,8 @@
-use crate::checks::Check;
 use crate::checks::pg_helpers::{
     alter_table_cmds, cmd_def_as_constraint, constraint_display_name, fk_cols_constraint,
     ref_columns_constraint, ref_table_constraint,
 };
+use crate::checks::{Check, CheckDescription};
 use crate::{Config, MigrationContext, Violation};
 use pg_query::NodeEnum;
 use pg_query::protobuf::ConstrType;
@@ -10,49 +10,67 @@ use pg_query::protobuf::ConstrType;
 pub struct AddForeignKeyCheck;
 
 impl Check for AddForeignKeyCheck {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
+            operation: "ADD FOREIGN KEY".into(),
+            problem: "Adding a foreign key constraint '<name>' on table '<table>' (<cols>) without NOT VALID \
+                      scans the entire table to validate existing rows, acquiring ShareRowExclusiveLock for \
+                      the duration. On large tables this blocks writes and is a common cause of \
+                      migration-induced outages.".into(),
+            safe_alternative: "For a safer foreign key addition on large tables:\n\n\
+                               1. Create a foreign key without any immediate validation:\n   \
+                               ALTER TABLE <table> ADD CONSTRAINT <name>\n    \
+                               FOREIGN KEY (<cols>) REFERENCES <ref_table> (<ref_cols>) NOT VALID;\n\n\
+                               2. Step 2 (separate migration, acquires ShareUpdateExclusiveLock only)\n  \
+                               ALTER TABLE <table> VALIDATE CONSTRAINT <name>;\n\n\
+                               Benefits:\n\
+                               - Table remains readable and writable during foreign key creation\n\
+                               - No blocking of SELECT, INSERT, UPDATE, or DELETE operations\n\
+                               - Safe for production deployments on large tables\n".into(),
+            script_path: None,
+        }]
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
-        cmds.iter().filter_map(|cmd| {
-            let constraint = cmd_def_as_constraint(cmd)?;
-            if constraint.contype != ConstrType::ConstrForeign as i32 {
-                return None;
-            }
+        cmds.iter()
+            .filter_map(|cmd| {
+                let constraint = cmd_def_as_constraint(cmd)?;
+                if constraint.contype != ConstrType::ConstrForeign as i32 {
+                    return None;
+                }
 
-            if !constraint.initially_valid {
-                return None;
-            }
+                if !constraint.initially_valid {
+                    return None;
+                }
 
-            let fk_cols = fk_cols_constraint(constraint);
+                let fk_cols = fk_cols_constraint(constraint);
 
-            let ref_table = ref_table_constraint(constraint);
+                let ref_table = ref_table_constraint(constraint);
 
-            let ref_cols = ref_columns_constraint(constraint);
+                let ref_cols = ref_columns_constraint(constraint);
 
-            let constraint_name = constraint_display_name(constraint);
+                let constraint_name = constraint_display_name(constraint);
 
-            Some(Violation::new(
-                "ADD FOREIGN KEY",
-                format!("Adding a foreign key constraint '{constraint_name}' on table '{table_name}' ({fk_cols}) without NOT VALID scans the entire table to validate existing rows,\
-             acquiring ShareRowExclusiveLock for the duration. On large tables this blocks writes and is a common cause of migration-induced outages."),
-                format!(
-                    r"For a safer foreign key addition on large tables:
-
-1. Create a foreign key without any immediate validation:
-   ALTER TABLE {table_name} ADD CONSTRAINT {constraint_name}
-    FOREIGN KEY ({fk_cols}) REFERENCES {ref_table} ({ref_cols}) NOT VALID;
-
-2. Step 2 (separate migration, acquires ShareUpdateExclusiveLock only)
-  ALTER TABLE {table_name} VALIDATE CONSTRAINT {constraint_name};
-
-Benefits:
-- Table remains readable and writable during foreign key creation
-- No blocking of SELECT, INSERT, UPDATE, or DELETE operations
-- Safe for production deployments on large tables
-",
-                )))
-        }).collect()
+                Some(Violation::new(
+                    desc.operation.clone(),
+                    desc.problem
+                        .replace("<table>", &table_name)
+                        .replace("<name>", &constraint_name)
+                        .replace("<cols>", &fk_cols),
+                    desc.safe_alternative
+                        .replace("<table>", &table_name)
+                        .replace("<name>", &constraint_name)
+                        .replace("<cols>", &fk_cols)
+                        .replace("<ref_table>", &ref_table)
+                        .replace("<ref_cols>", &ref_cols),
+                ))
+            })
+            .collect()
     }
 }
 

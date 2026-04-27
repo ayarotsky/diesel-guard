@@ -44,22 +44,11 @@ ci: lint doc build-release test
     cargo audit
     @echo "CI pipeline passed locally."
 
-# ── Project CLI ───────────────────────────────────────────────────────────────
-
-# Inspect the pg_query AST for a SQL snippet
-# Example: just dump-ast "ALTER TABLE users ADD COLUMN x TEXT;"
-dump-ast sql:
-    cargo run --quiet -- dump-ast --sql {{ quote(sql) }}
-
 # ── Testing ───────────────────────────────────────────────────────────────────
 
 # Run the full test suite
 test:
     cargo test --all-features
-
-# Run tests matching a name filter — e.g. `just test-filter add_column`
-test-filter filter:
-    cargo test {{ filter }}
 
 # ── Tool Installation ─────────────────────────────────────────────────────────
 

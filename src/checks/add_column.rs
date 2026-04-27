@@ -15,14 +15,33 @@ use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_has_constraint,
     column_type_name,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 use pg_query::protobuf::ColumnDef;
 
 pub struct AddColumnCheck;
 
 impl Check for AddColumnCheck {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
+            operation: "ADD COLUMN with DEFAULT".into(),
+            problem: "Adding column '<column>' with DEFAULT on table '<table>' requires a full table \
+                      rewrite on Postgres < 11, which acquires an ACCESS EXCLUSIVE lock and blocks all \
+                      operations. Duration depends on table size.".into(),
+            safe_alternative: "1. Add the column without a default:\n   \
+                               ALTER TABLE <table> ADD COLUMN <column> <type>;\n\n\
+                               2. Backfill data in batches (outside migration):\n   \
+                               UPDATE <table> SET <column> = <value> WHERE <column> IS NULL;\n\n\
+                               3. Add default for new rows only:\n   \
+                               ALTER TABLE <table> ALTER COLUMN <column> SET DEFAULT <value>;\n\n\
+                               Note: For Postgres 11+, this is safe if the default is a constant value.".into(),
+            script_path: None,
+        }]
+    }
+
     fn check(&self, node: &NodeEnum, config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
@@ -45,22 +64,14 @@ impl Check for AddColumnCheck {
                 let data_type = column_type_name(col);
 
                 Some(Violation::new(
-                    "ADD COLUMN with DEFAULT",
-                    format!(
-                        "Adding column '{column_name}' with DEFAULT on table '{table_name}' requires a full table rewrite on Postgres < 11, \
-                        which acquires an ACCESS EXCLUSIVE lock and blocks all operations. Duration depends on table size."
-                    ),
-                    format!(r"1. Add the column without a default:
-   ALTER TABLE {table_name} ADD COLUMN {column_name} {data_type};
-
-2. Backfill data in batches (outside migration):
-   UPDATE {table_name} SET {column_name} = <value> WHERE {column_name} IS NULL;
-
-3. Add default for new rows only:
-   ALTER TABLE {table_name} ALTER COLUMN {column_name} SET DEFAULT <value>;
-
-Note: For Postgres 11+, this is safe if the default is a constant value."
-                    ),
+                    desc.operation.clone(),
+                    desc.problem
+                        .replace("<table>", &table_name)
+                        .replace("<column>", column_name),
+                    desc.safe_alternative
+                        .replace("<table>", &table_name)
+                        .replace("<column>", column_name)
+                        .replace("<type>", &data_type),
                 ))
             })
             .collect()

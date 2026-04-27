@@ -1,6 +1,7 @@
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
 use diesel_guard::ast_dump;
+use diesel_guard::checks::CheckDescription;
 use diesel_guard::output::OutputFormatter;
 use diesel_guard::violation::Severity;
 use diesel_guard::{Config, SafetyChecker};
@@ -107,6 +108,23 @@ EXAMPLES:
         #[arg(long)]
         file: Option<Utf8PathBuf>,
     },
+
+    /// List all available checks
+    ListChecks {
+        /// Output format: "text" (default) or "json"
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
+
+    /// Show full description of a specific check
+    Explain {
+        /// Check name (e.g. AddIndexCheck or require_concurrent)
+        check_name: String,
+
+        /// Output format: "text" (default) or "json"
+        #[arg(long, default_value = "text")]
+        format: String,
+    },
 }
 
 fn run_check(path: &camino::Utf8Path, format: &str) -> Result<()> {
@@ -166,6 +184,192 @@ fn run_check(path: &camino::Utf8Path, format: &str) -> Result<()> {
     Ok(())
 }
 
+fn run_list_checks(format: &str) -> Result<()> {
+    if !Utf8PathBuf::from("diesel-guard.toml").exists() {
+        eprintln!("Warning: No config file found. Using default configuration.");
+    }
+    let config = Config::load().map_err(|e| miette::miette!(e))?;
+    let full_checker = SafetyChecker::with_config(Config {
+        disable_checks: vec![],
+        enable_checks: vec![],
+        ..config.clone()
+    });
+
+    let checks: Vec<_> = full_checker.registry().iter_checks().collect();
+
+    if format == "json" {
+        let json: Vec<_> = checks
+            .iter()
+            .map(|c| {
+                let check_type = if c.describe()[0].script_path.is_some() {
+                    "custom"
+                } else {
+                    "builtin"
+                };
+                let severity = if config.is_check_warning(c.name()) {
+                    "warning"
+                } else {
+                    "error"
+                };
+                serde_json::json!({
+                    "name": c.name(),
+                    "type": check_type,
+                    "severity": severity,
+                    "enabled": config.is_check_enabled(c.name()),
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&json).unwrap());
+    } else {
+        println!("{:<40} {:<10} {:<10} ENABLED", "NAME", "TYPE", "SEVERITY");
+        for check in &checks {
+            let check_type = if check.describe()[0].script_path.is_some() {
+                "custom"
+            } else {
+                "builtin"
+            };
+            let severity = if config.is_check_warning(check.name()) {
+                "warning"
+            } else {
+                "error"
+            };
+            let enabled = if config.is_check_enabled(check.name()) {
+                "yes"
+            } else {
+                "no"
+            };
+            println!(
+                "{:<40} {:<10} {:<10} {}",
+                check.name(),
+                check_type,
+                severity,
+                enabled
+            );
+        }
+    }
+    Ok(())
+}
+
+fn run_explain(check_name: &str, format: &str) -> Result<()> {
+    if !Utf8PathBuf::from("diesel-guard.toml").exists() {
+        eprintln!("Warning: No config file found. Using default configuration.");
+    }
+    let config = Config::load().map_err(|e| miette::miette!(e))?;
+    let full_checker = SafetyChecker::with_config(Config {
+        disable_checks: vec![],
+        enable_checks: vec![],
+        ..config.clone()
+    });
+
+    let Some(check) = full_checker
+        .registry()
+        .iter_checks()
+        .find(|c| c.name() == check_name)
+    else {
+        eprintln!("Error: No check named '{check_name}'.");
+        eprintln!("Run 'diesel-guard list-checks' to see available checks.");
+        exit(1);
+    };
+
+    let descriptions = check.describe();
+    let check_type = if descriptions[0].script_path.is_some() {
+        "custom"
+    } else {
+        "builtin"
+    };
+    let enabled = config.is_check_enabled(check.name());
+    let severity = if config.is_check_warning(check.name()) {
+        "warning"
+    } else {
+        "error"
+    };
+
+    if format == "json" {
+        print_explain_json(check.name(), check_type, severity, enabled, &descriptions);
+    } else {
+        print_explain_text(check.name(), check_type, severity, enabled, &descriptions);
+    }
+    Ok(())
+}
+
+fn print_explain_json(
+    check_name: &str,
+    check_type: &str,
+    severity: &str,
+    enabled: bool,
+    descriptions: &[CheckDescription],
+) {
+    let descs_json: Vec<_> = descriptions
+        .iter()
+        .map(|desc| {
+            serde_json::json!({
+                "operation": json_string_or_null(&desc.operation),
+                "problem": json_string_or_null(&desc.problem),
+                "safe_alternative": json_string_or_null(&desc.safe_alternative),
+            })
+        })
+        .collect();
+    let mut obj = serde_json::json!({
+        "name": check_name,
+        "type": check_type,
+        "severity": severity,
+        "enabled": enabled,
+        "descriptions": descs_json,
+    });
+    if let Some(path) = &descriptions[0].script_path {
+        obj["script_path"] = serde_json::Value::String(path.clone());
+    }
+    println!("{}", serde_json::to_string_pretty(&obj).unwrap());
+}
+
+fn json_string_or_null(value: &str) -> serde_json::Value {
+    if value.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::Value::String(value.to_string())
+    }
+}
+
+fn print_explain_text(
+    check_name: &str,
+    check_type: &str,
+    severity: &str,
+    enabled: bool,
+    descriptions: &[CheckDescription],
+) {
+    let enabled_str = if enabled { "enabled" } else { "disabled" };
+    println!("{check_name} ({check_type} | {severity} | {enabled_str})\n");
+    let first = &descriptions[0];
+    if first.operation.is_empty() && first.script_path.is_some() {
+        println!("No description available. Add fn describe() to the script:");
+        println!("  {}", first.script_path.as_deref().unwrap_or(""));
+        return;
+    }
+    if descriptions.len() == 1 {
+        println!("Operation: {}\n", first.operation);
+        print_description_body(first);
+        return;
+    }
+    for (i, desc) in descriptions.iter().enumerate() {
+        println!("[{}] {}\n", i + 1, desc.operation);
+        print_description_body(desc);
+        if i + 1 < descriptions.len() {
+            println!();
+        }
+    }
+}
+
+fn print_description_body(description: &CheckDescription) {
+    println!("Problem:");
+    for line in description.problem.lines() {
+        println!("  {line}");
+    }
+    println!("\nSafe alternative:");
+    for line in description.safe_alternative.lines() {
+        println!("  {line}");
+    }
+}
+
 fn main() -> Result<()> {
     miette::set_hook(Box::new(|_| {
         Box::new(
@@ -200,6 +404,10 @@ fn main() -> Result<()> {
             let json = ast_dump::dump_ast(&sql_input)?;
             println!("{json}");
         }
+
+        Commands::ListChecks { format } => run_list_checks(&format)?,
+
+        Commands::Explain { check_name, format } => run_explain(&check_name, &format)?,
 
         Commands::Init { force } => {
             let config_path = Utf8PathBuf::from("diesel-guard.toml");
