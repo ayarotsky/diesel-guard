@@ -1,4 +1,4 @@
-use crate::checks::pg_helpers::NodeEnum;
+use crate::checks::pg_helpers::{NodeEnum, ObjectType};
 use crate::checks::{Check, Config, MigrationContext};
 use crate::violation::Violation;
 
@@ -10,13 +10,45 @@ fn ddl_description(node: &NodeEnum) -> Option<&'static str> {
     match node {
         NodeEnum::AlterTableStmt(_) => Some("ALTER TABLE"),
         NodeEnum::IndexStmt(_) => Some("CREATE INDEX"),
-        NodeEnum::DropStmt(_) => Some("DROP"),
+        NodeEnum::DropStmt(stmt) => Some(drop_label(stmt.remove_type)),
         NodeEnum::TruncateStmt(_) => Some("TRUNCATE TABLE"),
         NodeEnum::ReindexStmt(_) => Some("REINDEX"),
-        NodeEnum::RenameStmt(_) => Some("RENAME"),
+        NodeEnum::RenameStmt(stmt) => Some(rename_label(stmt.rename_type)),
         NodeEnum::RefreshMatViewStmt(_) => Some("REFRESH MATERIALIZED VIEW"),
         NodeEnum::CreateExtensionStmt(_) => Some("CREATE EXTENSION"),
         _ => None,
+    }
+}
+
+/// Map `DropStmt.remove_type` to a specific label such as `"DROP TABLE"`,
+/// matching the labels used by the dedicated drop checks. Falls back to
+/// `"DROP"` for object kinds we don't enumerate.
+fn drop_label(remove_type: i32) -> &'static str {
+    match remove_type {
+        x if x == ObjectType::ObjectTable as i32 => "DROP TABLE",
+        x if x == ObjectType::ObjectIndex as i32 => "DROP INDEX",
+        x if x == ObjectType::ObjectSchema as i32 => "DROP SCHEMA",
+        x if x == ObjectType::ObjectMatview as i32 => "DROP MATERIALIZED VIEW",
+        x if x == ObjectType::ObjectView as i32 => "DROP VIEW",
+        x if x == ObjectType::ObjectSequence as i32 => "DROP SEQUENCE",
+        x if x == ObjectType::ObjectType as i32 => "DROP TYPE",
+        x if x == ObjectType::ObjectExtension as i32 => "DROP EXTENSION",
+        x if x == ObjectType::ObjectTrigger as i32 => "DROP TRIGGER",
+        _ => "DROP",
+    }
+}
+
+/// Map `RenameStmt.rename_type` to a specific label such as `"RENAME COLUMN"`,
+/// matching the labels used by the dedicated rename checks. Falls back to
+/// `"RENAME"` for object kinds we don't enumerate.
+fn rename_label(rename_type: i32) -> &'static str {
+    match rename_type {
+        x if x == ObjectType::ObjectTable as i32 => "RENAME TABLE",
+        x if x == ObjectType::ObjectColumn as i32 => "RENAME COLUMN",
+        x if x == ObjectType::ObjectSchema as i32 => "RENAME SCHEMA",
+        x if x == ObjectType::ObjectIndex as i32 => "RENAME INDEX",
+        x if x == ObjectType::ObjectTabconstraint as i32 => "RENAME CONSTRAINT",
+        _ => "RENAME",
     }
 }
 
@@ -80,6 +112,88 @@ mod tests {
         assert_detects_violation!(
             MissingLockTimeoutCheck,
             "DROP TABLE users;",
+            "DROP TABLE without lock_timeout and statement_timeout"
+        );
+    }
+
+    #[test]
+    fn test_detects_drop_index_without_timeouts() {
+        assert_detects_violation!(
+            MissingLockTimeoutCheck,
+            "DROP INDEX idx_users_email;",
+            "DROP INDEX without lock_timeout and statement_timeout"
+        );
+    }
+
+    #[test]
+    fn test_detects_drop_schema_without_timeouts() {
+        assert_detects_violation!(
+            MissingLockTimeoutCheck,
+            "DROP SCHEMA tenant_a;",
+            "DROP SCHEMA without lock_timeout and statement_timeout"
+        );
+    }
+
+    #[test]
+    fn test_detects_drop_materialized_view_without_timeouts() {
+        assert_detects_violation!(
+            MissingLockTimeoutCheck,
+            "DROP MATERIALIZED VIEW user_stats;",
+            "DROP MATERIALIZED VIEW without lock_timeout and statement_timeout"
+        );
+    }
+
+    #[test]
+    fn test_detects_drop_view_without_timeouts() {
+        assert_detects_violation!(
+            MissingLockTimeoutCheck,
+            "DROP VIEW user_view;",
+            "DROP VIEW without lock_timeout and statement_timeout"
+        );
+    }
+
+    #[test]
+    fn test_detects_drop_sequence_without_timeouts() {
+        assert_detects_violation!(
+            MissingLockTimeoutCheck,
+            "DROP SEQUENCE user_id_seq;",
+            "DROP SEQUENCE without lock_timeout and statement_timeout"
+        );
+    }
+
+    #[test]
+    fn test_detects_drop_type_without_timeouts() {
+        assert_detects_violation!(
+            MissingLockTimeoutCheck,
+            "DROP TYPE user_status;",
+            "DROP TYPE without lock_timeout and statement_timeout"
+        );
+    }
+
+    #[test]
+    fn test_detects_drop_extension_without_timeouts() {
+        assert_detects_violation!(
+            MissingLockTimeoutCheck,
+            "DROP EXTENSION pg_trgm;",
+            "DROP EXTENSION without lock_timeout and statement_timeout"
+        );
+    }
+
+    #[test]
+    fn test_detects_drop_trigger_without_timeouts() {
+        assert_detects_violation!(
+            MissingLockTimeoutCheck,
+            "DROP TRIGGER trg_users_audit ON users;",
+            "DROP TRIGGER without lock_timeout and statement_timeout"
+        );
+    }
+
+    #[test]
+    fn test_detects_drop_other_falls_back_to_generic_label() {
+        // DROP FUNCTION is not enumerated, so the label falls back to "DROP".
+        assert_detects_violation!(
+            MissingLockTimeoutCheck,
+            "DROP FUNCTION my_func();",
             "DROP without lock_timeout and statement_timeout"
         );
     }
@@ -103,10 +217,56 @@ mod tests {
     }
 
     #[test]
-    fn test_detects_rename_without_timeouts() {
+    fn test_detects_rename_table_without_timeouts() {
         assert_detects_violation!(
             MissingLockTimeoutCheck,
             "ALTER TABLE users RENAME TO customers;",
+            "RENAME TABLE without lock_timeout and statement_timeout"
+        );
+    }
+
+    #[test]
+    fn test_detects_rename_column_without_timeouts() {
+        assert_detects_violation!(
+            MissingLockTimeoutCheck,
+            "ALTER TABLE users RENAME COLUMN email TO email_address;",
+            "RENAME COLUMN without lock_timeout and statement_timeout"
+        );
+    }
+
+    #[test]
+    fn test_detects_rename_schema_without_timeouts() {
+        assert_detects_violation!(
+            MissingLockTimeoutCheck,
+            "ALTER SCHEMA tenant_a RENAME TO tenant_b;",
+            "RENAME SCHEMA without lock_timeout and statement_timeout"
+        );
+    }
+
+    #[test]
+    fn test_detects_rename_index_without_timeouts() {
+        assert_detects_violation!(
+            MissingLockTimeoutCheck,
+            "ALTER INDEX idx_users_email RENAME TO idx_users_addr;",
+            "RENAME INDEX without lock_timeout and statement_timeout"
+        );
+    }
+
+    #[test]
+    fn test_detects_rename_constraint_without_timeouts() {
+        assert_detects_violation!(
+            MissingLockTimeoutCheck,
+            "ALTER TABLE users RENAME CONSTRAINT users_pk TO users_pkey;",
+            "RENAME CONSTRAINT without lock_timeout and statement_timeout"
+        );
+    }
+
+    #[test]
+    fn test_detects_rename_other_falls_back_to_generic_label() {
+        // RENAME on a view is not enumerated, so the label falls back to "RENAME".
+        assert_detects_violation!(
+            MissingLockTimeoutCheck,
+            "ALTER VIEW v RENAME TO v2;",
             "RENAME without lock_timeout and statement_timeout"
         );
     }

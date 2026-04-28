@@ -633,4 +633,123 @@ mod tests {
             violations.iter().map(|(l, _)| l).collect::<Vec<_>>()
         );
     }
+
+    // --- MissingLockTimeout: timeout-context updates ---
+
+    fn timeout_violations(sql: &str) -> Vec<String> {
+        let config = Config {
+            // Disable other checks so we only see MissingLockTimeoutCheck output.
+            enable_checks: vec!["MissingLockTimeoutCheck".to_string()],
+            ..Default::default()
+        };
+        let checker = SafetyChecker::with_config(config);
+        checker
+            .check_sql(sql)
+            .unwrap()
+            .into_iter()
+            .map(|(_, v)| v.operation)
+            .collect()
+    }
+
+    #[test]
+    fn test_set_lock_timeout_zero_integer_is_unsafe() {
+        // `SET lock_timeout = 0` disables the timeout in PostgreSQL.
+        let sql = "SET lock_timeout = 0; SET statement_timeout = 0; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        assert_eq!(
+            timeout_violations(sql),
+            vec!["ALTER TABLE without lock_timeout and statement_timeout"]
+        );
+    }
+
+    #[test]
+    fn test_set_lock_timeout_zero_string_is_unsafe() {
+        // String forms like '0', '0ms' also disable the timeout.
+        let sql = "SET lock_timeout = '0ms'; SET statement_timeout = '0'; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        assert_eq!(
+            timeout_violations(sql),
+            vec!["ALTER TABLE without lock_timeout and statement_timeout"]
+        );
+    }
+
+    #[test]
+    fn test_set_lock_timeout_zero_only_lock_is_unsafe() {
+        // Only lock_timeout zeroed; statement_timeout still set.
+        let sql = "SET lock_timeout = 0; SET statement_timeout = '60s'; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        let violations = timeout_violations(sql);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0], "ALTER TABLE without lock_timeout");
+    }
+
+    #[test]
+    fn test_set_nonzero_string_with_decimal_is_safe() {
+        // '0.5s' must NOT be classified as zero (it's 500ms).
+        let sql = "SET lock_timeout = '0.5s'; SET statement_timeout = '60s'; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        assert!(timeout_violations(sql).is_empty());
+    }
+
+    #[test]
+    fn test_set_lock_timeout_to_default_clears_flag() {
+        // `SET lock_timeout TO DEFAULT` (kind = VarSetDefault) restores the
+        // server default and must not protect subsequent DDL.
+        let sql = "SET lock_timeout = '2s'; SET statement_timeout = '60s'; \
+                   SET lock_timeout TO DEFAULT; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        let violations = timeout_violations(sql);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0], "ALTER TABLE without lock_timeout");
+    }
+
+    #[test]
+    fn test_reset_lock_timeout_clears_flag() {
+        // `RESET lock_timeout` (kind = VarReset) restores the default.
+        let sql = "SET lock_timeout = '2s'; SET statement_timeout = '60s'; \
+                   RESET lock_timeout; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        let violations = timeout_violations(sql);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0], "ALTER TABLE without lock_timeout");
+    }
+
+    #[test]
+    fn test_reset_statement_timeout_clears_flag() {
+        let sql = "SET lock_timeout = '2s'; SET statement_timeout = '60s'; \
+                   RESET statement_timeout; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        let violations = timeout_violations(sql);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0], "ALTER TABLE without statement_timeout");
+    }
+
+    #[test]
+    fn test_reset_all_clears_both_flags() {
+        // `RESET ALL` (kind = VarResetAll) wipes every GUC, including both timeouts.
+        let sql = "SET lock_timeout = '2s'; SET statement_timeout = '60s'; \
+                   RESET ALL; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        assert_eq!(
+            timeout_violations(sql),
+            vec!["ALTER TABLE without lock_timeout and statement_timeout"]
+        );
+    }
+
+    #[test]
+    fn test_set_unrelated_var_does_not_affect_timeouts() {
+        // Setting an unrelated GUC must leave timeout flags untouched.
+        let sql = "SET timezone = 'UTC'; SET lock_timeout = '2s'; SET statement_timeout = '60s'; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        assert!(timeout_violations(sql).is_empty());
+    }
+
+    #[test]
+    fn test_reset_unrelated_var_does_not_affect_timeouts() {
+        // RESET on an unrelated GUC must leave timeout flags untouched.
+        let sql = "SET lock_timeout = '2s'; SET statement_timeout = '60s'; \
+                   RESET timezone; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        assert!(timeout_violations(sql).is_empty());
+    }
 }

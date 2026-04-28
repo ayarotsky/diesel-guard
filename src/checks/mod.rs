@@ -264,11 +264,16 @@ impl Registry {
                     VariableSetKind::try_from(set_stmt.kind).unwrap_or(VariableSetKind::Undefined);
 
                 match kind {
-                    VariableSetKind::VarSetValue => match set_stmt.name.as_str() {
-                        "lock_timeout" => ctx.has_lock_timeout = true,
-                        "statement_timeout" => ctx.has_statement_timeout = true,
-                        _ => {}
-                    },
+                    VariableSetKind::VarSetValue => {
+                        // `SET <timeout> = 0` (or `'0'`, `'0ms'`, ...) disables the
+                        // timeout in PostgreSQL, which is equivalent to a reset.
+                        let active = !is_zero_timeout_value(&set_stmt.args);
+                        match set_stmt.name.as_str() {
+                            "lock_timeout" => ctx.has_lock_timeout = active,
+                            "statement_timeout" => ctx.has_statement_timeout = active,
+                            _ => {}
+                        }
+                    }
                     VariableSetKind::VarSetDefault | VariableSetKind::VarReset => {
                         match set_stmt.name.as_str() {
                             "lock_timeout" => ctx.has_lock_timeout = false,
@@ -336,6 +341,34 @@ fn first_token_at_or_after(token_starts: &[usize], offset: usize) -> usize {
         Ok(i) => token_starts[i],
         Err(i) => token_starts.get(i).copied().unwrap_or(offset),
     }
+}
+
+/// Whether the first argument of a `SET <var> = <value>` statement is
+/// a zero-equivalent duration. PostgreSQL treats `0` (with or without a
+/// time unit) as "no timeout", so for `lock_timeout` and `statement_timeout`
+/// it is equivalent in effect to a `RESET`.
+fn is_zero_timeout_value(args: &[pg_query::protobuf::Node]) -> bool {
+    use pg_query::protobuf::a_const::Val;
+
+    let Some(first) = args.first() else {
+        return false;
+    };
+    let Some(NodeEnum::AConst(a_const)) = first.node.as_ref() else {
+        return false;
+    };
+    match &a_const.val {
+        Some(Val::Ival(i)) => i.ival == 0,
+        Some(Val::Sval(s)) => is_zero_duration(&s.sval),
+        _ => false,
+    }
+}
+
+/// Whether a string-form duration like `"0"`, `"0ms"`, `"0 s"` parses to zero.
+/// Rejects fractional values to avoid misclassifying e.g. `"0.5s"` as zero.
+fn is_zero_duration(s: &str) -> bool {
+    let trimmed = s.trim();
+    let digit_part: String = trimmed.chars().take_while(char::is_ascii_digit).collect();
+    !digit_part.is_empty() && digit_part.chars().all(|c| c == '0') && !trimmed.contains('.')
 }
 
 impl Default for Registry {
