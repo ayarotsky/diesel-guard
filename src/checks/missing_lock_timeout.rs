@@ -62,20 +62,37 @@ impl Check for MissingLockTimeoutCheck {
             return vec![];
         }
 
-        let missing = match (ctx.has_lock_timeout, ctx.has_statement_timeout) {
-            (false, false) => "lock_timeout and statement_timeout",
-            (true, false) => "statement_timeout",
-            (false, true) => "lock_timeout",
+        let (missing, problem) = match (ctx.has_lock_timeout, ctx.has_statement_timeout) {
+            (false, false) => (
+                "lock_timeout and statement_timeout",
+                format!(
+                    "{operation} requires aggressive locking or timeout protection. \
+                     Without lock_timeout and statement_timeout, the migration can \
+                     hang indefinitely and block other database activity."
+                ),
+            ),
+            (true, false) => (
+                "statement_timeout",
+                format!(
+                    "{operation} is bounded by lock_timeout while acquiring locks, \
+                     but without statement_timeout it can still run indefinitely \
+                     once it begins executing."
+                ),
+            ),
+            (false, true) => (
+                "lock_timeout",
+                format!(
+                    "{operation} is bounded by statement_timeout overall, but \
+                     without lock_timeout it can spend that entire window waiting \
+                     to acquire a lock and block other database activity."
+                ),
+            ),
             (true, true) => unreachable!(),
         };
 
         vec![Violation::new(
             format!("{operation} without {missing}"),
-            format!(
-                "{operation} requires an aggressive lock that blocks reads/writes. \
-                 Without {missing}, the migration can hang indefinitely waiting \
-                 for the lock, blocking all other queries on the table."
-            ),
+            problem,
             "SET lock_timeout = '2s';\n\
                  SET statement_timeout = '60s';\n\n\
                  Or disable this check if timeouts are configured at the connection level.",
