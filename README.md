@@ -49,6 +49,21 @@ Via PowerShell (Windows):
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/ayarotsky/diesel-guard/releases/latest/download/diesel-guard-installer.ps1 | iex"
 ```
 
+Via Docker (Unix):
+```sh
+docker run --rm -v "$(pwd):/app" -w /app ayarotsky/diesel-guard check
+```
+
+Via Docker (Windows CMD):
+```cmd
+docker run --rm -v "%cd%:/app" -w /app ayarotsky/diesel-guard check
+```
+
+Via Docker (Windows PowerShell):
+```powershell
+docker run --rm -v "${PWD}:/app" -w /app ayarotsky/diesel-guard check
+```
+
 Via pre-commit:
 ```yaml
 repos:

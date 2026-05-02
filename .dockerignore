@@ -1,0 +1,14 @@
+.git
+.github
+target/
+docs/
+tests/
+examples/
+*.md
+justfile
+deny.toml
+codecov.yml
+*.config.*
+.commitlintrc.json
+demo.gif
+.DS_Store
