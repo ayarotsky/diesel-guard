@@ -31,6 +31,25 @@ updates:
         update-types:
           - "minor"
 
+  # Docker
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    reviewers:
+      - "ayarotsky"
+    assignees:
+      - "ayarotsky"
+
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"

@@ -23,6 +23,23 @@ Homebrew:
 brew install ayarotsky/tap/diesel-guard
 ```
 
+## Docker
+
+Unix:
+```sh
+docker run --rm -v "$(pwd):/app" -w /app ayarotsky/diesel-guard check
+```
+
+Windows CMD:
+```cmd
+docker run --rm -v "%cd%:/app" -w /app ayarotsky/diesel-guard check
+```
+
+Windows PowerShell:
+```powershell
+docker run --rm -v "${PWD}:/app" -w /app ayarotsky/diesel-guard check
+```
+
 ## pre-commit
 
 Add diesel-guard as a [pre-commit](https://pre-commit.com/) hook to catch unsafe migrations before they're committed.
