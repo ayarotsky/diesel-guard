@@ -13,13 +13,40 @@ use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, alter_table_cmds, cmd_def_as_constraint, constraint_columns_str,
     constraint_display_name,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct AddUniqueConstraintCheck;
 
 impl Check for AddUniqueConstraintCheck {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
+            operation: "ADD UNIQUE constraint".into(),
+            problem: "Adding UNIQUE constraint '<name>' on table '<table>' (<cols>) via ALTER TABLE acquires \
+                      an ACCESS EXCLUSIVE lock, blocking all reads and writes during index creation. \
+                      Duration depends on table size.".into(),
+            safe_alternative: "Use CREATE UNIQUE INDEX CONCURRENTLY instead:\n\n\
+                               1. Create the unique index concurrently:\n   \
+                               CREATE UNIQUE INDEX CONCURRENTLY <index> ON <table> (<cols>);\n\n\
+                               2. (Optional) Add constraint using the existing index:\n   \
+                               ALTER TABLE <table> ADD CONSTRAINT <name> UNIQUE USING INDEX <index>;\n\n\
+                               Benefits:\n\
+                               - Table remains readable and writable during index creation\n\
+                               - No blocking of SELECT, INSERT, UPDATE, or DELETE operations\n\
+                               - Safe for production deployments on large tables\n\n\
+                               Considerations:\n\
+                               - Cannot run inside a transaction block\n\
+                               For Diesel migrations: Create metadata.toml with run_in_transaction = false\n\
+                               For SQLx migrations: Add -- no-transaction directive at the top of the file\n\
+                               - Takes longer than non-concurrent creation\n\
+                               - May fail if duplicate values exist (leaves behind invalid index that should be dropped)".into(),
+            script_path: None,
+        }]
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
@@ -46,42 +73,23 @@ impl Check for AddUniqueConstraintCheck {
                 } else {
                     c.conname.clone()
                 };
+                let suggested_constraint_name = if c.conname.is_empty() {
+                    format!("{table_name}_unique_constraint")
+                } else {
+                    constraint_name.clone()
+                };
 
                 Some(Violation::new(
-                    "ADD UNIQUE constraint",
-                    format!(
-                        "Adding UNIQUE constraint '{constraint_name}' on table '{table_name}' ({cols}) via ALTER TABLE acquires an ACCESS EXCLUSIVE lock, \
-                        blocking all reads and writes during index creation. Duration depends on table size."
-                    ),
-                    format!(
-                        r"Use CREATE UNIQUE INDEX CONCURRENTLY instead:
-
-1. Create the unique index concurrently:
-   CREATE UNIQUE INDEX CONCURRENTLY {index_name} ON {table} ({columns});
-
-2. (Optional) Add constraint using the existing index:
-   ALTER TABLE {table} ADD CONSTRAINT {constraint_name} UNIQUE USING INDEX {index_name};
-
-Benefits:
-- Table remains readable and writable during index creation
-- No blocking of SELECT, INSERT, UPDATE, or DELETE operations
-- Safe for production deployments on large tables
-
-Considerations:
-- Cannot run inside a transaction block
-  For Diesel migrations: Create metadata.toml with run_in_transaction = false
-  For SQLx migrations: Add -- no-transaction directive at the top of the file
-- Takes longer than non-concurrent creation
-- May fail if duplicate values exist (leaves behind invalid index that should be dropped)",
-                        index_name = suggested_index_name,
-                        table = table_name,
-                        columns = cols,
-                        constraint_name = if c.conname.is_empty() {
-                            format!("{table_name}_unique_constraint")
-                        } else {
-                            constraint_name
-                        }
-                    ),
+                    desc.operation.clone(),
+                    desc.problem
+                        .replace("<table>", &table_name)
+                        .replace("<name>", &constraint_name)
+                        .replace("<cols>", &cols),
+                    desc.safe_alternative
+                        .replace("<table>", &table_name)
+                        .replace("<name>", &suggested_constraint_name)
+                        .replace("<cols>", &cols)
+                        .replace("<index>", &suggested_index_name),
                 ))
             })
             .collect()

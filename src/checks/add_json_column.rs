@@ -14,13 +14,34 @@
 use crate::checks::pg_helpers::{
     NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_type_name, is_json_type,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct AddJsonColumnCheck;
 
 impl Check for AddJsonColumnCheck {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
+            operation: "ADD COLUMN with JSON type".into(),
+            problem: "Adding column '<column>' with JSON type on table '<table>' can break existing \
+                      SELECT DISTINCT queries. The JSON type has no equality operator, causing runtime \
+                      errors for DISTINCT, GROUP BY, and UNION operations.".into(),
+            safe_alternative: "Use JSONB instead of JSON:\n\n   \
+                               ALTER TABLE <table> ADD COLUMN <column> JSONB;\n\n\
+                               Benefits of JSONB over JSON:\n\
+                               - Has proper equality and comparison operators (supports DISTINCT, GROUP BY, UNION)\n\
+                               - Supports indexing (GIN indexes for efficient queries)\n\
+                               - Faster to process (binary format, no reparsing)\n\
+                               - Generally better performance for most use cases\n\n\
+                               Note: The only advantage of JSON over JSONB is that it preserves exact formatting \
+                               and key order, which is rarely needed in practice.".into(),
+            script_path: None,
+        }]
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
@@ -36,25 +57,13 @@ impl Check for AddJsonColumnCheck {
                 let column_name = &col.colname;
 
                 Some(Violation::new(
-                    "ADD COLUMN with JSON type",
-                    format!(
-                        "Adding column '{column_name}' with JSON type on table '{table_name}' can break existing SELECT DISTINCT queries. \
-                        The JSON type has no equality operator, causing runtime errors for DISTINCT, GROUP BY, and UNION operations."
-                    ),
-                    format!(
-                        r"Use JSONB instead of JSON:
-
-   ALTER TABLE {table_name} ADD COLUMN {column_name} JSONB;
-
-Benefits of JSONB over JSON:
-- Has proper equality and comparison operators (supports DISTINCT, GROUP BY, UNION)
-- Supports indexing (GIN indexes for efficient queries)
-- Faster to process (binary format, no reparsing)
-- Generally better performance for most use cases
-
-Note: The only advantage of JSON over JSONB is that it preserves exact formatting and key order,
-which is rarely needed in practice."
-                    ),
+                    desc.operation.clone(),
+                    desc.problem
+                        .replace("<table>", &table_name)
+                        .replace("<column>", column_name),
+                    desc.safe_alternative
+                        .replace("<table>", &table_name)
+                        .replace("<column>", column_name),
                 ))
             })
             .collect()

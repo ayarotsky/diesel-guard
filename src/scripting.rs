@@ -1,4 +1,4 @@
-use crate::checks::{Check, MigrationContext};
+use crate::checks::{Check, CheckDescription, MigrationContext};
 use crate::config::Config;
 use crate::violation::Violation;
 use camino::Utf8Path;
@@ -19,6 +19,7 @@ pub struct CustomCheck {
     name: &'static str,
     engine: Arc<Engine>,
     ast: AST,
+    path: String,
 }
 
 impl CustomCheck {
@@ -34,6 +35,36 @@ impl CustomCheck {
 impl Check for CustomCheck {
     fn name(&self) -> &'static str {
         self.name
+    }
+
+    fn describe(&self) -> Vec<CheckDescription> {
+        // clone_functions_only() strips the script body so call_fn won't
+        // try to evaluate statements that reference `node`.
+        let fns_ast = self.ast.clone_functions_only();
+        let mut scope = rhai::Scope::new();
+        if let Ok(result) =
+            self.engine
+                .call_fn::<rhai::Dynamic>(&mut scope, &fns_ast, "describe", ())
+            && let Some(map) = result.try_cast::<rhai::Map>()
+        {
+            let get = |k: &str| {
+                map.get(k)
+                    .and_then(|v| v.clone().into_string().ok())
+                    .unwrap_or_default()
+            };
+            return vec![CheckDescription {
+                operation: get("operation"),
+                problem: get("problem"),
+                safe_alternative: get("safe_alternative"),
+                script_path: Some(self.path.clone()),
+            }];
+        }
+        vec![CheckDescription {
+            operation: String::new(),
+            problem: String::new(),
+            safe_alternative: String::new(),
+            script_path: Some(self.path.clone()),
+        }]
     }
 
     fn check(&self, node: &NodeEnum, config: &Config, ctx: &MigrationContext) -> Vec<Violation> {
@@ -279,6 +310,7 @@ pub fn load_custom_checks(
                     name,
                     engine: Arc::clone(&engine),
                     ast,
+                    path: path.display().to_string(),
                 }));
             }
             Err(e) => {
@@ -329,7 +361,12 @@ mod tests {
         let engine = Arc::new(create_engine());
         let ast = engine.compile(script).expect("script should compile");
         let name: &'static str = Box::leak("test_check".to_string().into_boxed_str());
-        let check = CustomCheck { name, engine, ast };
+        let check = CustomCheck {
+            name,
+            engine,
+            ast,
+            path: String::new(),
+        };
 
         let stmts = crate::parser::parse(sql).expect("SQL should parse");
         let mut all_violations = Vec::new();
@@ -745,7 +782,12 @@ mod tests {
         let engine = Arc::new(create_engine());
         let ast = engine.compile("()").expect("script should compile");
         let name: &'static str = Box::leak("test_check".to_string().into_boxed_str());
-        CustomCheck { name, engine, ast }
+        CustomCheck {
+            name,
+            engine,
+            ast,
+            path: String::new(),
+        }
     }
 
     #[test]
@@ -804,5 +846,86 @@ mod tests {
             violations.is_empty(),
             "All pg constants should be accessible, got: {violations:?}"
         );
+    }
+
+    #[test]
+    fn test_describe_call_fn_debug() {
+        let engine = Arc::new(create_engine());
+        // Script with fn describe() AND body that references `node` (like a real check script)
+        let script = r#"
+fn describe() {
+    #{
+        operation: "MY OPERATION",
+        problem: "my problem",
+        safe_alternative: "my safe alternative"
+    }
+}
+let stmt = node.IndexStmt;
+if stmt == () { return; }
+#{ operation: "MY OPERATION", problem: "my problem", safe_alternative: "my safe alternative" }
+"#;
+        let ast = engine.compile(script).expect("script should compile");
+        let fns_ast = ast.clone_functions_only();
+        let mut scope = rhai::Scope::new();
+        let result = engine.call_fn::<rhai::Dynamic>(&mut scope, &fns_ast, "describe", ());
+        let result = result.expect("call_fn on fns-only AST should succeed");
+        assert!(
+            result.is_map(),
+            "result should be a map, got type: {}",
+            result.type_name()
+        );
+        let map = result.try_cast::<rhai::Map>().expect("should cast to Map");
+        let op = map
+            .get("operation")
+            .and_then(|v| v.clone().into_string().ok());
+        assert_eq!(op, Some("MY OPERATION".to_string()));
+    }
+
+    #[test]
+    fn test_describe_with_fn_describe_in_script() {
+        let engine = Arc::new(create_engine());
+        let script = r#"
+fn describe() {
+    #{
+        operation: "MY OPERATION",
+        problem: "my problem",
+        safe_alternative: "my safe alternative"
+    }
+}
+let stmt = node.IndexStmt;
+if stmt == () { return; }
+#{ operation: "MY OPERATION", problem: "my problem", safe_alternative: "my safe alternative" }
+"#;
+        let ast = engine.compile(script).expect("script should compile");
+        let name: &'static str = Box::leak("my_check".to_string().into_boxed_str());
+        let check = CustomCheck {
+            name,
+            engine,
+            ast,
+            path: "/path/my_check.rhai".to_string(),
+        };
+
+        let desc = check.describe();
+        assert_eq!(desc[0].operation, "MY OPERATION");
+        assert_eq!(desc[0].problem, "my problem");
+        assert_eq!(desc[0].safe_alternative, "my safe alternative");
+        assert_eq!(desc[0].script_path, Some("/path/my_check.rhai".to_string()));
+    }
+
+    #[test]
+    fn test_describe_without_fn_describe_in_script_falls_back() {
+        let engine = Arc::new(create_engine());
+        let ast = engine.compile("()").expect("script should compile");
+        let name: &'static str = Box::leak("no_desc".to_string().into_boxed_str());
+        let check = CustomCheck {
+            name,
+            engine,
+            ast,
+            path: "/path/no_desc.rhai".to_string(),
+        };
+
+        let desc = check.describe();
+        assert_eq!(desc[0].operation, "");
+        assert_eq!(desc[0].script_path, Some("/path/no_desc.rhai".to_string()));
     }
 }

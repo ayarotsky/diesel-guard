@@ -12,13 +12,34 @@
 //! backups exist, and check for foreign key dependencies before dropping.
 
 use crate::checks::pg_helpers::{DropBehavior, NodeEnum, ObjectType, drop_object_names};
-use crate::checks::{Check, Config, MigrationContext, if_exists_clause};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext, if_exists_clause};
 use crate::violation::Violation;
 
 pub struct DropTableCheck;
 
 impl Check for DropTableCheck {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
+            operation: "DROP TABLE".into(),
+            problem: "Dropping table '<name>' permanently deletes all data and acquires an ACCESS \
+                      EXCLUSIVE lock. This operation cannot be undone after the transaction commits.".into(),
+            safe_alternative: "Before dropping a table in production:\n\n\
+                               1. Verify this is intentional and the table is no longer in use\n\
+                               2. Ensure a backup exists or data has been migrated\n\
+                               3. Check for foreign key dependencies that may block the drop\n\n\
+                               If this drop is intentional, wrap it in a safety-assured block:\n   \
+                               -- safety-assured:start\n   \
+                               DROP TABLE<if_exists> <name><modifiers>;\n   \
+                               -- safety-assured:end\n\n\
+                               Note: DROP TABLE acquires ACCESS EXCLUSIVE lock, blocking all operations \
+                               until complete.".into(),
+            script_path: None,
+        }]
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let NodeEnum::DropStmt(drop_stmt) = node else {
             return vec![];
         };
@@ -39,24 +60,12 @@ impl Check for DropTableCheck {
             .into_iter()
             .map(|name| {
                 Violation::new(
-                    "DROP TABLE",
-                    format!(
-                        "Dropping table '{name}' permanently deletes all data and acquires an ACCESS EXCLUSIVE lock. \
-                        This operation cannot be undone after the transaction commits."
-                    ),
-                    format!(r"Before dropping a table in production:
-
-1. Verify this is intentional and the table is no longer in use
-2. Ensure a backup exists or data has been migrated
-3. Check for foreign key dependencies that may block the drop
-
-If this drop is intentional, wrap it in a safety-assured block:
-   -- safety-assured:start
-   DROP TABLE{if_exists_str} {name}{modifiers};
-   -- safety-assured:end
-
-Note: DROP TABLE acquires ACCESS EXCLUSIVE lock, blocking all operations until complete."
-                    ),
+                    desc.operation.clone(),
+                    desc.problem.replace("<name>", &name),
+                    desc.safe_alternative
+                        .replace("<name>", &name)
+                        .replace("<if_exists>", if_exists_str)
+                        .replace("<modifiers>", modifiers),
                 )
             })
             .collect()

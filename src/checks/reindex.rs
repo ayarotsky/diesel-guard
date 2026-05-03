@@ -12,7 +12,7 @@
 //! inside a transaction block.
 
 use crate::checks::pg_helpers::{Node, NodeEnum, concurrent_safe_alternative};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct ReindexCheck;
@@ -38,7 +38,35 @@ fn has_concurrently(params: &[Node]) -> bool {
 }
 
 impl Check for ReindexCheck {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![
+            CheckDescription {
+                operation: "REINDEX without CONCURRENTLY".into(),
+                problem: "REINDEX <object> '<target>' without CONCURRENTLY acquires an ACCESS \
+                          EXCLUSIVE lock, blocking all operations on the <object> '<target>' until \
+                          complete. Duration depends on index size."
+                    .into(),
+                safe_alternative:
+                    "Use REINDEX CONCURRENTLY (Postgres 12+) to rebuild the index without \
+                                   blocking reads or writes (cannot run inside a transaction)."
+                        .into(),
+                script_path: None,
+            },
+            CheckDescription {
+                operation: "REINDEX CONCURRENTLY inside a transaction".into(),
+                problem: "REINDEX <object> CONCURRENTLY '<target>' cannot run inside a transaction \
+                          block. PostgreSQL will raise an error at runtime."
+                    .into(),
+                safe_alternative:
+                    "Disable transaction wrapping for this migration (see your framework's documentation)."
+                        .into(),
+                script_path: None,
+            },
+        ]
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
         let NodeEnum::ReindexStmt(reindex) = node else {
             return vec![];
         };
@@ -84,11 +112,11 @@ Considerations:
             let safe_alternative = concurrent_safe_alternative(suggestion, ctx);
 
             return vec![Violation::new(
-                "REINDEX without CONCURRENTLY",
-                format!(
-                    "REINDEX {object} '{target}' without CONCURRENTLY acquires an ACCESS EXCLUSIVE lock, \
-                    blocking all operations on the {object} '{target}' until complete. Duration depends on index size.",
-                ),
+                descriptions[0].operation.clone(),
+                descriptions[0]
+                    .problem
+                    .replace("<object>", object)
+                    .replace("<target>", &target),
                 safe_alternative,
             )];
         }
@@ -100,11 +128,11 @@ Considerations:
 
         // REINDEX CONCURRENTLY inside a transaction — PostgreSQL will error at runtime
         vec![Violation::new(
-            "REINDEX CONCURRENTLY inside a transaction",
-            format!(
-                "REINDEX {object} CONCURRENTLY '{target}' cannot run inside a transaction block. \
-                PostgreSQL will raise an error at runtime.",
-            ),
+            descriptions[1].operation.clone(),
+            descriptions[1]
+                .problem
+                .replace("<object>", object)
+                .replace("<target>", &target),
             ctx.no_transaction_hint,
         )]
     }

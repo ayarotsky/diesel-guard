@@ -15,13 +15,47 @@
 //! `disable_checks = ["TruncateTableCheck"]` (fully disabled).
 
 use crate::checks::pg_helpers::{NodeEnum, range_var_name};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct TruncateTableCheck;
 
 impl Check for TruncateTableCheck {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
+            operation: "TRUNCATE TABLE".into(),
+            problem: "TRUNCATE TABLE on '<table>' acquires an ACCESS EXCLUSIVE lock, blocking all reads \
+                      and writes. Unlike DELETE, it cannot be batched or throttled. This is safe for \
+                      empty or small tables or non-production environments, but dangerous on large \
+                      production tables.".into(),
+            safe_alternative: "If this table can be large in production, prefer batched DELETE:\n\n\
+                               1. Delete rows in small batches:\n   \
+                               DELETE FROM <table> WHERE id IN (\n     SELECT id FROM <table> LIMIT 1000\n   );\n\n\
+                               2. Repeat until all rows are removed.\n\n\
+                               3. (Optional) Reset sequences:\n   \
+                               ALTER SEQUENCE <table>_id_seq RESTART WITH 1;\n\n\
+                               4. (Optional) Reclaim space:\n   \
+                               VACUUM <table>;\n\n\
+                               If TRUNCATE is intentional (e.g. lookup table, test/staging environment,\n\
+                               or table is known to be small), silence this check:\n\n  \
+                               Per-statement — wrap in a safety-assured block:\n    \
+                               -- safety-assured:start\n    \
+                               -- Safe because: lookup table, always small\n    \
+                               TRUNCATE TABLE <table>;\n    \
+                               -- safety-assured:end\n\n  \
+                               Project-wide as a warning (reported but non-blocking):\n    \
+                               # diesel-guard.toml\n    \
+                               warn_checks = [\"TruncateTableCheck\"]\n\n  \
+                               Project-wide silenced:\n    \
+                               # diesel-guard.toml\n    \
+                               disable_checks = [\"TruncateTableCheck\"]".into(),
+            script_path: None,
+        }]
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let NodeEnum::TruncateStmt(truncate) = node else {
             return vec![];
         };
@@ -34,46 +68,9 @@ impl Check for TruncateTableCheck {
                     let table_name_str = range_var_name(rv);
 
                     Some(Violation::new(
-                        "TRUNCATE TABLE",
-                        format!(
-                            "TRUNCATE TABLE on '{table_name_str}' acquires an ACCESS EXCLUSIVE lock, blocking \
-                            all reads and writes. Unlike DELETE, it cannot be batched or throttled. \
-                            This is safe for empty/small tables or non-production environments, but \
-                            dangerous on large production tables."
-                        ),
-                        format!(
-                            r#"If this table can be large in production, prefer batched DELETE:
-
-1. Delete rows in small batches:
-   DELETE FROM {table_name_str} WHERE id IN (
-     SELECT id FROM {table_name_str} LIMIT 1000
-   );
-
-2. Repeat until all rows are removed.
-
-3. (Optional) Reset sequences:
-   ALTER SEQUENCE {table_name_str}_id_seq RESTART WITH 1;
-
-4. (Optional) Reclaim space:
-   VACUUM {table_name_str};
-
-If TRUNCATE is intentional (e.g. lookup table, test/staging environment,
-or table is known to be small), silence this check:
-
-  Per-statement — wrap in a safety-assured block:
-    -- safety-assured:start
-    -- Safe because: lookup table, always small
-    TRUNCATE TABLE {table_name_str};
-    -- safety-assured:end
-
-  Project-wide as a warning (reported but non-blocking):
-    # diesel-guard.toml
-    warn_checks = ["TruncateTableCheck"]
-
-  Project-wide silenced:
-    # diesel-guard.toml
-    disable_checks = ["TruncateTableCheck"]"#
-                        ),
+                        desc.operation.clone(),
+                        desc.problem.replace("<table>", &table_name_str),
+                        desc.safe_alternative.replace("<table>", &table_name_str),
                     ))
                 } else {
                     None

@@ -24,12 +24,51 @@ use crate::checks::pg_helpers::{
     NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_type_name, for_each_column_def,
     is_timestamp_without_tz,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct TimestampTypeCheck;
 
 impl Check for TimestampTypeCheck {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![
+            CheckDescription {
+                operation: "ADD COLUMN with TIMESTAMP".into(),
+                problem: "Column '<column>' on table '<table>' uses TIMESTAMP without time zone. This stores \
+                          values without timezone context, which can cause issues in multi-timezone applications, \
+                          during DST transitions, and makes it difficult to determine the actual point in time. \
+                          This is a best practice warning (no locking impact).".into(),
+                safe_alternative: "Use TIMESTAMPTZ instead of TIMESTAMP:\n\n\
+                                   1. Replace TIMESTAMP with TIMESTAMPTZ:\n   \
+                                   ALTER TABLE <table> ADD COLUMN <column> TIMESTAMPTZ;\n\n\
+                                   TIMESTAMPTZ stores values in UTC internally and converts on input/output based\n\
+                                   on the session's timezone setting, providing consistent behavior across timezones.\n\n\
+                                   2. If you intentionally need timezone-naive timestamps, use a safety-assured block:\n   \
+                                   -- safety-assured:start\n   \
+                                   ALTER TABLE <table> ADD COLUMN <column> TIMESTAMP;\n   \
+                                   -- safety-assured:end".into(),
+                script_path: None,
+            },
+            CheckDescription {
+                operation: "CREATE TABLE with TIMESTAMP".into(),
+                problem: "Column '<column>' on table '<table>' uses TIMESTAMP without time zone. This stores \
+                          values without timezone context, which can cause issues in multi-timezone applications, \
+                          during DST transitions, and makes it difficult to determine the actual point in time. \
+                          This is a best practice warning (no locking impact).".into(),
+                safe_alternative: "Use TIMESTAMPTZ instead of TIMESTAMP:\n\n\
+                                   1. Replace TIMESTAMP with TIMESTAMPTZ:\n   \
+                                   CREATE TABLE <table> (\n       <column> TIMESTAMPTZ\n   );\n\n\
+                                   TIMESTAMPTZ stores values in UTC internally and converts on input/output based\n\
+                                   on the session's timezone setting, providing consistent behavior across timezones.\n\n\
+                                   2. If you intentionally need timezone-naive timestamps, use a safety-assured block:\n   \
+                                   -- safety-assured:start\n   \
+                                   CREATE TABLE <table> (\n       <column> TIMESTAMP\n   );\n   \
+                                   -- safety-assured:end".into(),
+                script_path: None,
+            },
+        ]
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         let is_create = matches!(node, NodeEnum::CreateStmt(_));
 
@@ -70,61 +109,33 @@ impl Check for TimestampTypeCheck {
 
 /// Create a violation for ALTER TABLE ADD COLUMN with TIMESTAMP
 fn create_alter_table_violation(table_name: &str, column_name: &str) -> Violation {
+    let check = TimestampTypeCheck;
+    let descriptions = check.describe();
+    let desc = &descriptions[0];
     Violation::new(
-        "ADD COLUMN with TIMESTAMP",
-        format!(
-            "Column '{column_name}' uses TIMESTAMP without time zone. \
-            This stores values without timezone context, which can cause issues in \
-            multi-timezone applications, during DST transitions, and makes it difficult \
-            to determine the actual point in time. \
-            This is a best practice warning (no locking impact)."
-        ),
-        format!(
-            r"Use TIMESTAMPTZ instead of TIMESTAMP:
-
-1. Replace TIMESTAMP with TIMESTAMPTZ:
-   ALTER TABLE {table_name} ADD COLUMN {column_name} TIMESTAMPTZ;
-
-TIMESTAMPTZ stores values in UTC internally and converts on input/output based
-on the session's timezone setting, providing consistent behavior across timezones.
-
-2. If you intentionally need timezone-naive timestamps, use a safety-assured block:
-   -- safety-assured:start
-   ALTER TABLE {table_name} ADD COLUMN {column_name} TIMESTAMP;
-   -- safety-assured:end"
-        ),
+        desc.operation.clone(),
+        desc.problem
+            .replace("<table>", table_name)
+            .replace("<column>", column_name),
+        desc.safe_alternative
+            .replace("<table>", table_name)
+            .replace("<column>", column_name),
     )
 }
 
 /// Create a violation for CREATE TABLE with TIMESTAMP column
 fn create_create_table_violation(table_name: &str, column_name: &str) -> Violation {
+    let check = TimestampTypeCheck;
+    let descriptions = check.describe();
+    let desc = &descriptions[1];
     Violation::new(
-        "CREATE TABLE with TIMESTAMP",
-        format!(
-            "Column '{column_name}' uses TIMESTAMP without time zone. \
-            This stores values without timezone context, which can cause issues in \
-            multi-timezone applications, during DST transitions, and makes it difficult \
-            to determine the actual point in time. \
-            This is a best practice warning (no locking impact)."
-        ),
-        format!(
-            r"Use TIMESTAMPTZ instead of TIMESTAMP:
-
-1. Replace TIMESTAMP with TIMESTAMPTZ:
-   CREATE TABLE {table_name} (
-       {column_name} TIMESTAMPTZ
-   );
-
-TIMESTAMPTZ stores values in UTC internally and converts on input/output based
-on the session's timezone setting, providing consistent behavior across timezones.
-
-2. If you intentionally need timezone-naive timestamps, use a safety-assured block:
-   -- safety-assured:start
-   CREATE TABLE {table_name} (
-       {column_name} TIMESTAMP
-   );
-   -- safety-assured:end"
-        ),
+        desc.operation.clone(),
+        desc.problem
+            .replace("<table>", table_name)
+            .replace("<column>", column_name),
+        desc.safe_alternative
+            .replace("<table>", table_name)
+            .replace("<column>", column_name),
     )
 }
 

@@ -14,7 +14,7 @@
 //! connections to verify constraint types with certainty.
 
 use crate::checks::pg_helpers::{AlterTableType, NodeEnum, alter_table_cmds};
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 use regex::Regex;
 use std::sync::LazyLock;
@@ -39,7 +39,38 @@ impl DropPrimaryKeyCheck {
 }
 
 impl Check for DropPrimaryKeyCheck {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![CheckDescription {
+            operation: "DROP PRIMARY KEY".into(),
+            problem: "Dropping primary key constraint '<name>' from table '<table>' requires an ACCESS \
+                      EXCLUSIVE lock, blocking all operations. More critically, this breaks foreign key \
+                      relationships in other tables and removes the uniqueness constraint.".into(),
+            safe_alternative: "Consider the following before dropping a primary key:\n\n\
+                               1. Identify all foreign key dependencies:\n   \
+                               SELECT\n     tc.table_name, kcu.column_name, rc.constraint_name\n   \
+                               FROM information_schema.table_constraints tc\n   \
+                               JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name\n   \
+                               JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.unique_constraint_name\n   \
+                               WHERE tc.table_name = '<table>' AND tc.constraint_type = 'PRIMARY KEY';\n\n\
+                               2. If you must change the primary key:\n   \
+                               - Create the new primary key constraint FIRST\n   \
+                               - Update all foreign keys to reference the new key\n   \
+                               - Then drop the old primary key\n\n\
+                               3. If migrating to a different key strategy:\n   \
+                               - Consider using a transition period with both keys\n   \
+                               - Update application code gradually\n   \
+                               - Drop the old key only after full migration\n\n\
+                               Note: This check uses naming pattern detection (e.g., '<name>' matches '*_pkey' \
+                               pattern) and may not catch all cases.\n\
+                               Future versions will support database connections for accurate constraint type verification.\n\
+                               If this is a false positive, use a safety-assured block.".into(),
+            script_path: None,
+        }]
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
+        let descriptions = self.describe();
+        let desc = &descriptions[0];
         let Some((table_name, cmds)) = alter_table_cmds(node) else {
             return vec![];
         };
@@ -58,35 +89,13 @@ impl Check for DropPrimaryKeyCheck {
                 }
 
                 Some(Violation::new(
-                    "DROP PRIMARY KEY",
-                    format!(
-                        "Dropping primary key constraint '{constraint_name_str}' from table '{table_name}' requires an ACCESS EXCLUSIVE lock, blocking all operations. \
-                        More critically, this breaks foreign key relationships in other tables and removes the uniqueness constraint."
-                    ),
-                    format!(r"Consider the following before dropping a primary key:
-
-1. Identify all foreign key dependencies:
-   SELECT
-     tc.table_name, kcu.column_name, rc.constraint_name
-   FROM information_schema.table_constraints tc
-   JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
-   JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.unique_constraint_name
-   WHERE tc.table_name = '{table_name}' AND tc.constraint_type = 'PRIMARY KEY';
-
-2. If you must change the primary key:
-   - Create the new primary key constraint FIRST
-   - Update all foreign keys to reference the new key
-   - Then drop the old primary key
-
-3. If migrating to a different key strategy:
-   - Consider using a transition period with both keys
-   - Update application code gradually
-   - Drop the old key only after full migration
-
-Note: This check uses naming pattern detection (e.g., '{constraint_name_str}' matches '*_pkey' pattern) and may not catch all cases.
-Future versions will support database connections for accurate constraint type verification.
-If this is a false positive, use a safety-assured block."
-                    ),
+                    desc.operation.clone(),
+                    desc.problem
+                        .replace("<table>", &table_name)
+                        .replace("<name>", constraint_name_str),
+                    desc.safe_alternative
+                        .replace("<table>", &table_name)
+                        .replace("<name>", constraint_name_str),
                 ))
             })
             .collect()

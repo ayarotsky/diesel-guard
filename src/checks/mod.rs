@@ -106,6 +106,15 @@ static BUILTIN_CHECK_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
     registry.checks.iter().map(|c| c.name()).collect()
 });
 
+/// Static metadata describing what a check detects and how to fix it.
+pub struct CheckDescription {
+    pub operation: String,
+    pub problem: String,
+    pub safe_alternative: String,
+    /// `None` for built-in checks; `Some(path)` for custom Rhai checks.
+    pub script_path: Option<String>,
+}
+
 /// Trait for implementing safety checks on SQL statements
 pub trait Check: Send + Sync {
     /// The check's name, used for config-based disabling (e.g., "AddColumnCheck").
@@ -114,6 +123,9 @@ pub trait Check: Send + Sync {
         let full = std::any::type_name::<Self>();
         full.rsplit("::").next().unwrap_or(full)
     }
+
+    /// Return all canonical descriptions for this check (one per distinct violation type).
+    fn describe(&self) -> Vec<CheckDescription>;
 
     /// Run the check on a pg_query AST node and return any violations found
     fn check(&self, node: &NodeEnum, config: &Config, ctx: &MigrationContext) -> Vec<Violation>;
@@ -184,6 +196,11 @@ impl Registry {
     /// Return the names of all currently active checks (built-in + custom, minus disabled).
     pub fn active_check_names(&self) -> Vec<&str> {
         self.checks.iter().map(|c| c.name()).collect()
+    }
+
+    /// Iterate over all currently active checks (built-in + custom, minus disabled).
+    pub fn iter_checks(&self) -> impl Iterator<Item = &dyn Check> + '_ {
+        self.checks.iter().map(Box::as_ref)
     }
 
     /// Register a check if it's enabled in configuration

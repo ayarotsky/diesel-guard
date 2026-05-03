@@ -22,12 +22,55 @@ use crate::checks::pg_helpers::{
     ColumnDef, NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_type_name,
     for_each_column_def, is_char_type,
 };
-use crate::checks::{Check, Config, MigrationContext};
+use crate::checks::{Check, CheckDescription, Config, MigrationContext};
 use crate::violation::Violation;
 
 pub struct CharTypeCheck;
 
 impl Check for CharTypeCheck {
+    fn describe(&self) -> Vec<CheckDescription> {
+        vec![
+            CheckDescription {
+                operation: "ADD COLUMN with CHAR type".into(),
+                problem: "Column '<column>' on table '<table>' uses CHAR(<length>) which is fixed-length and \
+                          padded with spaces. This wastes storage and can cause subtle bugs with string comparisons. \
+                          This is a best practice warning (no locking impact).".into(),
+                safe_alternative: "Use TEXT or VARCHAR instead of CHAR:\n\n\
+                                   1. For variable-length strings (most cases):\n   \
+                                   ALTER TABLE <table> ADD COLUMN <column> TEXT;\n\n\
+                                   2. If you need a length constraint:\n   \
+                                   ALTER TABLE <table> ADD COLUMN <column> VARCHAR(<length>);\n   \
+                                   -- Or use TEXT with a CHECK constraint:\n   \
+                                   ALTER TABLE <table> ADD COLUMN <column> TEXT CHECK (length(<column>) <= <length>);\n\n\
+                                   CHAR is only appropriate for truly fixed-length codes (e.g., ISO country codes).\n\
+                                   If this is intentional, use a safety-assured block:\n   \
+                                   -- safety-assured:start\n   \
+                                   ALTER TABLE <table> ADD COLUMN <column> CHAR(<length>);\n   \
+                                   -- safety-assured:end".into(),
+                script_path: None,
+            },
+            CheckDescription {
+                operation: "CREATE TABLE with CHAR type".into(),
+                problem: "Column '<column>' on table '<table>' uses CHAR(<length>) which is fixed-length and \
+                          padded with spaces. This wastes storage and can cause subtle bugs with string comparisons. \
+                          This is a best practice warning (no locking impact).".into(),
+                safe_alternative: "Use TEXT or VARCHAR instead of CHAR:\n\n\
+                                   1. For variable-length strings (most cases):\n   \
+                                   CREATE TABLE <table> (\n       <column> TEXT\n   );\n\n\
+                                   2. If you need a length constraint:\n   \
+                                   CREATE TABLE <table> (\n       <column> VARCHAR(<length>)\n   );\n   \
+                                   -- Or use TEXT with a CHECK constraint:\n   \
+                                   CREATE TABLE <table> (\n       <column> TEXT CHECK (length(<column>) <= <length>)\n   );\n\n\
+                                   CHAR is only appropriate for truly fixed-length codes (e.g., ISO country codes).\n\
+                                   If this is intentional, use a safety-assured block:\n   \
+                                   -- safety-assured:start\n   \
+                                   CREATE TABLE <table> (\n       <column> CHAR(<length>)\n   );\n   \
+                                   -- safety-assured:end".into(),
+                script_path: None,
+            },
+        ]
+    }
+
     fn check(&self, node: &NodeEnum, _config: &Config, _ctx: &MigrationContext) -> Vec<Violation> {
         // Handle CREATE TABLE via for_each_column_def
         if let NodeEnum::CreateStmt(_) = node {
@@ -91,67 +134,37 @@ fn get_char_length(col: &ColumnDef) -> String {
 
 /// Create a violation for ALTER TABLE ADD COLUMN with CHAR type
 fn create_alter_table_violation(table_name: &str, column_name: &str, length: &str) -> Violation {
+    let check = CharTypeCheck;
+    let descriptions = check.describe();
+    let desc = &descriptions[0];
     Violation::new(
-        "ADD COLUMN with CHAR type",
-        format!(
-            "Column '{column_name}' uses CHAR({length}) which is fixed-length and padded with spaces. \
-            This wastes storage and can cause subtle bugs with string comparisons. \
-            This is a best practice warning (no locking impact)."
-        ),
-        format!(
-            r"Use TEXT or VARCHAR instead of CHAR:
-
-1. For variable-length strings (most cases):
-   ALTER TABLE {table_name} ADD COLUMN {column_name} TEXT;
-
-2. If you need a length constraint:
-   ALTER TABLE {table_name} ADD COLUMN {column_name} VARCHAR({length});
-   -- Or use TEXT with a CHECK constraint:
-   ALTER TABLE {table_name} ADD COLUMN {column_name} TEXT CHECK (length({column_name}) <= {length});
-
-CHAR is only appropriate for truly fixed-length codes (e.g., ISO country codes).
-If this is intentional, use a safety-assured block:
-   -- safety-assured:start
-   ALTER TABLE {table_name} ADD COLUMN {column_name} CHAR({length});
-   -- safety-assured:end"
-        ),
+        desc.operation.clone(),
+        desc.problem
+            .replace("<table>", table_name)
+            .replace("<column>", column_name)
+            .replace("<length>", length),
+        desc.safe_alternative
+            .replace("<table>", table_name)
+            .replace("<column>", column_name)
+            .replace("<length>", length),
     )
 }
 
 /// Create a violation for CREATE TABLE with CHAR type column
 fn create_create_table_violation(table_name: &str, column_name: &str, length: &str) -> Violation {
+    let check = CharTypeCheck;
+    let descriptions = check.describe();
+    let desc = &descriptions[1];
     Violation::new(
-        "CREATE TABLE with CHAR type",
-        format!(
-            "Column '{column_name}' uses CHAR({length}) which is fixed-length and padded with spaces. \
-            This wastes storage and can cause subtle bugs with string comparisons. \
-            This is a best practice warning (no locking impact)."
-        ),
-        format!(
-            r"Use TEXT or VARCHAR instead of CHAR:
-
-1. For variable-length strings (most cases):
-   CREATE TABLE {table_name} (
-       {column_name} TEXT
-   );
-
-2. If you need a length constraint:
-   CREATE TABLE {table_name} (
-       {column_name} VARCHAR({length})
-   );
-   -- Or use TEXT with a CHECK constraint:
-   CREATE TABLE {table_name} (
-       {column_name} TEXT CHECK (length({column_name}) <= {length})
-   );
-
-CHAR is only appropriate for truly fixed-length codes (e.g., ISO country codes).
-If this is intentional, use a safety-assured block:
-   -- safety-assured:start
-   CREATE TABLE {table_name} (
-       {column_name} CHAR({length})
-   );
-   -- safety-assured:end"
-        ),
+        desc.operation.clone(),
+        desc.problem
+            .replace("<table>", table_name)
+            .replace("<column>", column_name)
+            .replace("<length>", length),
+        desc.safe_alternative
+            .replace("<table>", table_name)
+            .replace("<column>", column_name)
+            .replace("<length>", length),
     )
 }
 
