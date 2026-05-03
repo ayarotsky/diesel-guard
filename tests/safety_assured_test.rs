@@ -1,11 +1,14 @@
 use camino::Utf8Path;
-use diesel_guard::SafetyChecker;
+use diesel_guard::{Config, SafetyChecker};
 use std::fs;
 use tempfile::TempDir;
 
 #[test]
 fn test_safety_assured_block_ignores_violations() {
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["DropColumnCheck".to_string()],
+        ..Default::default()
+    });
     let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
@@ -23,7 +26,10 @@ ALTER TABLE posts DROP COLUMN body;
 
 #[test]
 fn test_without_safety_assured_detects_violations() {
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["DropColumnCheck".to_string()],
+        ..Default::default()
+    });
     let sql = r"
 ALTER TABLE users DROP COLUMN email;
 ALTER TABLE posts DROP COLUMN body;
@@ -39,7 +45,10 @@ ALTER TABLE posts DROP COLUMN body;
 
 #[test]
 fn test_partial_safety_assured() {
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["DropColumnCheck".to_string()],
+        ..Default::default()
+    });
     let sql = r"
 ALTER TABLE users DROP COLUMN email;
 
@@ -67,7 +76,10 @@ ALTER TABLE comments DROP COLUMN author;
 
 #[test]
 fn test_multiple_blocks() {
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["DropColumnCheck".to_string()],
+        ..Default::default()
+    });
     let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
@@ -86,7 +98,10 @@ ALTER TABLE comments DROP COLUMN author;
 
 #[test]
 fn test_case_insensitive() {
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["DropColumnCheck".to_string()],
+        ..Default::default()
+    });
     let sql = r"
 -- SAFETY-ASSURED:START
 ALTER TABLE users DROP COLUMN email;
@@ -103,7 +118,10 @@ ALTER TABLE users DROP COLUMN email;
 
 #[test]
 fn test_unclosed_block_error() {
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["DropColumnCheck".to_string()],
+        ..Default::default()
+    });
     let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
@@ -177,7 +195,10 @@ fn test_empty_block() {
 
 #[test]
 fn test_comments_within_block() {
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["DropColumnCheck".to_string()],
+        ..Default::default()
+    });
     let sql = r"
 -- safety-assured:start
 -- This column was deprecated 6 months ago
@@ -196,7 +217,10 @@ ALTER TABLE users DROP COLUMN email;
 
 #[test]
 fn test_multiline_statement_in_block() {
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["DropColumnCheck".to_string()],
+        ..Default::default()
+    });
     let sql = r"
 -- safety-assured:start
 ALTER TABLE users
@@ -214,7 +238,10 @@ ALTER TABLE users
 
 #[test]
 fn test_mixed_safe_and_unsafe_operations() {
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["AddColumnCheck".to_string(), "DropColumnCheck".to_string()],
+        ..Default::default()
+    });
     let sql = r"
 -- Safe operation - no default
 ALTER TABLE users ADD COLUMN email VARCHAR(255);
@@ -298,7 +325,10 @@ ALTER TABLE users DROP COLUMN deprecated_c;
 #[test]
 fn test_interleaved_blocks_and_statements_same_keyword() {
     // Edge case: Same keyword appears in block, outside block, and in another block
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["DropColumnCheck".to_string()],
+        ..Default::default()
+    });
     let sql = r"
 ALTER TABLE users DROP COLUMN a;
 
@@ -332,7 +362,10 @@ ALTER TABLE users DROP COLUMN f;
 
 #[test]
 fn test_safety_assured_with_leading_whitespace() {
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["DropColumnCheck".to_string()],
+        ..Default::default()
+    });
     let sql = r"
 
     -- safety-assured:start

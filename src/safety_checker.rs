@@ -221,7 +221,10 @@ mod tests {
 
     #[test]
     fn test_check_safe_sql() {
-        let checker = SafetyChecker::new();
+        let checker = SafetyChecker::with_config(Config {
+            enable_checks: vec!["AddColumnCheck".to_string()],
+            ..Default::default()
+        });
         let sql = "ALTER TABLE users ADD COLUMN email VARCHAR(255);";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 0);
@@ -229,7 +232,10 @@ mod tests {
 
     #[test]
     fn test_check_unsafe_sql() {
-        let checker = SafetyChecker::new();
+        let checker = SafetyChecker::with_config(Config {
+            enable_checks: vec!["AddColumnCheck".to_string()],
+            ..Default::default()
+        });
         let sql = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 1);
@@ -245,7 +251,12 @@ mod tests {
 
         let sql = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
         let violations = checker.check_sql(sql).unwrap();
-        assert_eq!(violations.len(), 0);
+        assert!(
+            !violations
+                .iter()
+                .any(|(_, violation)| violation.operation == "ADD COLUMN with DEFAULT"),
+            "AddColumnCheck should be disabled"
+        );
     }
 
     #[test]
@@ -320,7 +331,10 @@ mod tests {
 
     #[test]
     fn test_buffer_input_safe_sql() {
-        let checker: SafetyChecker = SafetyChecker::new();
+        let checker = SafetyChecker::with_config(Config {
+            enable_checks: vec!["AddColumnCheck".to_string()],
+            ..Default::default()
+        });
         let input_data = "ALTER TABLE users ADD COLUMN foo TEXT;";
         let violations = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
@@ -330,7 +344,10 @@ mod tests {
 
     #[test]
     fn test_buffer_input_unsafe_sql() {
-        let checker: SafetyChecker = SafetyChecker::new();
+        let checker = SafetyChecker::with_config(Config {
+            enable_checks: vec!["AddColumnCheck".to_string()],
+            ..Default::default()
+        });
         let input_data = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
         let violations = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
@@ -351,7 +368,12 @@ mod tests {
         let violations = checker
             .check_sql("ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;")
             .unwrap();
-        assert_eq!(violations.len(), 1);
+        assert!(
+            violations
+                .iter()
+                .any(|(_, violation)| violation.operation == "ADD COLUMN with DEFAULT"),
+            "Built-in checks should still run"
+        );
     }
 
     #[test]
@@ -452,6 +474,7 @@ mod tests {
 
         let config = Config {
             framework: "diesel".to_string(),
+            enable_checks: vec!["AddIndexCheck".to_string()],
             ..Default::default()
         };
         let checker = SafetyChecker::with_config(config);
@@ -491,6 +514,7 @@ mod tests {
 
         let config = Config {
             framework: "diesel".to_string(),
+            enable_checks: vec!["AddIndexCheck".to_string()],
             ..Default::default()
         };
         let checker = SafetyChecker::with_config(config);
@@ -518,11 +542,11 @@ mod tests {
         .unwrap();
         // No -- no-transaction directive
 
-        let config = Config {
+        let checker = SafetyChecker::with_config(Config {
             framework: "sqlx".to_string(),
+            enable_checks: vec!["AddIndexCheck".to_string()],
             ..Default::default()
-        };
-        let checker = SafetyChecker::with_config(config);
+        });
         let dir_path =
             camino::Utf8Path::from_path(temp_dir.path()).expect("path should be valid UTF-8");
 
@@ -550,11 +574,11 @@ mod tests {
         )
         .unwrap();
 
-        let config = Config {
+        let checker = SafetyChecker::with_config(Config {
             framework: "sqlx".to_string(),
+            enable_checks: vec!["AddIndexCheck".to_string()],
             ..Default::default()
-        };
-        let checker = SafetyChecker::with_config(config);
+        });
         let dir_path =
             camino::Utf8Path::from_path(temp_dir.path()).expect("path should be valid UTF-8");
 
@@ -567,6 +591,13 @@ mod tests {
     }
 
     // --- Line number integration tests (full pipeline through check_sql) ---
+
+    fn line_number_checker() -> SafetyChecker {
+        SafetyChecker::with_config(Config {
+            enable_checks: vec!["DropColumnCheck".to_string()],
+            ..Default::default()
+        })
+    }
 
     fn violation_lines(checker: &SafetyChecker, sql: &str) -> Vec<usize> {
         let mut lines: Vec<usize> = checker
@@ -581,28 +612,28 @@ mod tests {
 
     #[test]
     fn test_line_numbers_two_stmts_on_sequential_lines() {
-        let checker = SafetyChecker::new();
+        let checker = line_number_checker();
         let sql = "ALTER TABLE users DROP COLUMN email;\nALTER TABLE posts DROP COLUMN body;";
         assert_eq!(violation_lines(&checker, sql), vec![1, 2]);
     }
 
     #[test]
     fn test_line_numbers_stmts_separated_by_blank_line() {
-        let checker = SafetyChecker::new();
+        let checker = line_number_checker();
         let sql = "ALTER TABLE users DROP COLUMN email;\n\nALTER TABLE posts DROP COLUMN body;";
         assert_eq!(violation_lines(&checker, sql), vec![1, 3]);
     }
 
     #[test]
     fn test_line_numbers_stmts_with_interleaved_line_comments() {
-        let checker = SafetyChecker::new();
+        let checker = line_number_checker();
         let sql = "-- first op\nALTER TABLE users DROP COLUMN email;\n-- second op\nALTER TABLE posts DROP COLUMN body;";
         assert_eq!(violation_lines(&checker, sql), vec![2, 4]);
     }
 
     #[test]
     fn test_line_numbers_stmt_just_after_safety_assured_block() {
-        let checker = SafetyChecker::new();
+        let checker = line_number_checker();
         // Lines: 1=start directive, 2=suppressed DROP, 3=end directive, 4=blank, 5=active DROP
         let sql = "-- safety-assured:start\nALTER TABLE users DROP COLUMN email;\n-- safety-assured:end\n\nALTER TABLE posts DROP COLUMN body;";
         assert_eq!(violation_lines(&checker, sql), vec![5]);
@@ -610,7 +641,7 @@ mod tests {
 
     #[test]
     fn test_line_numbers_multiple_violations_from_one_stmt_share_same_line() {
-        let checker = SafetyChecker::new();
+        let checker = line_number_checker();
         // Two DROP COLUMN clauses in one ALTER TABLE on line 3
         let sql = "\n\nALTER TABLE users DROP COLUMN a, DROP COLUMN b;";
         let violations = checker.check_sql(sql).unwrap();

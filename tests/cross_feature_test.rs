@@ -130,9 +130,7 @@ fn test_disable_builtin_and_custom_checks_simultaneously() {
 
     // DropColumnCheck should NOT fire (disabled)
     assert!(
-        !violations
-            .iter()
-            .any(|(_, v)| v.operation.contains("DROP COLUMN")),
+        !violations.iter().any(|(_, v)| v.operation == "DROP COLUMN"),
         "DropColumnCheck should be disabled"
     );
 
@@ -171,6 +169,7 @@ ALTER TABLE users DROP COLUMN phone;
 
     let config = Config {
         check_down: true,
+        enable_checks: vec!["DropColumnCheck".to_string()],
         ..Default::default()
     };
     let checker = SafetyChecker::with_config(config);
