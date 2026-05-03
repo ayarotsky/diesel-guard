@@ -1,4 +1,6 @@
 -- Safe: Add unique constraint via CONCURRENTLY index then USING INDEX
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 CREATE UNIQUE INDEX CONCURRENTLY users_email_idx ON users(email);
 
 -- Step 2 (Optional): Add constraint using the existing index

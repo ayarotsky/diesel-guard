@@ -1,4 +1,6 @@
 -- Safe
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 -- Step 1 (no table scans; lock acquired momentarily)
 ALTER TABLE orders ADD CONSTRAINT check_amount CHECK (amount > 0) NOT VALID;
 

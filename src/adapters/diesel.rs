@@ -104,6 +104,7 @@ impl MigrationAdapter for DieselAdapter {
             return MigrationContext {
                 run_in_transaction: true,
                 no_transaction_hint: NO_TRANSACTION_HINT,
+                ..Default::default()
             };
         };
         let metadata_path = parent.join("metadata.toml");
@@ -112,6 +113,7 @@ impl MigrationAdapter for DieselAdapter {
             return MigrationContext {
                 run_in_transaction: true,
                 no_transaction_hint: NO_TRANSACTION_HINT,
+                ..Default::default()
             };
         };
 
@@ -120,6 +122,7 @@ impl MigrationAdapter for DieselAdapter {
         MigrationContext {
             run_in_transaction: parsed.run_in_transaction.unwrap_or(true),
             no_transaction_hint: NO_TRANSACTION_HINT,
+            ..Default::default()
         }
     }
 }
