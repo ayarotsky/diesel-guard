@@ -506,10 +506,10 @@ mod tests {
 
     #[test]
     fn test_map_with_misspelled_key_produces_error_violation() {
-        // Typo: "safe_alterative" instead of "safe_alternative"
+        // Unrecognized key "safe_alt" instead of "safe_alternative"
         let violations = run_script(
             r#"
-            #{ operation: "op", problem: "p", safe_alterative: "s" }
+            #{ operation: "op", problem: "p", safe_alt: "s" }
             "#,
             "CREATE INDEX idx ON users(email);",
         );
