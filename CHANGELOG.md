@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.11.0 - 2026-05-24
+
+### Added
+
+- `IdempotencyCreateCheck`, `IdempotencyIndexCheck`, `IdempotencyAlterCheck`, `IdempotencyDropCheck` — Flags statements missing idempotency guards. Statements that lack `IF NOT EXISTS` / `IF EXISTS` will fail when a migration is retried. Covers `CREATE TABLE`, `CREATE INDEX [CONCURRENTLY]`, `ALTER TABLE … ADD COLUMN`, `DROP TABLE`, `DROP INDEX`, and `ALTER TABLE … DROP COLUMN`.
+- `AddIdentityColumnCheck` — Detects `ALTER TABLE … ADD COLUMN … GENERATED … AS IDENTITY`. Adding an identity column to an existing table rewrites every row to assign a sequence value, taking an ACCESS EXCLUSIVE lock for the duration. Use `CREATE TABLE` instead, or add the column without a default and backfill in batches.
+- **`check_name` in JSON output** — Every violation now includes a `check_name` field identifying which check fired (e.g. `"AddIndexCheck"`). Makes it easier to filter or route violations in CI pipelines without parsing message text.
+- **Docker image** — Official Docker image published to [Docker Hub](https://hub.docker.com/r/ayarotsky/diesel-guard) alongside each release.
+
 ## 0.10.0 - 2026-04-11
 
 ### Added
