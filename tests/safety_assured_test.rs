@@ -7,6 +7,8 @@ use tempfile::TempDir;
 fn test_safety_assured_block_ignores_violations() {
     let checker = SafetyChecker::new();
     let sql = r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
 ALTER TABLE posts DROP COLUMN body;
@@ -25,6 +27,8 @@ ALTER TABLE posts DROP COLUMN body;
 fn test_without_safety_assured_detects_violations() {
     let checker = SafetyChecker::new();
     let sql = r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 ALTER TABLE users DROP COLUMN email;
 ALTER TABLE posts DROP COLUMN body;
     ";
@@ -41,6 +45,8 @@ ALTER TABLE posts DROP COLUMN body;
 fn test_partial_safety_assured() {
     let checker = SafetyChecker::new();
     let sql = r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 ALTER TABLE users DROP COLUMN email;
 
 -- safety-assured:start
@@ -69,6 +75,8 @@ ALTER TABLE comments DROP COLUMN author;
 fn test_multiple_blocks() {
     let checker = SafetyChecker::new();
     let sql = r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
@@ -88,6 +96,8 @@ ALTER TABLE comments DROP COLUMN author;
 fn test_case_insensitive() {
     let checker = SafetyChecker::new();
     let sql = r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 -- SAFETY-ASSURED:START
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:END
@@ -105,6 +115,8 @@ ALTER TABLE users DROP COLUMN email;
 fn test_unclosed_block_error() {
     let checker = SafetyChecker::new();
     let sql = r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
     ";
@@ -114,7 +126,7 @@ ALTER TABLE users DROP COLUMN email;
         .expect_err("should error on unclosed block");
     assert_eq!(
         err.to_string(),
-        "Failed to parse SQL: Unclosed 'safety-assured:start' at line 2. Did you forget to add 'safety-assured:end'?"
+        "Failed to parse SQL: Unclosed 'safety-assured:start' at line 4. Did you forget to add 'safety-assured:end'?"
     );
 }
 
@@ -122,6 +134,8 @@ ALTER TABLE users DROP COLUMN email;
 fn test_unmatched_end_error() {
     let checker = SafetyChecker::new();
     let sql = r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
     ";
@@ -131,7 +145,7 @@ ALTER TABLE users DROP COLUMN email;
         .expect_err("should error on unmatched end");
     assert_eq!(
         err.to_string(),
-        "Failed to parse SQL: Unmatched 'safety-assured:end' at line 3. Each 'safety-assured:end' must have a matching 'safety-assured:start' before it."
+        "Failed to parse SQL: Unmatched 'safety-assured:end' at line 5. Each 'safety-assured:end' must have a matching 'safety-assured:start' before it."
     );
 }
 
@@ -144,6 +158,8 @@ fn test_safety_assured_in_migration_file() {
     fs::write(
         migration_dir.join("up.sql"),
         r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN deprecated_column;
 -- safety-assured:end
@@ -179,6 +195,8 @@ fn test_empty_block() {
 fn test_comments_within_block() {
     let checker = SafetyChecker::new();
     let sql = r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 -- safety-assured:start
 -- This column was deprecated 6 months ago
 -- All code references have been removed
@@ -198,6 +216,8 @@ ALTER TABLE users DROP COLUMN email;
 fn test_multiline_statement_in_block() {
     let checker = SafetyChecker::new();
     let sql = r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 -- safety-assured:start
 ALTER TABLE users
     DROP COLUMN email;
@@ -216,6 +236,8 @@ ALTER TABLE users
 fn test_mixed_safe_and_unsafe_operations() {
     let checker = SafetyChecker::new();
     let sql = r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 -- Safe operation - no default
 ALTER TABLE users ADD COLUMN email VARCHAR(255);
 
@@ -240,6 +262,8 @@ ALTER TABLE users ADD COLUMN name VARCHAR(255);
 fn test_nested_blocks() {
     let checker = SafetyChecker::new();
     let sql = r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:start
@@ -252,7 +276,7 @@ ALTER TABLE posts DROP COLUMN body;
     let err = checker.check_sql(sql).unwrap_err();
     assert_eq!(
         err.to_string(),
-        "Failed to parse SQL: Nested 'safety-assured:start' at line 4. Nested blocks are not supported. Close the previous block before starting a new one."
+        "Failed to parse SQL: Nested 'safety-assured:start' at line 6. Nested blocks are not supported. Close the previous block before starting a new one."
     );
 }
 
@@ -260,6 +284,8 @@ ALTER TABLE posts DROP COLUMN body;
 fn test_block_with_multiple_statement_types() {
     let checker = SafetyChecker::new();
     let sql = r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
 ALTER TABLE posts ADD COLUMN admin BOOLEAN DEFAULT FALSE;
@@ -280,6 +306,8 @@ fn test_block_with_multiple_same_operation_type() {
     // Edge case: Multiple ALTER statements (same keyword) within block
     let checker = SafetyChecker::new();
     let sql = r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN deprecated_a;
 ALTER TABLE users DROP COLUMN deprecated_b;
@@ -300,6 +328,8 @@ fn test_interleaved_blocks_and_statements_same_keyword() {
     // Edge case: Same keyword appears in block, outside block, and in another block
     let checker = SafetyChecker::new();
     let sql = r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 ALTER TABLE users DROP COLUMN a;
 
 -- safety-assured:start
@@ -334,6 +364,8 @@ ALTER TABLE users DROP COLUMN f;
 fn test_safety_assured_with_leading_whitespace() {
     let checker = SafetyChecker::new();
     let sql = r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 
     -- safety-assured:start
         ALTER TABLE users DROP COLUMN email;

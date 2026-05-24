@@ -219,19 +219,24 @@ mod tests {
 
     use super::*;
 
+    /// Prefix for SET timeouts, used in tests that aren't specifically testing
+    /// MissingLockTimeoutCheck to avoid extraneous violations.
+    const TIMEOUT_PREFIX: &str = "SET lock_timeout = '2s'; SET statement_timeout = '60s'; ";
+
     #[test]
     fn test_check_safe_sql() {
         let checker = SafetyChecker::new();
-        let sql = "ALTER TABLE users ADD COLUMN email VARCHAR(255);";
-        let violations = checker.check_sql(sql).unwrap();
+        let sql = format!("{TIMEOUT_PREFIX}ALTER TABLE users ADD COLUMN email VARCHAR(255);");
+        let violations = checker.check_sql(&sql).unwrap();
         assert_eq!(violations.len(), 0);
     }
 
     #[test]
     fn test_check_unsafe_sql() {
         let checker = SafetyChecker::new();
-        let sql = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
-        let violations = checker.check_sql(sql).unwrap();
+        let sql =
+            format!("{TIMEOUT_PREFIX}ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;");
+        let violations = checker.check_sql(&sql).unwrap();
         assert_eq!(violations.len(), 1);
     }
 
@@ -243,16 +248,17 @@ mod tests {
         };
         let checker = SafetyChecker::with_config(config);
 
-        let sql = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
-        let violations = checker.check_sql(sql).unwrap();
+        let sql =
+            format!("{TIMEOUT_PREFIX}ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;");
+        let violations = checker.check_sql(&sql).unwrap();
         assert_eq!(violations.len(), 0);
     }
 
     #[test]
     fn test_reindex_without_concurrently_detected() {
         let checker = SafetyChecker::new();
-        let sql = "REINDEX INDEX idx_users_email;";
-        let violations = checker.check_sql(sql).unwrap();
+        let sql = format!("{TIMEOUT_PREFIX}REINDEX INDEX idx_users_email;");
+        let violations = checker.check_sql(&sql).unwrap();
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].1.operation, "REINDEX without CONCURRENTLY");
     }
@@ -260,8 +266,8 @@ mod tests {
     #[test]
     fn test_reindex_table_without_concurrently_detected() {
         let checker = SafetyChecker::new();
-        let sql = "REINDEX TABLE users;";
-        let violations = checker.check_sql(sql).unwrap();
+        let sql = format!("{TIMEOUT_PREFIX}REINDEX TABLE users;");
+        let violations = checker.check_sql(&sql).unwrap();
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].1.operation, "REINDEX without CONCURRENTLY");
     }
@@ -271,8 +277,8 @@ mod tests {
         // check_sql uses MigrationContext::default() (run_in_transaction=true),
         // so REINDEX CONCURRENTLY is flagged as requiring no-transaction context.
         let checker = SafetyChecker::new();
-        let sql = "REINDEX INDEX CONCURRENTLY idx_users_email;";
-        let violations = checker.check_sql(sql).unwrap();
+        let sql = format!("{TIMEOUT_PREFIX}REINDEX INDEX CONCURRENTLY idx_users_email;");
+        let violations = checker.check_sql(&sql).unwrap();
         assert_eq!(violations.len(), 1);
         assert_eq!(
             violations[0].1.operation,
@@ -288,19 +294,16 @@ mod tests {
         };
         let checker = SafetyChecker::with_config(config);
 
-        let sql = "REINDEX INDEX idx_users_email;";
-        let violations = checker.check_sql(sql).unwrap();
+        let sql = format!("{TIMEOUT_PREFIX}REINDEX INDEX idx_users_email;");
+        let violations = checker.check_sql(&sql).unwrap();
         assert_eq!(violations.len(), 0);
     }
 
     #[test]
     fn test_multiple_reindex_violations() {
         let checker = SafetyChecker::new();
-        let sql = r"
-            REINDEX INDEX idx_users_email;
-            REINDEX TABLE posts;
-        ";
-        let violations = checker.check_sql(sql).unwrap();
+        let sql = format!("{TIMEOUT_PREFIX}REINDEX INDEX idx_users_email; REINDEX TABLE posts;");
+        let violations = checker.check_sql(&sql).unwrap();
         assert_eq!(violations.len(), 2);
     }
 
@@ -321,7 +324,7 @@ mod tests {
     #[test]
     fn test_buffer_input_safe_sql() {
         let checker: SafetyChecker = SafetyChecker::new();
-        let input_data = "ALTER TABLE users ADD COLUMN foo TEXT;";
+        let input_data = format!("{TIMEOUT_PREFIX}ALTER TABLE users ADD COLUMN foo TEXT;");
         let violations = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
             .unwrap();
@@ -331,7 +334,8 @@ mod tests {
     #[test]
     fn test_buffer_input_unsafe_sql() {
         let checker: SafetyChecker = SafetyChecker::new();
-        let input_data = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
+        let input_data =
+            format!("{TIMEOUT_PREFIX}ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;");
         let violations = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
             .unwrap();
@@ -348,9 +352,9 @@ mod tests {
         };
         // Should not panic; .txt file is silently ignored
         let checker = SafetyChecker::with_config(config);
-        let violations = checker
-            .check_sql("ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;")
-            .unwrap();
+        let sql =
+            format!("{TIMEOUT_PREFIX}ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;");
+        let violations = checker.check_sql(&sql).unwrap();
         assert_eq!(violations.len(), 1);
     }
 
@@ -423,10 +427,8 @@ mod tests {
     #[test]
     fn test_buffer_input_multiple_lines() {
         let checker: SafetyChecker = SafetyChecker::new();
-        let input_data = r"
-            REINDEX INDEX idx_users_email;
-            REINDEX TABLE posts;
-        ";
+        let input_data =
+            format!("{TIMEOUT_PREFIX}REINDEX INDEX idx_users_email; REINDEX TABLE posts;");
         let violations = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
             .unwrap();
@@ -445,7 +447,7 @@ mod tests {
         fs::create_dir(&migration_dir).unwrap();
         fs::write(
             migration_dir.join("up.sql"),
-            "CREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
+            "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nCREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
         )
         .unwrap();
         // No metadata.toml — defaults to run_in_transaction=true
@@ -480,7 +482,7 @@ mod tests {
         fs::create_dir(&migration_dir).unwrap();
         fs::write(
             migration_dir.join("up.sql"),
-            "CREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
+            "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nCREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
         )
         .unwrap();
         fs::write(
@@ -513,7 +515,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         fs::write(
             temp_dir.path().join("20240101000000_add_idx.up.sql"),
-            "CREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
+            "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nCREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
         )
         .unwrap();
         // No -- no-transaction directive
@@ -546,7 +548,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         fs::write(
             temp_dir.path().join("20240101000000_add_idx.up.sql"),
-            "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
+            "-- no-transaction\nSET lock_timeout = '2s';\nSET statement_timeout = '60s';\nCREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
         )
         .unwrap();
 
@@ -568,6 +570,16 @@ mod tests {
 
     // --- Line number integration tests (full pipeline through check_sql) ---
 
+    // These tests focus on line-number bookkeeping and use raw ALTER TABLE
+    // statements without a timeout preamble, so disable MissingLockTimeoutCheck
+    // to keep one violation per DDL statement from the check under test.
+    fn line_number_test_checker() -> SafetyChecker {
+        SafetyChecker::with_config(Config {
+            disable_checks: vec!["MissingLockTimeoutCheck".to_string()],
+            ..Default::default()
+        })
+    }
+
     fn violation_lines(checker: &SafetyChecker, sql: &str) -> Vec<usize> {
         let mut lines: Vec<usize> = checker
             .check_sql(sql)
@@ -581,28 +593,28 @@ mod tests {
 
     #[test]
     fn test_line_numbers_two_stmts_on_sequential_lines() {
-        let checker = SafetyChecker::new();
+        let checker = line_number_test_checker();
         let sql = "ALTER TABLE users DROP COLUMN email;\nALTER TABLE posts DROP COLUMN body;";
         assert_eq!(violation_lines(&checker, sql), vec![1, 2]);
     }
 
     #[test]
     fn test_line_numbers_stmts_separated_by_blank_line() {
-        let checker = SafetyChecker::new();
+        let checker = line_number_test_checker();
         let sql = "ALTER TABLE users DROP COLUMN email;\n\nALTER TABLE posts DROP COLUMN body;";
         assert_eq!(violation_lines(&checker, sql), vec![1, 3]);
     }
 
     #[test]
     fn test_line_numbers_stmts_with_interleaved_line_comments() {
-        let checker = SafetyChecker::new();
+        let checker = line_number_test_checker();
         let sql = "-- first op\nALTER TABLE users DROP COLUMN email;\n-- second op\nALTER TABLE posts DROP COLUMN body;";
         assert_eq!(violation_lines(&checker, sql), vec![2, 4]);
     }
 
     #[test]
     fn test_line_numbers_stmt_just_after_safety_assured_block() {
-        let checker = SafetyChecker::new();
+        let checker = line_number_test_checker();
         // Lines: 1=start directive, 2=suppressed DROP, 3=end directive, 4=blank, 5=active DROP
         let sql = "-- safety-assured:start\nALTER TABLE users DROP COLUMN email;\n-- safety-assured:end\n\nALTER TABLE posts DROP COLUMN body;";
         assert_eq!(violation_lines(&checker, sql), vec![5]);
@@ -610,7 +622,7 @@ mod tests {
 
     #[test]
     fn test_line_numbers_multiple_violations_from_one_stmt_share_same_line() {
-        let checker = SafetyChecker::new();
+        let checker = line_number_test_checker();
         // Two DROP COLUMN clauses in one ALTER TABLE on line 3
         let sql = "\n\nALTER TABLE users DROP COLUMN a, DROP COLUMN b;";
         let violations = checker.check_sql(sql).unwrap();
@@ -620,5 +632,124 @@ mod tests {
             "Both violations must reference line 3, got {:?}",
             violations.iter().map(|(l, _)| l).collect::<Vec<_>>()
         );
+    }
+
+    // --- MissingLockTimeout: timeout-context updates ---
+
+    fn timeout_violations(sql: &str) -> Vec<String> {
+        let config = Config {
+            // Disable other checks so we only see MissingLockTimeoutCheck output.
+            enable_checks: vec!["MissingLockTimeoutCheck".to_string()],
+            ..Default::default()
+        };
+        let checker = SafetyChecker::with_config(config);
+        checker
+            .check_sql(sql)
+            .unwrap()
+            .into_iter()
+            .map(|(_, v)| v.operation)
+            .collect()
+    }
+
+    #[test]
+    fn test_set_lock_timeout_zero_integer_is_unsafe() {
+        // `SET lock_timeout = 0` disables the timeout in PostgreSQL.
+        let sql = "SET lock_timeout = 0; SET statement_timeout = 0; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        assert_eq!(
+            timeout_violations(sql),
+            vec!["ALTER TABLE without lock_timeout and statement_timeout"]
+        );
+    }
+
+    #[test]
+    fn test_set_lock_timeout_zero_string_is_unsafe() {
+        // String forms like '0', '0ms' also disable the timeout.
+        let sql = "SET lock_timeout = '0ms'; SET statement_timeout = '0'; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        assert_eq!(
+            timeout_violations(sql),
+            vec!["ALTER TABLE without lock_timeout and statement_timeout"]
+        );
+    }
+
+    #[test]
+    fn test_set_lock_timeout_zero_only_lock_is_unsafe() {
+        // Only lock_timeout zeroed; statement_timeout still set.
+        let sql = "SET lock_timeout = 0; SET statement_timeout = '60s'; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        let violations = timeout_violations(sql);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0], "ALTER TABLE without lock_timeout");
+    }
+
+    #[test]
+    fn test_set_nonzero_string_with_decimal_is_safe() {
+        // '0.5s' must NOT be classified as zero (it's 500ms).
+        let sql = "SET lock_timeout = '0.5s'; SET statement_timeout = '60s'; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        assert!(timeout_violations(sql).is_empty());
+    }
+
+    #[test]
+    fn test_set_lock_timeout_to_default_clears_flag() {
+        // `SET lock_timeout TO DEFAULT` (kind = VarSetDefault) restores the
+        // server default and must not protect subsequent DDL.
+        let sql = "SET lock_timeout = '2s'; SET statement_timeout = '60s'; \
+                   SET lock_timeout TO DEFAULT; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        let violations = timeout_violations(sql);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0], "ALTER TABLE without lock_timeout");
+    }
+
+    #[test]
+    fn test_reset_lock_timeout_clears_flag() {
+        // `RESET lock_timeout` (kind = VarReset) restores the default.
+        let sql = "SET lock_timeout = '2s'; SET statement_timeout = '60s'; \
+                   RESET lock_timeout; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        let violations = timeout_violations(sql);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0], "ALTER TABLE without lock_timeout");
+    }
+
+    #[test]
+    fn test_reset_statement_timeout_clears_flag() {
+        let sql = "SET lock_timeout = '2s'; SET statement_timeout = '60s'; \
+                   RESET statement_timeout; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        let violations = timeout_violations(sql);
+        assert_eq!(violations.len(), 1);
+        assert_eq!(violations[0], "ALTER TABLE without statement_timeout");
+    }
+
+    #[test]
+    fn test_reset_all_clears_both_flags() {
+        // `RESET ALL` (kind = VarResetAll) wipes every GUC, including both timeouts.
+        let sql = "SET lock_timeout = '2s'; SET statement_timeout = '60s'; \
+                   RESET ALL; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        assert_eq!(
+            timeout_violations(sql),
+            vec!["ALTER TABLE without lock_timeout and statement_timeout"]
+        );
+    }
+
+    #[test]
+    fn test_set_unrelated_var_does_not_affect_timeouts() {
+        // Setting an unrelated GUC must leave timeout flags untouched.
+        let sql = "SET timezone = 'UTC'; SET lock_timeout = '2s'; SET statement_timeout = '60s'; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        assert!(timeout_violations(sql).is_empty());
+    }
+
+    #[test]
+    fn test_reset_unrelated_var_does_not_affect_timeouts() {
+        // RESET on an unrelated GUC must leave timeout flags untouched.
+        let sql = "SET lock_timeout = '2s'; SET statement_timeout = '60s'; \
+                   RESET timezone; \
+                   ALTER TABLE users ADD COLUMN admin BOOLEAN;";
+        assert!(timeout_violations(sql).is_empty());
     }
 }

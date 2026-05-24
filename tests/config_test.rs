@@ -11,12 +11,12 @@ fn test_check_down_single_migration_dir() {
     fs::create_dir(&migration_dir).unwrap();
     fs::write(
         migration_dir.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;",
     )
     .unwrap();
     fs::write(
         migration_dir.join("down.sql"),
-        "ALTER TABLE users DROP COLUMN admin;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN admin;",
     )
     .unwrap();
 
@@ -100,14 +100,14 @@ fn test_check_down_integration() {
     // Create up.sql with unsafe operation
     fs::write(
         migration_dir.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;",
     )
     .unwrap();
 
     // Create down.sql with unsafe operation
     fs::write(
         migration_dir.join("down.sql"),
-        "ALTER TABLE users DROP COLUMN admin;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN admin;",
     )
     .unwrap();
 
@@ -147,7 +147,7 @@ fn test_start_after_integration() {
     fs::create_dir(&old_migration).unwrap();
     fs::write(
         old_migration.join("up.sql"),
-        "ALTER TABLE users DROP COLUMN email;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN email;",
     )
     .unwrap();
 
@@ -156,7 +156,7 @@ fn test_start_after_integration() {
     fs::create_dir(&new_migration).unwrap();
     fs::write(
         new_migration.join("up.sql"),
-        "ALTER TABLE users DROP COLUMN phone;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN phone;",
     )
     .unwrap();
 
@@ -165,7 +165,7 @@ fn test_start_after_integration() {
     fs::create_dir(&exact_migration).unwrap();
     fs::write(
         exact_migration.join("up.sql"),
-        "ALTER TABLE users DROP COLUMN fax;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN fax;",
     )
     .unwrap();
 
@@ -193,7 +193,7 @@ fn test_disable_checks_integration() {
     // SQL that would trigger AddColumnCheck
     fs::write(
         migration_dir.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;",
     )
     .unwrap();
 
@@ -229,6 +229,8 @@ fn test_disable_checks_separates_serial_checks() {
     fs::write(
         migration_dir.join("up.sql"),
         r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 CREATE TABLE events (id BIGSERIAL PRIMARY KEY);
 ALTER TABLE users ADD COLUMN id SERIAL;
 ",
@@ -289,12 +291,12 @@ fn test_combined_config_features() {
     fs::create_dir(&old_migration).unwrap();
     fs::write(
         old_migration.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN admin BOOLEAN;", // Safe
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users ADD COLUMN admin BOOLEAN;",
     )
     .unwrap();
     fs::write(
         old_migration.join("down.sql"),
-        "ALTER TABLE users DROP COLUMN admin;", // Unsafe but should be skipped
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN admin;",
     )
     .unwrap();
 
@@ -303,12 +305,12 @@ fn test_combined_config_features() {
     fs::create_dir(&new_migration).unwrap();
     fs::write(
         new_migration.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN email VARCHAR(255);", // Safe
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users ADD COLUMN email VARCHAR(255);",
     )
     .unwrap();
     fs::write(
         new_migration.join("down.sql"),
-        "ALTER TABLE users DROP COLUMN email;", // Unsafe and should be detected
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN email;",
     )
     .unwrap();
 
@@ -337,7 +339,7 @@ fn test_standalone_sql_files_always_checked() {
     // Create a standalone SQL file (not in a migration directory)
     fs::write(
         temp_dir.path().join("migration.sql"),
-        "ALTER TABLE users DROP COLUMN email;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN email;",
     )
     .unwrap();
 
@@ -367,7 +369,7 @@ fn test_check_down_with_missing_down_sql() {
     // Only create up.sql, no down.sql
     fs::write(
         migration_dir.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN email VARCHAR(255);",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users ADD COLUMN email VARCHAR(255);",
     )
     .unwrap();
 
@@ -404,7 +406,7 @@ fn test_multiple_migrations_with_start_after() {
         fs::create_dir(&migration_dir).unwrap();
         fs::write(
             migration_dir.join("up.sql"),
-            "ALTER TABLE users DROP COLUMN test_column;",
+            "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN test_column;",
         )
         .unwrap();
     }
@@ -446,7 +448,7 @@ fn test_migrations_checked_in_alphanumeric_order() {
         fs::create_dir(&migration_dir).unwrap();
         fs::write(
             migration_dir.join("up.sql"),
-            "ALTER TABLE users DROP COLUMN test;",
+            "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN test;",
         )
         .unwrap();
     }
@@ -487,7 +489,7 @@ fn test_standalone_sql_with_timestamp_respects_start_after() {
     // Standalone SQL file with a Diesel timestamp prefix
     fs::write(
         temp_dir.path().join("2023_01_01_000000_init.sql"),
-        "ALTER TABLE users DROP COLUMN email;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN email;",
     )
     .unwrap();
 
@@ -512,7 +514,7 @@ fn test_standalone_sql_with_timestamp_after_start_after() {
 
     fs::write(
         temp_dir.path().join("2025_01_01_000000_new.sql"),
-        "ALTER TABLE users DROP COLUMN email;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN email;",
     )
     .unwrap();
 
@@ -538,7 +540,7 @@ fn test_standalone_sql_without_timestamp_always_checked() {
 
     fs::write(
         temp_dir.path().join("seed.sql"),
-        "ALTER TABLE users DROP COLUMN email;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN email;",
     )
     .unwrap();
 
@@ -566,7 +568,7 @@ fn test_enable_checks_integration() {
     // SQL that triggers both AddColumnCheck and DropColumnCheck
     fs::write(
         migration_dir.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;\nALTER TABLE users DROP COLUMN old_col;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;\nALTER TABLE users DROP COLUMN old_col;",
     )
     .unwrap();
 
@@ -595,7 +597,7 @@ fn test_enable_checks_suppresses_all_when_unmatched() {
     // SQL that triggers DropColumnCheck
     fs::write(
         migration_dir.join("up.sql"),
-        "ALTER TABLE users DROP COLUMN old_col;",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nALTER TABLE users DROP COLUMN old_col;",
     )
     .unwrap();
 
@@ -647,7 +649,7 @@ fn test_diesel_concurrently_without_metadata_warns() {
 
     fs::write(
         migration_dir.join("up.sql"),
-        "CREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
+        "SET lock_timeout = '2s';\nSET statement_timeout = '60s';\nCREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
     )
     .unwrap();
     // No metadata.toml — defaults to run_in_transaction = true
