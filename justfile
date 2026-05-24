@@ -68,3 +68,4 @@ install-tools:
     cargo install --locked cargo-deny
     cargo install --locked cargo-audit
     cargo install --locked cargo-auditable
+    cargo install --locked typos-cli
