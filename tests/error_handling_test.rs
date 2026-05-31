@@ -1,7 +1,7 @@
 use camino::Utf8Path;
 use diesel_guard::{Config, SafetyChecker};
 use std::fs;
-use tempfile::TempDir;
+use tempfile::tempdir;
 
 #[test]
 fn test_invalid_sql_produces_parse_error() {
@@ -18,7 +18,7 @@ fn test_invalid_sql_produces_parse_error() {
 
 #[test]
 fn test_invalid_sql_in_migration_file_has_file_context() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let file_path = temp_dir.path().join("up.sql");
     fs::write(&file_path, "NOT VALID SQL;").unwrap();
 
@@ -40,7 +40,7 @@ fn test_invalid_sql_in_migration_file_has_file_context() {
 
 #[test]
 fn test_empty_migration_file() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let file_path = temp_dir.path().join("up.sql");
     fs::write(&file_path, "").unwrap();
 
@@ -58,7 +58,7 @@ fn test_empty_migration_file() {
 
 #[test]
 fn test_migration_file_with_only_comments() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let file_path = temp_dir.path().join("up.sql");
     fs::write(&file_path, "-- comment\n-- another comment\n").unwrap();
 
@@ -93,7 +93,7 @@ fn test_nonexistent_path_returns_error() {
 
 #[test]
 fn test_check_directory_fails_on_invalid_sql_file() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     // First migration: valid SQL
     let valid_dir = temp_dir.path().join("2024_01_01_000000_valid");
@@ -121,7 +121,7 @@ fn test_check_directory_fails_on_invalid_sql_file() {
 
 #[test]
 fn test_empty_directory_returns_no_results() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     let checker = SafetyChecker::new();
     let result = checker
@@ -136,7 +136,7 @@ fn test_empty_directory_returns_no_results() {
 
 #[test]
 fn test_directory_with_non_sql_files_ignored() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     fs::write(temp_dir.path().join("readme.txt"), "Hello").unwrap();
     fs::write(temp_dir.path().join("notes.md"), "# Notes").unwrap();

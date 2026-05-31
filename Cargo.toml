@@ -2,14 +2,14 @@
 name = "diesel-guard"
 version = "0.11.0"
 edition = "2024"
-authors = ["Alex Yarotsky <https://github.com/ayarotsky>"]
+authors = ["Alex Yarotsky"]
 description = "Linter for dangerous Postgres migration patterns in Diesel and SQLx. Prevents downtime caused by unsafe schema changes."
 documentation = "https://ayarotsky.github.io/diesel-guard/"
 license = "MIT"
 repository = "https://github.com/ayarotsky/diesel-guard"
-homepage = "https://github.com/ayarotsky/diesel-guard"
+homepage = "https://ayarotsky.github.io/diesel-guard/"
 readme = "README.md"
-keywords = ["linter", "postgres", "postgresql", "sqlx", "diesel"]
+keywords = ["linter", "orm", "postgresql", "sqlx", "diesel"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
@@ -19,6 +19,7 @@ pg_query = "6"
 # CLI
 clap = { version = "4.6", features = ["derive"] }
 colored = "3.1"
+human-panic = "2"
 
 # Error handling
 thiserror = "2.0"
@@ -59,6 +60,7 @@ inherits = "release"
 
 [dev-dependencies]
 tempfile = "3.27"
+assert_cmd = "2"
 
 [lints.rust]
 unsafe_code = "deny"

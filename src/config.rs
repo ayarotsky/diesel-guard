@@ -208,7 +208,7 @@ impl Default for Config {
 mod tests {
     use super::*;
     use std::fs;
-    use tempfile::TempDir;
+    use tempfile::tempdir;
 
     #[test]
     fn test_default_config() {
@@ -266,7 +266,7 @@ mod tests {
 
     #[test]
     fn test_load_from_path() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let config_path = temp_dir.path().join("diesel-guard.toml");
 
         fs::write(
@@ -328,7 +328,7 @@ disable_checks = ["AddColumnCheck"]
 
     #[test]
     fn test_missing_framework_field_errors() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let config_path = temp_dir.path().join("diesel-guard.toml");
 
         // Config file without framework field

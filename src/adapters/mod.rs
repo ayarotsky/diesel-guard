@@ -149,11 +149,11 @@ pub(crate) fn collect_and_sort_entries(dir: &Utf8Path) -> Vec<DirEntry> {
 mod tests {
     use super::*;
     use std::fs;
-    use tempfile::TempDir;
+    use tempfile::tempdir;
 
     #[test]
     fn test_is_single_migration_dir_with_up_sql() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let dir = Utf8Path::from_path(temp_dir.path()).unwrap();
         fs::write(dir.join("up.sql"), "CREATE TABLE t();").unwrap();
         assert!(is_single_migration_dir(dir));
@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn test_is_single_migration_dir_without_up_sql() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let dir = Utf8Path::from_path(temp_dir.path()).unwrap();
         assert!(!is_single_migration_dir(dir));
     }

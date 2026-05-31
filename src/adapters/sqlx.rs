@@ -166,6 +166,7 @@ mod tests {
     use super::*;
     use crate::adapters::should_check_migration;
     use std::fs;
+    use tempfile::tempdir;
 
     #[test]
     fn test_parse_timestamp() {
@@ -250,9 +251,7 @@ mod tests {
 
     #[test]
     fn test_extract_metadata_no_directive_defaults_to_in_transaction() {
-        use tempfile::TempDir;
-
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let sql_file = temp_dir.path().join("20240101000000_add_index.sql");
         fs::write(&sql_file, "CREATE INDEX idx ON users(email);\n").unwrap();
 
@@ -264,9 +263,7 @@ mod tests {
 
     #[test]
     fn test_extract_metadata_with_no_transaction_directive() {
-        use tempfile::TempDir;
-
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let sql_file = temp_dir.path().join("20240101000000_add_index.sql");
         fs::write(
             &sql_file,
@@ -282,9 +279,7 @@ mod tests {
 
     #[test]
     fn test_extract_metadata_directive_case_insensitive() {
-        use tempfile::TempDir;
-
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let sql_file = temp_dir.path().join("20240101000000_add_index.sql");
         fs::write(&sql_file, "-- NO-TRANSACTION\nSELECT 1;\n").unwrap();
 
@@ -296,9 +291,7 @@ mod tests {
 
     #[test]
     fn test_extract_metadata_directive_anywhere_in_file() {
-        use tempfile::TempDir;
-
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let sql_file = temp_dir.path().join("20240101000000_add_index.sql");
         fs::write(&sql_file, "SELECT 1;\n-- no-transaction\nSELECT 2;\n").unwrap();
 
@@ -310,9 +303,7 @@ mod tests {
 
     #[test]
     fn test_suffix_down_sql_skipped_when_check_down_false() {
-        use tempfile::TempDir;
-
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let down_file = temp_dir.path().join("20240101000000_create_users.down.sql");
         fs::write(&down_file, "ALTER TABLE users DROP COLUMN admin;").unwrap();
 

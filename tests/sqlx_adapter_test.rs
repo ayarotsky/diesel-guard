@@ -1,13 +1,13 @@
 use camino::Utf8Path;
 use diesel_guard::{Config, SafetyChecker};
 use std::fs;
-use tempfile::TempDir;
+use tempfile::tempdir;
 
 #[test]
 fn test_concurrently_violations_include_sqlx_transaction_hint() {
     // No `-- no-transaction` directive → run_in_transaction = true; all three
     // "without CONCURRENTLY" violations should carry the SQLx-specific hint in safe_alternative.
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     fs::write(
         temp_dir.path().join("1_indexes.up.sql"),
         "CREATE INDEX idx_a ON users(email);\nDROP INDEX idx_b;\nREINDEX INDEX idx_a;",
@@ -56,7 +56,7 @@ fn test_concurrently_violations_include_sqlx_transaction_hint() {
 
 #[test]
 fn test_sqlx_numeric_version_comparison() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     // Create 3 suffix-format migrations with numeric versions: 1, 2, 10
     for version in &["1", "2", "10"] {
@@ -90,7 +90,7 @@ fn test_sqlx_numeric_version_comparison() {
 
 #[test]
 fn test_sqlx_single_file_format_no_markers() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     // Single file format: VERSION_DESC.sql (no .up/.down suffix, no markers)
     fs::write(
@@ -117,7 +117,7 @@ fn test_sqlx_single_file_format_no_markers() {
 
 #[test]
 fn test_sqlx_start_after_with_suffix_format() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     // Old migration (should be skipped)
     fs::write(
@@ -149,7 +149,7 @@ fn test_sqlx_start_after_with_suffix_format() {
 
 #[test]
 fn test_sqlx_check_down_suffix_format() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     // Suffix format with both up and down files
     fs::write(

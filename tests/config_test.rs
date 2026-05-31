@@ -2,11 +2,11 @@ use camino::Utf8Path;
 use diesel_guard::{Config, ConfigError, SafetyChecker};
 use miette::Diagnostic as _;
 use std::fs;
-use tempfile::TempDir;
+use tempfile::tempdir;
 
 #[test]
 fn test_check_down_single_migration_dir() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
     fs::create_dir(&migration_dir).unwrap();
     fs::write(
@@ -34,7 +34,7 @@ fn test_check_down_single_migration_dir() {
 
 #[test]
 fn test_config_disables_checks() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let config_path = temp_dir.path().join("diesel-guard.toml");
 
     fs::write(
@@ -54,7 +54,7 @@ disable_checks = ["AddColumnCheck"]
 
 #[test]
 fn test_config_enables_check_down() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let config_path = temp_dir.path().join("diesel-guard.toml");
 
     fs::write(
@@ -73,7 +73,7 @@ check_down = true
 
 #[test]
 fn test_config_start_after() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let config_path = temp_dir.path().join("diesel-guard.toml");
 
     fs::write(
@@ -93,7 +93,7 @@ start_after = "2024_01_01_000000"
 #[test]
 fn test_check_down_integration() {
     // Create temporary migration structure
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
     fs::create_dir(&migration_dir).unwrap();
 
@@ -140,7 +140,7 @@ fn test_check_down_integration() {
 #[test]
 fn test_start_after_integration() {
     // Create temporary migrations with different timestamps
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     // Old migration (before threshold)
     let old_migration = temp_dir.path().join("2023_12_31_000000_old");
@@ -186,7 +186,7 @@ fn test_start_after_integration() {
 
 #[test]
 fn test_disable_checks_integration() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
     fs::create_dir(&migration_dir).unwrap();
 
@@ -227,7 +227,7 @@ fn test_disable_checks_integration() {
 fn test_disable_checks_separates_serial_checks() {
     use std::collections::HashSet;
 
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let migration_dir = temp_dir.path().join("2024_01_01_000001_test");
     fs::create_dir(&migration_dir).unwrap();
 
@@ -287,7 +287,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS id SERIAL;
 #[test]
 fn test_combined_config_features() {
     // Test all three config features together
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     // Old migration with unsafe down.sql
     let old_migration = temp_dir.path().join("2023_12_31_000000_old");
@@ -337,7 +337,7 @@ fn test_combined_config_features() {
 #[test]
 fn test_standalone_sql_files_always_checked() {
     // Verify that standalone .sql files are always checked regardless of start_after
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     // Create a standalone SQL file (not in a migration directory)
     fs::write(
@@ -365,7 +365,7 @@ fn test_standalone_sql_files_always_checked() {
 #[test]
 fn test_check_down_with_missing_down_sql() {
     // Verify no error when check_down=true but down.sql doesn't exist
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
     fs::create_dir(&migration_dir).unwrap();
 
@@ -389,7 +389,7 @@ fn test_check_down_with_missing_down_sql() {
 #[test]
 fn test_multiple_migrations_with_start_after() {
     // Test filtering with multiple migrations
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     // Create 5 migrations with different timestamps
     let timestamps = [
@@ -430,7 +430,7 @@ fn test_multiple_migrations_with_start_after() {
 #[test]
 fn test_migrations_checked_in_alphanumeric_order() {
     // Verify that migrations are checked in sorted order
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     // Create migrations with different naming patterns
     // These might be returned in random order by the filesystem
@@ -483,7 +483,7 @@ fn test_migrations_checked_in_alphanumeric_order() {
 #[test]
 fn test_standalone_sql_with_timestamp_respects_start_after() {
     // Bug fix: standalone .sql files with valid timestamps should respect start_after
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     // Standalone SQL file with a Diesel timestamp prefix
     fs::write(
@@ -509,7 +509,7 @@ fn test_standalone_sql_with_timestamp_respects_start_after() {
 #[test]
 fn test_standalone_sql_with_timestamp_after_start_after() {
     // Standalone .sql files with timestamps after start_after should still be checked
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     fs::write(
         temp_dir.path().join("2025_01_01_000000_new.sql"),
@@ -535,7 +535,7 @@ fn test_standalone_sql_with_timestamp_after_start_after() {
 #[test]
 fn test_standalone_sql_without_timestamp_always_checked() {
     // Standalone .sql files without timestamps should always be checked (unchanged behavior)
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     fs::write(
         temp_dir.path().join("seed.sql"),
@@ -560,7 +560,7 @@ fn test_standalone_sql_without_timestamp_always_checked() {
 
 #[test]
 fn test_enable_checks_integration() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
     fs::create_dir(&migration_dir).unwrap();
 
@@ -589,7 +589,7 @@ fn test_enable_checks_integration() {
 
 #[test]
 fn test_enable_checks_suppresses_all_when_unmatched() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
     fs::create_dir(&migration_dir).unwrap();
 
@@ -616,7 +616,7 @@ fn test_enable_checks_suppresses_all_when_unmatched() {
 #[test]
 fn test_enable_and_disable_checks_conflict_in_config() {
     // File-level: load_from_path propagates ConflictingCheckConfig
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let config_path = temp_dir.path().join("diesel-guard.toml");
     fs::write(
         &config_path,
@@ -642,7 +642,7 @@ fn test_diesel_concurrently_without_metadata_warns() {
     // CONCURRENTLY used without metadata.toml is now a violation:
     // the migration defaults to run_in_transaction=true, so CONCURRENTLY will
     // fail at runtime because PostgreSQL doesn't allow it inside a transaction.
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let migration_dir = temp_dir.path().join("2024_01_01_000000_add_index");
     fs::create_dir(&migration_dir).unwrap();
 
@@ -672,7 +672,7 @@ fn test_diesel_concurrently_without_metadata_warns() {
 
 #[test]
 fn test_config_invalid_toml_syntax() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let config_path = temp_dir.path().join("diesel-guard.toml");
 
     // Missing closing quote — invalid TOML
@@ -688,7 +688,7 @@ fn test_config_invalid_toml_syntax() {
 
 #[test]
 fn test_config_empty_file_errors() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let config_path = temp_dir.path().join("diesel-guard.toml");
 
     // Empty file (0 bytes)
@@ -704,7 +704,7 @@ fn test_config_empty_file_errors() {
 
 #[test]
 fn test_config_extra_unknown_fields_ignored() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let config_path = temp_dir.path().join("diesel-guard.toml");
 
     fs::write(
