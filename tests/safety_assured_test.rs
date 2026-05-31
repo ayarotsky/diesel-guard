@@ -1,7 +1,7 @@
 use camino::Utf8Path;
 use diesel_guard::{Config, SafetyChecker};
 use std::fs;
-use tempfile::TempDir;
+use tempfile::tempdir;
 
 #[test]
 fn test_safety_assured_block_ignores_violations() {
@@ -155,7 +155,7 @@ ALTER TABLE users DROP COLUMN email;
 
 #[test]
 fn test_safety_assured_in_migration_file() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
     fs::create_dir(&migration_dir).unwrap();
 

@@ -1,11 +1,11 @@
 use camino::Utf8Path;
 use diesel_guard::{Config, SafetyChecker};
 use std::fs;
-use tempfile::TempDir;
+use tempfile::tempdir;
 
 #[test]
 fn test_diesel_loose_sql_and_directory_migrations_coexist() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     // Directory-based migration
     let dir_mig = temp_dir.path().join("2024_01_01_000000_create_users");
@@ -38,7 +38,7 @@ fn test_diesel_loose_sql_and_directory_migrations_coexist() {
 
 #[test]
 fn test_diesel_mixed_timestamp_separators() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     // Underscore separator
     let dir1 = temp_dir.path().join("2023_01_01_000000_old");
@@ -85,7 +85,7 @@ fn test_diesel_mixed_timestamp_separators() {
 fn test_concurrently_violations_include_diesel_transaction_hint() {
     // No metadata.toml → run_in_transaction = true; all three "without CONCURRENTLY"
     // violations should carry the Diesel-specific hint in safe_alternative.
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let migration_dir = temp_dir.path().join("2024_01_01_000000_indexes");
     fs::create_dir(&migration_dir).unwrap();
     fs::write(
@@ -136,7 +136,7 @@ fn test_concurrently_violations_include_diesel_transaction_hint() {
 
 #[test]
 fn test_diesel_no_separator_timestamp() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
 
     // YYYYMMDDHHMMSS format (no separators)
     let dir = temp_dir.path().join("20240101000000_create_users");

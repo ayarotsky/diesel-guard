@@ -167,6 +167,8 @@ fn run_check(path: &camino::Utf8Path, format: &str) -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    human_panic::setup_panic!(human_panic::metadata!()
+        .support("Please open an issue at https://github.com/ayarotsky/diesel-guard/issues. Attach the crash report file mentioned above."));
     miette::set_hook(Box::new(|_| {
         Box::new(
             miette::MietteHandlerOpts::new()

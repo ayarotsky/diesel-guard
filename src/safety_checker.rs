@@ -218,6 +218,7 @@ mod tests {
     use std::io::Cursor;
 
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn test_check_safe_sql() {
@@ -357,7 +358,7 @@ mod tests {
 
     #[test]
     fn test_custom_checks_dir_ignores_non_rhai_files() {
-        let temp_dir = tempfile::TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         std::fs::write(temp_dir.path().join("readme.txt"), "not a check").unwrap();
         let config = Config {
             custom_checks_dir: Some(temp_dir.path().to_str().unwrap().to_string()),
@@ -394,9 +395,8 @@ mod tests {
     #[test]
     fn test_check_file_parse_error_points_to_failing_statement_line() {
         use std::fs;
-        use tempfile::TempDir;
 
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let file_path = temp_dir.path().join("bad_migration.sql");
         // Line 1: "CREATE TABLE a ();\n"
         // Line 2: "CREATE TABLE b ();\n"
@@ -460,9 +460,8 @@ mod tests {
     #[test]
     fn test_diesel_concurrently_without_metadata_toml_is_violation() {
         use std::fs;
-        use tempfile::TempDir;
 
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let migration_dir = temp_dir.path().join("2024_01_01_000000_add_idx");
         fs::create_dir(&migration_dir).unwrap();
         fs::write(
@@ -496,9 +495,8 @@ mod tests {
     #[test]
     fn test_diesel_concurrently_with_metadata_toml_is_safe() {
         use std::fs;
-        use tempfile::TempDir;
 
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let migration_dir = temp_dir.path().join("2024_01_01_000000_add_idx");
         fs::create_dir(&migration_dir).unwrap();
         fs::write(
@@ -532,9 +530,8 @@ mod tests {
     #[test]
     fn test_sqlx_concurrently_without_directive_is_violation() {
         use std::fs;
-        use tempfile::TempDir;
 
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         fs::write(
             temp_dir.path().join("20240101000000_add_idx.up.sql"),
             "CREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
@@ -565,9 +562,8 @@ mod tests {
     #[test]
     fn test_sqlx_concurrently_with_directive_is_safe() {
         use std::fs;
-        use tempfile::TempDir;
 
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         fs::write(
             temp_dir.path().join("20240101000000_add_idx.up.sql"),
             "-- no-transaction\nCREATE INDEX CONCURRENTLY idx_users_email ON users(email);",

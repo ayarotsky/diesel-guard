@@ -1,12 +1,12 @@
 use camino::Utf8Path;
 use diesel_guard::{Config, SafetyChecker};
 use std::fs;
-use tempfile::TempDir;
+use tempfile::tempdir;
 
 #[test]
 fn test_start_after_plus_custom_checks_plus_safety_assured() {
-    let checks_dir = TempDir::new().unwrap();
-    let migrations_dir = TempDir::new().unwrap();
+    let checks_dir = tempdir().expect("Failed to create temp dir");
+    let migrations_dir = tempdir().expect("Failed to create temp dir");
 
     // Custom check that flags DROP TABLE
     fs::write(
@@ -90,7 +90,7 @@ DROP TABLE unprotected_table;
 
 #[test]
 fn test_disable_builtin_and_custom_checks_simultaneously() {
-    let checks_dir = TempDir::new().unwrap();
+    let checks_dir = tempdir().expect("Failed to create temp dir");
 
     // Custom check that flags every DropStmt
     fs::write(
@@ -145,7 +145,7 @@ fn test_disable_builtin_and_custom_checks_simultaneously() {
 
 #[test]
 fn test_check_down_with_safety_assured_in_down_sql() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = tempdir().expect("Failed to create temp dir");
     let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
     fs::create_dir(&migration_dir).unwrap();
 

@@ -298,7 +298,7 @@ mod tests {
     use super::*;
     use crate::checks::pg_helpers::extract_node;
     use std::fs;
-    use tempfile::TempDir;
+    use tempfile::tempdir;
 
     /// Helper: run a script against a node and return violations.
     fn run_script(script: &str, sql: &str) -> Vec<Violation> {
@@ -446,7 +446,7 @@ mod tests {
 
     #[test]
     fn test_load_custom_checks_from_directory() {
-        let dir = TempDir::new().unwrap();
+        let dir = tempdir().expect("Failed to create temp dir");
         let dir_path = Utf8Path::from_path(dir.path()).unwrap();
 
         // Write a valid check script
@@ -592,7 +592,7 @@ mod tests {
 
     #[test]
     fn test_load_custom_checks_respects_disable() {
-        let dir = TempDir::new().unwrap();
+        let dir = tempdir().expect("Failed to create temp dir");
         let dir_path = Utf8Path::from_path(dir.path()).unwrap();
 
         fs::write(dir.path().join("my_check.rhai"), r"return;").unwrap();
@@ -609,7 +609,7 @@ mod tests {
 
     #[test]
     fn test_load_custom_checks_nonexistent_directory() {
-        let dir = TempDir::new().unwrap();
+        let dir = tempdir().expect("Failed to create temp dir");
         let missing = dir.path().join("does_not_exist");
         let dir_path = Utf8Path::from_path(&missing).unwrap();
         let config = crate::config::Config::default();
@@ -675,7 +675,7 @@ mod tests {
 
     #[test]
     fn test_load_custom_checks_unreadable_file() {
-        let dir = TempDir::new().unwrap();
+        let dir = tempdir().expect("Failed to create temp dir");
         let dir_path = Utf8Path::from_path(dir.path()).unwrap();
 
         // A directory at the .rhai path always fails fs::read_to_string,

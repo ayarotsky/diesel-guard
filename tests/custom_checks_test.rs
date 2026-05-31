@@ -1,11 +1,11 @@
 use camino::Utf8Path;
 use diesel_guard::{Config, SafetyChecker, ViolationList};
 use std::fs;
-use tempfile::TempDir;
+use tempfile::tempdir;
 
 #[test]
 fn test_custom_check_fires_alongside_builtin() {
-    let dir = TempDir::new().unwrap();
+    let dir = tempdir().expect("Failed to create temp dir");
 
     // Write a custom check that flags non-concurrent indexes
     fs::write(
@@ -63,7 +63,7 @@ fn test_custom_check_fires_alongside_builtin() {
 
 #[test]
 fn test_disable_checks_works_for_custom_check() {
-    let dir = TempDir::new().unwrap();
+    let dir = tempdir().expect("Failed to create temp dir");
 
     fs::write(
         dir.path().join("my_custom.rhai"),
@@ -102,7 +102,7 @@ fn test_disable_checks_works_for_custom_check() {
 
 #[test]
 fn test_safety_assured_blocks_skip_custom_checks() {
-    let dir = TempDir::new().unwrap();
+    let dir = tempdir().expect("Failed to create temp dir");
 
     fs::write(
         dir.path().join("always_fires.rhai"),
@@ -145,8 +145,8 @@ CREATE INDEX idx ON users(email);
 
 #[test]
 fn test_custom_check_in_migration_directory() {
-    let checks_dir = TempDir::new().unwrap();
-    let migrations_dir = TempDir::new().unwrap();
+    let checks_dir = tempdir().expect("Failed to create temp dir");
+    let migrations_dir = tempdir().expect("Failed to create temp dir");
 
     // Write a custom check
     fs::write(
@@ -202,7 +202,7 @@ fn test_nonexistent_custom_checks_dir_is_ignored() {
 
 #[test]
 fn test_registry_check_names_includes_custom_checks() {
-    let dir = TempDir::new().unwrap();
+    let dir = tempdir().expect("Failed to create temp dir");
 
     fs::write(
         dir.path().join("my_custom.rhai"),
@@ -255,7 +255,7 @@ fn test_unknown_check_name_warning_not_emitted_for_custom_check() {
     // SafetyChecker::with_config() should NOT warn about it.
     // The validation checks .rhai file stems on disk, not just what was
     // loaded into the registry (disabled checks are skipped during loading).
-    let dir = TempDir::new().unwrap();
+    let dir = tempdir().expect("Failed to create temp dir");
 
     fs::write(
         dir.path().join("my_custom.rhai"),
@@ -299,7 +299,7 @@ fn test_unknown_check_name_detected_after_custom_checks_loaded() {
     // custom .rhai file stem. SafetyChecker::with_config() will warn about it
     // on stderr. We verify indirectly: the name doesn't appear in either the
     // built-in list or the custom check file stems.
-    let dir = TempDir::new().unwrap();
+    let dir = tempdir().expect("Failed to create temp dir");
 
     fs::write(
         dir.path().join("my_custom.rhai"),
@@ -528,7 +528,7 @@ fn test_example_limit_columns_per_index_detects() {
 
 #[test]
 fn test_custom_check_returning_array_of_violations() {
-    let dir = TempDir::new().unwrap();
+    let dir = tempdir().expect("Failed to create temp dir");
 
     // Script that always returns an array of 3 violations for any IndexStmt
     fs::write(
@@ -573,7 +573,7 @@ fn test_custom_check_returning_array_of_violations() {
 
 #[test]
 fn test_custom_check_using_pg_constants() {
-    let dir = TempDir::new().unwrap();
+    let dir = tempdir().expect("Failed to create temp dir");
 
     // Script that uses pg::OBJECT_TABLE to detect DROP TABLE
     fs::write(
@@ -619,7 +619,7 @@ fn test_custom_check_using_pg_constants() {
 
 #[test]
 fn test_multiple_custom_checks_loaded_in_sorted_order() {
-    let dir = TempDir::new().unwrap();
+    let dir = tempdir().expect("Failed to create temp dir");
 
     // Two scripts that both fire on IndexStmt — named to test sort order
     fs::write(
@@ -684,7 +684,7 @@ fn test_multiple_custom_checks_loaded_in_sorted_order() {
 
 #[test]
 fn test_custom_check_name_conflicts_with_builtin() {
-    let dir = TempDir::new().unwrap();
+    let dir = tempdir().expect("Failed to create temp dir");
 
     // Script with the same name as a built-in check
     fs::write(
@@ -728,7 +728,7 @@ fn test_custom_check_name_conflicts_with_builtin() {
 
 #[test]
 fn test_custom_check_compilation_error_nonfatal() {
-    let dir = TempDir::new().unwrap();
+    let dir = tempdir().expect("Failed to create temp dir");
 
     // Broken script (invalid syntax)
     fs::write(dir.path().join("broken.rhai"), "this is not valid rhai {{{").unwrap();
@@ -774,7 +774,7 @@ fn test_example_limit_columns_per_index_allows() {
 
 #[test]
 fn test_custom_check_can_read_postgres_version() {
-    let dir = TempDir::new().unwrap();
+    let dir = tempdir().expect("Failed to create temp dir");
 
     // Script that skips the violation when postgres_version >= 14
     fs::write(
@@ -847,7 +847,7 @@ fn test_custom_check_can_read_postgres_version() {
 
 #[test]
 fn test_custom_check_runtime_error_yields_script_error_violation() {
-    let dir = TempDir::new().unwrap();
+    let dir = tempdir().expect("Failed to create temp dir");
     fs::write(dir.path().join("bad.rhai"), "let x = 1 / 0;").unwrap();
     let config = Config {
         custom_checks_dir: Some(dir.path().to_str().unwrap().to_string()),
@@ -877,7 +877,7 @@ fn test_custom_check_max_operations_yields_script_error() {
     // An infinite loop hits the max_operations budget (ErrorTooManyOperations).
     // This must surface as a SCRIPT ERROR violation — a broken script must not
     // silently disable a safety check.
-    let dir = TempDir::new().unwrap();
+    let dir = tempdir().expect("Failed to create temp dir");
     fs::write(dir.path().join("looping.rhai"), "loop {}").unwrap();
     let config = Config {
         custom_checks_dir: Some(dir.path().to_str().unwrap().to_string()),

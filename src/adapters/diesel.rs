@@ -172,6 +172,7 @@ impl DieselAdapter {
 mod tests {
     use super::*;
     use crate::adapters::should_check_migration;
+    use tempfile::tempdir;
 
     #[test]
     fn test_parse_timestamp_with_underscores() {
@@ -282,9 +283,7 @@ mod tests {
 
     #[test]
     fn test_extract_metadata_no_file_defaults_to_in_transaction() {
-        use tempfile::TempDir;
-
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let sql_file = temp_dir.path().join("up.sql");
         std::fs::write(&sql_file, "SELECT 1;").unwrap();
         // No metadata.toml written
@@ -297,9 +296,7 @@ mod tests {
 
     #[test]
     fn test_extract_metadata_run_in_transaction_false() {
-        use tempfile::TempDir;
-
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let sql_file = temp_dir.path().join("up.sql");
         std::fs::write(&sql_file, "SELECT 1;").unwrap();
         std::fs::write(
@@ -316,9 +313,7 @@ mod tests {
 
     #[test]
     fn test_extract_metadata_run_in_transaction_true_explicit() {
-        use tempfile::TempDir;
-
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let sql_file = temp_dir.path().join("up.sql");
         std::fs::write(&sql_file, "SELECT 1;").unwrap();
         std::fs::write(
@@ -335,9 +330,7 @@ mod tests {
 
     #[test]
     fn test_extract_metadata_empty_toml_defaults_to_in_transaction() {
-        use tempfile::TempDir;
-
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let sql_file = temp_dir.path().join("up.sql");
         std::fs::write(&sql_file, "SELECT 1;").unwrap();
         std::fs::write(temp_dir.path().join("metadata.toml"), "").unwrap();
@@ -350,9 +343,7 @@ mod tests {
 
     #[test]
     fn test_extract_metadata_malformed_toml_defaults_to_in_transaction() {
-        use tempfile::TempDir;
-
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let sql_file = temp_dir.path().join("up.sql");
         std::fs::write(&sql_file, "SELECT 1;").unwrap();
         std::fs::write(
@@ -370,9 +361,8 @@ mod tests {
     #[test]
     fn test_single_migration_dir_skips_down_sql() {
         use std::fs;
-        use tempfile::TempDir;
 
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
         fs::create_dir(&migration_dir).unwrap();
         fs::write(
@@ -400,9 +390,8 @@ mod tests {
     #[test]
     fn test_single_migration_dir_includes_down_sql() {
         use std::fs;
-        use tempfile::TempDir;
 
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempdir().expect("Failed to create temp dir");
         let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
         fs::create_dir(&migration_dir).unwrap();
         fs::write(
