@@ -197,3 +197,35 @@ fn test_sqlx_check_down_suffix_format() {
     assert!(paths.iter().any(|p| p.contains(".up.sql")));
     assert!(paths.iter().any(|p| p.contains(".down.sql")));
 }
+
+#[test]
+fn test_sqlx_file_directive_can_disable_checks_for_one_migration() {
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    fs::write(
+        temp_dir.path().join("1_test.up.sql"),
+        r"
+-- diesel-guard:disable AddColumnCheck
+ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
+",
+    )
+    .unwrap();
+
+    let config = Config {
+        framework: "sqlx".to_string(),
+        enable_checks: vec![
+            "AddColumnCheck".to_string(),
+            "IdempotencyAlterCheck".to_string(),
+        ],
+        ..Default::default()
+    };
+    let results = SafetyChecker::with_config(config)
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].1.len(), 1);
+    assert_eq!(
+        results[0].1[0].1.operation,
+        "ADD COLUMN without IF NOT EXISTS"
+    );
+}

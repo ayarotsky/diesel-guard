@@ -17,6 +17,12 @@ static START_DIRECTIVE: LazyLock<Regex> =
 static END_DIRECTIVE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)^\s*--\s*safety-assured:end\s*$").unwrap());
 
+/// Regex pattern for matching whole-migration check disable directives.
+/// Matches: -- diesel-guard:disable AddColumnCheck, DropColumnCheck
+/// Case-insensitive for the directive prefix; check names retain their original case.
+static DISABLE_CHECKS_DIRECTIVE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^\s*--\s*diesel-guard:disable\s+(.+?)\s*$").unwrap());
+
 /// Represents a range of lines that should be ignored
 #[derive(Debug, Clone, PartialEq, Display)]
 #[display("lines {}-{}", start_line, end_line)]
@@ -75,6 +81,17 @@ impl CommentParser {
         Ok(ranges)
     }
 
+    /// Parse whole-migration check disable directives.
+    ///
+    /// Directives are comma-separated and apply to the entire SQL string:
+    /// `-- diesel-guard:disable AddColumnCheck, DropColumnCheck`
+    pub fn parse_disabled_checks(sql: &str) -> Vec<String> {
+        sql.lines()
+            .filter_map(Self::parse_disabled_checks_line)
+            .flatten()
+            .collect()
+    }
+
     /// Check if line is a start directive
     fn is_start_directive(line: &str) -> bool {
         START_DIRECTIVE.is_match(line)
@@ -83,6 +100,24 @@ impl CommentParser {
     /// Check if line is an end directive
     fn is_end_directive(line: &str) -> bool {
         END_DIRECTIVE.is_match(line)
+    }
+
+    fn parse_disabled_checks_line(line: &str) -> Option<Vec<String>> {
+        let captures = DISABLE_CHECKS_DIRECTIVE.captures(line.trim())?;
+        let checks = captures
+            .get(1)?
+            .as_str()
+            .split(',')
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+
+        if checks.is_empty() {
+            None
+        } else {
+            Some(checks)
+        }
     }
 }
 
@@ -223,6 +258,43 @@ ALTER TABLE posts ADD COLUMN body TEXT;
 
         let ranges = CommentParser::parse_ignore_ranges(sql).unwrap();
         assert_eq!(ranges.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_disabled_checks_directive() {
+        let sql = r"
+-- diesel-guard:disable AddColumnCheck, DropColumnCheck
+ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
+        ";
+
+        let disabled = CommentParser::parse_disabled_checks(sql);
+        assert_eq!(disabled, vec!["AddColumnCheck", "DropColumnCheck"]);
+    }
+
+    #[test]
+    fn test_parse_disabled_checks_directive_is_case_insensitive() {
+        let sql = r"
+-- DIESEL-GUARD:DISABLE AddColumnCheck
+ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
+        ";
+
+        let disabled = CommentParser::parse_disabled_checks(sql);
+        assert_eq!(disabled, vec!["AddColumnCheck"]);
+    }
+
+    #[test]
+    fn test_parse_multiple_disabled_checks_directives() {
+        let sql = r"
+-- diesel-guard:disable AddColumnCheck
+-- diesel-guard:disable DropColumnCheck, ReindexCheck
+ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
+        ";
+
+        let disabled = CommentParser::parse_disabled_checks(sql);
+        assert_eq!(
+            disabled,
+            vec!["AddColumnCheck", "DropColumnCheck", "ReindexCheck"]
+        );
     }
 
     #[test]

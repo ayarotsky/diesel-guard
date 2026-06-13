@@ -11,6 +11,7 @@ pub struct ParsedSql {
     pub stmts: Vec<RawStmt>,
     pub sql: String,
     pub ignore_ranges: Vec<IgnoreRange>,
+    pub disabled_checks: Vec<String>,
 }
 
 /// Parse SQL string into AST statements
@@ -45,12 +46,14 @@ pub fn parse(sql: &str) -> Result<Vec<RawStmt>> {
 /// Parse SQL with metadata for safety-assured blocks
 pub fn parse_with_metadata(sql: &str) -> Result<ParsedSql> {
     let ignore_ranges = comment_parser::CommentParser::parse_ignore_ranges(sql)?;
+    let disabled_checks = comment_parser::CommentParser::parse_disabled_checks(sql);
     let stmts = parse(sql)?;
 
     Ok(ParsedSql {
         stmts,
         sql: sql.to_string(),
         ignore_ranges,
+        disabled_checks,
     })
 }
 
@@ -87,6 +90,7 @@ ALTER TABLE users DROP COLUMN email;
         let result = parse_with_metadata(sql).unwrap();
         assert_eq!(result.stmts.len(), 1);
         assert_eq!(result.ignore_ranges.len(), 1);
+        assert_eq!(result.disabled_checks.len(), 0);
         assert!(!result.sql.is_empty());
     }
 
@@ -97,7 +101,20 @@ ALTER TABLE users DROP COLUMN email;
         let result = parse_with_metadata(sql).unwrap();
         assert_eq!(result.stmts.len(), 1);
         assert_eq!(result.ignore_ranges.len(), 0);
+        assert_eq!(result.disabled_checks.len(), 0);
         assert_eq!(result.sql, sql);
+    }
+
+    #[test]
+    fn test_parse_with_metadata_disabled_checks() {
+        let sql = r"
+-- diesel-guard:disable AddColumnCheck
+ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
+        ";
+
+        let result = parse_with_metadata(sql).unwrap();
+        assert_eq!(result.stmts.len(), 1);
+        assert_eq!(result.disabled_checks, vec!["AddColumnCheck"]);
     }
 
     #[test]

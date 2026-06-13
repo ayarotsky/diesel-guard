@@ -133,6 +133,13 @@ ALTER TABLE users DROP COLUMN legacy_field;
 -- safety-assured:end
 ```
 
+To suppress only one known-safe check while keeping other checks active for the same migration, disable that check by name:
+
+```sql
+-- diesel-guard:disable AddColumnCheck
+ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
+```
+
 ## Further Reading
 
 - [Your Diesel Migrations Might Be Ticking Time Bombs](https://dev.to/ayarotsky/your-diesel-migrations-might-be-ticking-time-bombs-30g7)

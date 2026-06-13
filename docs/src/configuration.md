@@ -35,6 +35,10 @@ check_down = true
 # Disable specific checks (blacklist)
 disable_checks = ["AddColumnCheck"]
 
+# Disable specific checks for one migration:
+#   Any framework: add `-- diesel-guard:disable AddColumnCheck` to the migration SQL.
+#   Diesel only: add `disable_checks = ["AddColumnCheck"]` to that migration's metadata.toml.
+
 # Run only specific checks (whitelist). Cannot be used with disable_checks.
 enable_checks = ["AddIndexCheck", "AddNotNullCheck"]
 

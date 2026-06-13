@@ -38,6 +38,10 @@ framework = "diesel"
 #
 # Default: [] (all checks enabled)
 # disable_checks = []
+#
+# To disable a check for one migration only:
+#   Any framework: add `-- diesel-guard:disable AddColumnCheck` to the migration SQL.
+#   Diesel only: add `disable_checks = ["AddColumnCheck"]` to that migration's metadata.toml.
 
 # Enable only specific safety checks (whitelist)
 # When set, only the listed checks run — all others are skipped.

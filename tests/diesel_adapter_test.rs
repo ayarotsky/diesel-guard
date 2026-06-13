@@ -159,3 +159,41 @@ fn test_diesel_no_separator_timestamp() {
     );
     assert!(results[0].0.contains("20240101000000_create_users"));
 }
+
+#[test]
+fn test_diesel_metadata_can_disable_checks_for_one_migration() {
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
+    fs::create_dir(&migration_dir).unwrap();
+    fs::write(
+        migration_dir.join("metadata.toml"),
+        r#"
+disable_checks = ["AddColumnCheck"]
+"#,
+    )
+    .unwrap();
+    fs::write(
+        migration_dir.join("up.sql"),
+        "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;",
+    )
+    .unwrap();
+
+    let config = Config {
+        framework: "diesel".to_string(),
+        enable_checks: vec![
+            "AddColumnCheck".to_string(),
+            "IdempotencyAlterCheck".to_string(),
+        ],
+        ..Default::default()
+    };
+    let results = SafetyChecker::with_config(config)
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].1.len(), 1);
+    assert_eq!(
+        results[0].1[0].1.operation,
+        "ADD COLUMN without IF NOT EXISTS"
+    );
+}

@@ -264,6 +264,46 @@ ALTER TABLE users ADD COLUMN name VARCHAR(255);
 }
 
 #[test]
+fn test_per_migration_disable_directive_skips_only_named_check() {
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec![
+            "AddColumnCheck".to_string(),
+            "IdempotencyAlterCheck".to_string(),
+        ],
+        ..Default::default()
+    });
+    let sql = r"
+-- diesel-guard:disable AddColumnCheck
+ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
+    ";
+
+    let violations = checker.check_sql(sql).unwrap();
+    assert_eq!(violations.len(), 1);
+    assert_eq!(
+        violations[0].1.operation,
+        "ADD COLUMN without IF NOT EXISTS"
+    );
+}
+
+#[test]
+fn test_per_migration_disable_directive_accepts_multiple_checks() {
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec![
+            "AddColumnCheck".to_string(),
+            "IdempotencyAlterCheck".to_string(),
+        ],
+        ..Default::default()
+    });
+    let sql = r"
+-- diesel-guard:disable AddColumnCheck, IdempotencyAlterCheck
+ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
+    ";
+
+    let violations = checker.check_sql(sql).unwrap();
+    assert_eq!(violations.len(), 0);
+}
+
+#[test]
 fn test_nested_blocks() {
     let checker = SafetyChecker::new();
     let sql = r"
