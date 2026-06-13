@@ -28,6 +28,8 @@ pub struct MigrationContext {
     /// Framework-specific hint for how to opt out of transactions.
     /// Empty string when no framework context is available (e.g. `check_sql`).
     pub no_transaction_hint: &'static str,
+    /// Check names disabled for this specific migration.
+    pub disabled_checks: Vec<String>,
 }
 
 impl Default for MigrationContext {
@@ -35,7 +37,23 @@ impl Default for MigrationContext {
         Self {
             run_in_transaction: true,
             no_transaction_hint: "",
+            disabled_checks: Vec::new(),
         }
+    }
+}
+
+impl MigrationContext {
+    /// Return a copy of this context with additional check names disabled.
+    #[must_use]
+    pub fn with_disabled_checks(&self, disabled_checks: &[String]) -> Self {
+        let mut ctx = self.clone();
+        ctx.disabled_checks.extend(disabled_checks.iter().cloned());
+        ctx
+    }
+
+    /// Return true when this migration disables a specific check.
+    pub fn disables_check(&self, check_name: &str) -> bool {
+        self.disabled_checks.iter().any(|name| name == check_name)
     }
 }
 

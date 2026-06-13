@@ -12,6 +12,7 @@ use std::io::{self, BufRead, BufReader};
 pub struct SafetyChecker {
     registry: Registry,
     config: Config,
+    known_check_names: Vec<String>,
 }
 
 impl SafetyChecker {
@@ -71,12 +72,15 @@ impl SafetyChecker {
                 }
             })
             .collect();
+        let known_check_names = builtin_names
+            .iter()
+            .map(|name| (*name).to_string())
+            .chain(custom_names.iter().cloned())
+            .collect::<Vec<_>>();
 
         let warn_unknown = |names: &[String], field: &str| {
             for name in names {
-                if !builtin_names.contains(&name.as_str())
-                    && !custom_names.iter().any(|c| c == name)
-                {
+                if !known_check_names.iter().any(|known| known == name) {
                     eprintln!(
                         "Warning: Unknown check name '{name}' in {field}. Run --list-checks to see available checks."
                     );
@@ -88,7 +92,11 @@ impl SafetyChecker {
         warn_unknown(&config.enable_checks, "enable_checks");
         warn_unknown(&config.warn_checks, "warn_checks");
 
-        Self { registry, config }
+        Self {
+            registry,
+            config,
+            known_check_names,
+        }
     }
 
     /// Build the migration adapter for the configured framework.
@@ -103,15 +111,30 @@ impl SafetyChecker {
         }
     }
 
+    fn warn_unknown_migration_disabled_checks(&self, disabled_checks: &[String], source: &str) {
+        for name in disabled_checks {
+            if !self.known_check_names.iter().any(|known| known == name) {
+                eprintln!(
+                    "Warning: Unknown check name '{name}' in {source}. Run --list-checks to see available checks."
+                );
+            }
+        }
+    }
+
     /// Check SQL string for violations
     pub fn check_sql(&self, sql: &str) -> Result<ViolationList> {
         let parsed = parser::parse_with_metadata(sql)?;
+        let ctx = MigrationContext::default().with_disabled_checks(&parsed.disabled_checks);
+        self.warn_unknown_migration_disabled_checks(
+            &ctx.disabled_checks,
+            "migration-scoped disable_checks",
+        );
         Ok(self.registry.check_stmts_with_context(
             &parsed.stmts,
             &parsed.sql,
             &parsed.ignore_ranges,
             &self.config,
-            &MigrationContext::default(),
+            &ctx,
         ))
     }
 
@@ -125,13 +148,20 @@ impl SafetyChecker {
             .unwrap_or_default();
 
         match parser::parse_with_metadata(&sql) {
-            Ok(parsed) => Ok(self.registry.check_stmts_with_context(
-                &parsed.stmts,
-                &parsed.sql,
-                &parsed.ignore_ranges,
-                &self.config,
-                &ctx,
-            )),
+            Ok(parsed) => {
+                let ctx = ctx.with_disabled_checks(&parsed.disabled_checks);
+                self.warn_unknown_migration_disabled_checks(
+                    &ctx.disabled_checks,
+                    &format!("{path} migration-scoped disable_checks"),
+                );
+                Ok(self.registry.check_stmts_with_context(
+                    &parsed.stmts,
+                    &parsed.sql,
+                    &parsed.ignore_ranges,
+                    &self.config,
+                    &ctx,
+                ))
+            }
             Err(e) => Err(e.with_file_context(path.as_str(), sql)),
         }
     }
@@ -157,6 +187,11 @@ impl SafetyChecker {
 
             match parser::parse_with_metadata(&sql) {
                 Ok(parsed) => {
+                    let ctx = ctx.with_disabled_checks(&parsed.disabled_checks);
+                    self.warn_unknown_migration_disabled_checks(
+                        &ctx.disabled_checks,
+                        &format!("{} migration-scoped disable_checks", mig_file.path),
+                    );
                     let violations = self.registry.check_stmts_with_context(
                         &parsed.stmts,
                         &parsed.sql,

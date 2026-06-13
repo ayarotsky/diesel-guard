@@ -11,6 +11,30 @@ ALTER TABLE posts DROP COLUMN old_field;
 
 All statements between the start and end markers are skipped by all checks — both built-in and custom.
 
+## Disable Specific Checks for One Migration
+
+When only one check is known to be acceptable for a migration, disable that check by name instead of suppressing the whole statement:
+
+```sql
+-- diesel-guard:disable AddColumnCheck
+ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
+```
+
+Other checks still run on the same migration. For example, the statement above can still be flagged by `IdempotencyAlterCheck` if it is missing `IF NOT EXISTS`.
+
+Disable multiple checks with a comma-separated list:
+
+```sql
+-- diesel-guard:disable AddColumnCheck, IdempotencyAlterCheck
+ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
+```
+
+For Diesel directory migrations, you can also put migration-scoped disables in that migration's `metadata.toml`:
+
+```toml
+disable_checks = ["AddColumnCheck"]
+```
+
 ## Multiple Blocks
 
 ```sql

@@ -34,6 +34,8 @@ pub struct DieselAdapter;
 #[derive(Deserialize, Default)]
 struct MetadataFile {
     run_in_transaction: Option<bool>,
+    #[serde(default)]
+    disable_checks: Vec<String>,
 }
 
 impl MigrationAdapter for DieselAdapter {
@@ -104,6 +106,7 @@ impl MigrationAdapter for DieselAdapter {
             return MigrationContext {
                 run_in_transaction: true,
                 no_transaction_hint: NO_TRANSACTION_HINT,
+                ..MigrationContext::default()
             };
         };
         let metadata_path = parent.join("metadata.toml");
@@ -112,6 +115,7 @@ impl MigrationAdapter for DieselAdapter {
             return MigrationContext {
                 run_in_transaction: true,
                 no_transaction_hint: NO_TRANSACTION_HINT,
+                ..MigrationContext::default()
             };
         };
 
@@ -120,6 +124,7 @@ impl MigrationAdapter for DieselAdapter {
         MigrationContext {
             run_in_transaction: parsed.run_in_transaction.unwrap_or(true),
             no_transaction_hint: NO_TRANSACTION_HINT,
+            disabled_checks: parsed.disable_checks,
         }
     }
 }

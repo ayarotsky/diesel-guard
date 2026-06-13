@@ -216,6 +216,7 @@ impl Registry {
         use crate::violation::Severity;
         self.checks
             .iter()
+            .filter(|check| !ctx.disables_check(check.name()))
             .flat_map(|check| {
                 let severity = if config.is_check_warning(check.name()) {
                     Severity::Warning
