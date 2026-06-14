@@ -46,9 +46,22 @@ impl MigrationContext {
     /// Return a copy of this context with additional check names disabled.
     #[must_use]
     pub fn with_disabled_checks(&self, disabled_checks: &[String]) -> Self {
-        let mut ctx = self.clone();
-        ctx.disabled_checks.extend(disabled_checks.iter().cloned());
+        let mut ctx = Self {
+            disabled_checks: Vec::new(),
+            ..self.clone()
+        };
+
+        for check_name in self.disabled_checks.iter().chain(disabled_checks) {
+            ctx.push_disabled_check_once(check_name);
+        }
+
         ctx
+    }
+
+    fn push_disabled_check_once(&mut self, check_name: &str) {
+        if !self.disabled_checks.iter().any(|name| name == check_name) {
+            self.disabled_checks.push(check_name.to_string());
+        }
     }
 
     /// Return true when this migration disables a specific check.
@@ -196,5 +209,28 @@ mod tests {
             Some("20240101000000"),
             "create_users"
         ));
+    }
+
+    #[test]
+    fn test_with_disabled_checks_deduplicates_names() {
+        let ctx = MigrationContext {
+            disabled_checks: vec![
+                "AddColumnCheck".to_string(),
+                "IdempotencyAlterCheck".to_string(),
+            ],
+            ..MigrationContext::default()
+        };
+
+        let ctx = ctx
+            .with_disabled_checks(&["AddColumnCheck".to_string(), "DropColumnCheck".to_string()]);
+
+        assert_eq!(
+            ctx.disabled_checks,
+            vec![
+                "AddColumnCheck".to_string(),
+                "IdempotencyAlterCheck".to_string(),
+                "DropColumnCheck".to_string(),
+            ]
+        );
     }
 }

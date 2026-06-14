@@ -138,6 +138,10 @@ To suppress only one known-safe check while keeping other checks active for the 
 ```sql
 -- diesel-guard:disable AddColumnCheck
 ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
+
+-- Disable multiple checks with a comma-separated list:
+-- diesel-guard:disable AddColumnCheck, IdempotencyAlterCheck
+ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
 ```
 
 ## Further Reading
