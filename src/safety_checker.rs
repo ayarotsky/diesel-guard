@@ -112,8 +112,20 @@ impl SafetyChecker {
     }
 
     fn warn_unknown_migration_disabled_checks(&self, disabled_checks: &[String], source: &str) {
+        let mut warned_names = Vec::new();
+
         for name in disabled_checks {
-            if !self.known_check_names.iter().any(|known| known == name) {
+            let name = name.as_str();
+            if warned_names.contains(&name) {
+                continue;
+            }
+            warned_names.push(name);
+
+            if !self
+                .known_check_names
+                .iter()
+                .any(|known| known.as_str() == name)
+            {
                 eprintln!(
                     "Warning: Unknown check name '{name}' in {source}. Run --list-checks to see available checks."
                 );
