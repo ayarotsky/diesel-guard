@@ -103,7 +103,7 @@ impl CommentParser {
     }
 
     fn parse_disabled_checks_line(line: &str) -> Option<Vec<String>> {
-        let captures = DISABLE_CHECKS_DIRECTIVE.captures(line.trim())?;
+        let captures = DISABLE_CHECKS_DIRECTIVE.captures(line)?;
         let checks = captures
             .get(1)?
             .as_str()
