@@ -548,6 +548,7 @@ ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
             "ALTER ROLE app_user SET search_path = public;",
             "DROP ROLE app_user;",
             "GRANT SELECT ON TABLE users TO app_user;",
+            "REVOKE SELECT ON TABLE users FROM app_user;",
             "ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO app_user;",
             "COMMENT ON TABLE users IS 'customer records';",
             "SECURITY LABEL FOR selinux ON TABLE users IS 'system_u:object_r:sepgsql_table_t:s0';",
