@@ -183,7 +183,9 @@ fn is_zeroish_timeout_literal(value: &str) -> bool {
 fn is_ddl(node: &NodeEnum) -> bool {
     matches!(
         node,
-        NodeEnum::AlterDomainStmt(_)
+        NodeEnum::AlterCollationStmt(_)
+            | NodeEnum::AlterDefaultPrivilegesStmt(_)
+            | NodeEnum::AlterDomainStmt(_)
             | NodeEnum::AlterDatabaseRefreshCollStmt(_)
             | NodeEnum::AlterDatabaseSetStmt(_)
             | NodeEnum::AlterDatabaseStmt(_)
@@ -201,14 +203,24 @@ fn is_ddl(node: &NodeEnum) -> bool {
             | NodeEnum::AlterOpFamilyStmt(_)
             | NodeEnum::AlterSeqStmt(_)
             | NodeEnum::AlterStatsStmt(_)
+            | NodeEnum::AlterSubscriptionStmt(_)
             | NodeEnum::AlterTableStmt(_)
             | NodeEnum::AlterTableMoveAllStmt(_)
             | NodeEnum::AlterTableSpaceOptionsStmt(_)
+            | NodeEnum::AlterTsdictionaryStmt(_)
+            | NodeEnum::AlterTsconfigurationStmt(_)
             | NodeEnum::AlterTypeStmt(_)
+            | NodeEnum::AlterSystemStmt(_)
+            | NodeEnum::AlterObjectDependsStmt(_)
             | NodeEnum::AlterUserMappingStmt(_)
+            | NodeEnum::AlterPublicationStmt(_)
+            | NodeEnum::AlterRoleStmt(_)
+            | NodeEnum::AlterRoleSetStmt(_)
             | NodeEnum::CompositeTypeStmt(_)
             | NodeEnum::CreatedbStmt(_)
             | NodeEnum::CreateAmStmt(_)
+            | NodeEnum::CreateCastStmt(_)
+            | NodeEnum::CreateConversionStmt(_)
             | NodeEnum::CreateDomainStmt(_)
             | NodeEnum::CreateEnumStmt(_)
             | NodeEnum::CreateEventTrigStmt(_)
@@ -221,26 +233,39 @@ fn is_ddl(node: &NodeEnum) -> bool {
             | NodeEnum::CreateOpFamilyStmt(_)
             | NodeEnum::CreatePlangStmt(_)
             | NodeEnum::CreatePolicyStmt(_)
+            | NodeEnum::CreatePublicationStmt(_)
             | NodeEnum::CreateRangeStmt(_)
+            | NodeEnum::CreateRoleStmt(_)
             | NodeEnum::CreateSchemaStmt(_)
             | NodeEnum::CreateSeqStmt(_)
             | NodeEnum::CreateStatsStmt(_)
             | NodeEnum::CreateStmt(_)
+            | NodeEnum::CreateSubscriptionStmt(_)
             | NodeEnum::CreateTableAsStmt(_)
             | NodeEnum::CreateTableSpaceStmt(_)
+            | NodeEnum::CreateTransformStmt(_)
             | NodeEnum::CreateTrigStmt(_)
             | NodeEnum::CreateUserMappingStmt(_)
+            | NodeEnum::CommentStmt(_)
             | NodeEnum::DropStmt(_)
             | NodeEnum::DropdbStmt(_)
+            | NodeEnum::DropOwnedStmt(_)
+            | NodeEnum::DropRoleStmt(_)
+            | NodeEnum::DropSubscriptionStmt(_)
             | NodeEnum::DropTableSpaceStmt(_)
             | NodeEnum::DropUserMappingStmt(_)
             | NodeEnum::DefineStmt(_)
+            | NodeEnum::GrantRoleStmt(_)
+            | NodeEnum::GrantStmt(_)
             | NodeEnum::ImportForeignSchemaStmt(_)
             | NodeEnum::IndexStmt(_)
             | NodeEnum::RefreshMatViewStmt(_)
             | NodeEnum::ReindexStmt(_)
+            | NodeEnum::ReassignOwnedStmt(_)
             | NodeEnum::RenameStmt(_)
+            | NodeEnum::ReplicaIdentityStmt(_)
             | NodeEnum::RuleStmt(_)
+            | NodeEnum::SecLabelStmt(_)
             | NodeEnum::TruncateStmt(_)
             | NodeEnum::ViewStmt(_)
     )
@@ -509,6 +534,23 @@ ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
             "CREATE FUNCTION touch_updated_at() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;",
             "ALTER FUNCTION touch_updated_at() OWNER TO postgres;",
             "CREATE DATABASE analytics;",
+            "CREATE PUBLICATION pub_all FOR ALL TABLES;",
+            "ALTER PUBLICATION pub_all SET (publish = 'insert, update');",
+            "CREATE SUBSCRIPTION sub CONNECTION 'host=localhost' PUBLICATION pub WITH (connect = false);",
+            "ALTER SUBSCRIPTION sub DISABLE;",
+            "DROP SUBSCRIPTION sub;",
+            "CREATE CAST (text AS int4) WITH INOUT AS ASSIGNMENT;",
+            "CREATE DEFAULT CONVERSION myconv FOR 'UTF8' TO 'LATIN1' FROM utf8_to_latin1;",
+            "CREATE TRANSFORM FOR hstore LANGUAGE plpgsql (FROM SQL WITH FUNCTION hstore_recv(internal), TO SQL WITH FUNCTION hstore_send(hstore));",
+            "ALTER COLLATION \"C\" REFRESH VERSION;",
+            "ALTER TEXT SEARCH DICTIONARY english_stem (StopWords = english);",
+            "CREATE ROLE app_user;",
+            "ALTER ROLE app_user SET search_path = public;",
+            "DROP ROLE app_user;",
+            "GRANT SELECT ON TABLE users TO app_user;",
+            "ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO app_user;",
+            "COMMENT ON TABLE users IS 'customer records';",
+            "SECURITY LABEL FOR selinux ON TABLE users IS 'system_u:object_r:sepgsql_table_t:s0';",
         ] {
             let violations = check_sql(sql);
 

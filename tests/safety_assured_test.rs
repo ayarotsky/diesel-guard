@@ -67,6 +67,33 @@ ALTER TABLE users ADD COLUMN admin BOOLEAN;
 }
 
 #[test]
+fn test_safety_assured_reset_clears_timeout_assignment_after_block() {
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["DdlTimeoutCheck".to_string()],
+        ..Default::default()
+    });
+    let sql = r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
+-- safety-assured:start
+RESET ALL;
+-- safety-assured:end
+ALTER TABLE users ADD COLUMN admin BOOLEAN;
+    ";
+
+    let violations = checker.check_sql(sql).unwrap();
+    assert_eq!(
+        violations.len(),
+        1,
+        "RESET ALL inside safety-assured should still clear state for later DDL"
+    );
+    assert_eq!(
+        violations[0].1.operation,
+        "DDL without lock_timeout/statement_timeout"
+    );
+}
+
+#[test]
 fn test_without_safety_assured_detects_violations() {
     let checker = SafetyChecker::with_config(Config {
         enable_checks: vec!["DropColumnCheck".to_string()],
@@ -325,6 +352,21 @@ ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
         violations[0].1.operation,
         "ADD COLUMN without IF NOT EXISTS"
     );
+}
+
+#[test]
+fn test_per_migration_disable_directive_skips_statement_list_check() {
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["DdlTimeoutCheck".to_string()],
+        ..Default::default()
+    });
+    let sql = r"
+-- diesel-guard:disable DdlTimeoutCheck
+ALTER TABLE users ADD COLUMN admin BOOLEAN;
+    ";
+
+    let violations = checker.check_sql(sql).unwrap();
+    assert_eq!(violations.len(), 0);
 }
 
 #[test]

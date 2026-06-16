@@ -74,6 +74,7 @@ Use these names in `disable_checks` (blacklist), `enable_checks` (whitelist), or
 | `CharTypeCheck` | CHAR/CHARACTER column types |
 | `CreateExtensionCheck` | CREATE EXTENSION |
 | `CreateTableSerialCheck` | CREATE TABLE with SERIAL |
+| `DdlTimeoutCheck` | DDL before `lock_timeout` and `statement_timeout` are set |
 | `DropColumnCheck` | DROP COLUMN |
 | `DropDatabaseCheck` | DROP DATABASE |
 | `DropIndexCheck` | DROP INDEX without CONCURRENTLY; CONCURRENTLY inside a transaction |

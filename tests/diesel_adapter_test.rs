@@ -198,3 +198,33 @@ disable_checks = ["AddColumnCheck"]
         "ADD COLUMN without IF NOT EXISTS"
     );
 }
+
+#[test]
+fn test_diesel_metadata_can_disable_statement_list_check_for_one_migration() {
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
+    fs::create_dir(&migration_dir).unwrap();
+    fs::write(
+        migration_dir.join("metadata.toml"),
+        r#"
+disable_checks = ["DdlTimeoutCheck"]
+"#,
+    )
+    .unwrap();
+    fs::write(
+        migration_dir.join("up.sql"),
+        "ALTER TABLE users ADD COLUMN admin BOOLEAN;",
+    )
+    .unwrap();
+
+    let config = Config {
+        framework: "diesel".to_string(),
+        enable_checks: vec!["DdlTimeoutCheck".to_string()],
+        ..Default::default()
+    };
+    let results = SafetyChecker::with_config(config)
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
+
+    assert_eq!(results.len(), 0);
+}
