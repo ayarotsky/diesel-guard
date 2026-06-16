@@ -25,6 +25,48 @@ ALTER TABLE posts DROP COLUMN body;
 }
 
 #[test]
+fn test_safety_assured_block_ignores_ddl_timeout_violations() {
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["DdlTimeoutCheck".to_string()],
+        ..Default::default()
+    });
+    let sql = r"
+-- safety-assured:start
+ALTER TABLE users ADD COLUMN admin BOOLEAN;
+-- safety-assured:end
+    ";
+
+    let violations = checker.check_sql(sql).unwrap();
+    assert_eq!(
+        violations.len(),
+        0,
+        "safety-assured block should ignore DDL timeout violations"
+    );
+}
+
+#[test]
+fn test_safety_assured_timeout_assignment_applies_after_block() {
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["DdlTimeoutCheck".to_string()],
+        ..Default::default()
+    });
+    let sql = r"
+-- safety-assured:start
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
+-- safety-assured:end
+ALTER TABLE users ADD COLUMN admin BOOLEAN;
+    ";
+
+    let violations = checker.check_sql(sql).unwrap();
+    assert_eq!(
+        violations.len(),
+        0,
+        "timeout assignments inside safety-assured blocks should still affect later statements"
+    );
+}
+
+#[test]
 fn test_without_safety_assured_detects_violations() {
     let checker = SafetyChecker::with_config(Config {
         enable_checks: vec!["DropColumnCheck".to_string()],

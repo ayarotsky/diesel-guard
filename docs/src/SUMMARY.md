@@ -18,6 +18,7 @@
   - [Create Table with SERIAL](checks/create-table-serial.md)
   - [Creating an Extension](checks/creating-extension.md)
   - [Creating a Table without Primary Key](checks/create-table-without-pk.md)
+  - [DDL Timeouts](checks/ddl-timeouts.md)
   - [Domain CHECK Constraint](checks/add-domain-check-constraint.md)
   - [Dropping a Column](checks/dropping-column.md)
   - [Dropping a Constraint](checks/dropping-constraint.md)

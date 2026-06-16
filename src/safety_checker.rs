@@ -309,7 +309,10 @@ mod tests {
 
     #[test]
     fn test_reindex_without_concurrently_detected() {
-        let checker = SafetyChecker::new();
+        let checker = SafetyChecker::with_config(Config {
+            enable_checks: vec!["ReindexCheck".to_string()],
+            ..Default::default()
+        });
         let sql = "REINDEX INDEX idx_users_email;";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 1);
@@ -318,7 +321,10 @@ mod tests {
 
     #[test]
     fn test_reindex_table_without_concurrently_detected() {
-        let checker = SafetyChecker::new();
+        let checker = SafetyChecker::with_config(Config {
+            enable_checks: vec!["ReindexCheck".to_string()],
+            ..Default::default()
+        });
         let sql = "REINDEX TABLE users;";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 1);
@@ -329,7 +335,10 @@ mod tests {
     fn test_reindex_concurrently_in_transaction_detected() {
         // check_sql uses MigrationContext::default() (run_in_transaction=true),
         // so REINDEX CONCURRENTLY is flagged as requiring no-transaction context.
-        let checker = SafetyChecker::new();
+        let checker = SafetyChecker::with_config(Config {
+            enable_checks: vec!["ReindexCheck".to_string()],
+            ..Default::default()
+        });
         let sql = "REINDEX INDEX CONCURRENTLY idx_users_email;";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 1);
@@ -347,14 +356,21 @@ mod tests {
         };
         let checker = SafetyChecker::with_config(config);
 
-        let sql = "REINDEX INDEX idx_users_email;";
+        let sql = r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
+REINDEX INDEX idx_users_email;
+        ";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 0);
     }
 
     #[test]
     fn test_multiple_reindex_violations() {
-        let checker = SafetyChecker::new();
+        let checker = SafetyChecker::with_config(Config {
+            enable_checks: vec!["ReindexCheck".to_string()],
+            ..Default::default()
+        });
         let sql = r"
             REINDEX INDEX idx_users_email;
             REINDEX TABLE posts;
@@ -491,7 +507,10 @@ mod tests {
 
     #[test]
     fn test_buffer_input_multiple_lines() {
-        let checker: SafetyChecker = SafetyChecker::new();
+        let checker = SafetyChecker::with_config(Config {
+            enable_checks: vec!["ReindexCheck".to_string()],
+            ..Default::default()
+        });
         let input_data = r"
             REINDEX INDEX idx_users_email;
             REINDEX TABLE posts;

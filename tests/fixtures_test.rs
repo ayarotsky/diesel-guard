@@ -13,6 +13,13 @@ const IDEMPOTENCY_CHECKS: &[&str] = &[
     "IdempotencyDropCheck",
     "IdempotencyIndexCheck",
 ];
+const AGGREGATE_DISABLED_CHECKS: &[&str] = &[
+    "DdlTimeoutCheck",
+    "IdempotencyAlterCheck",
+    "IdempotencyCreateCheck",
+    "IdempotencyDropCheck",
+    "IdempotencyIndexCheck",
+];
 
 /// Helper to get fixture path
 fn fixture_path(name: &str) -> String {
@@ -73,6 +80,7 @@ fn test_safe_fixtures_pass() {
             vec!["CreateTableWithoutPkCheck"],
         ),
         ("delete_with_where_safe", vec!["MutationWithoutWhereCheck"]),
+        ("ddl_timeout_safe", vec!["DdlTimeoutCheck"]),
         ("update_with_where_safe", vec!["MutationWithoutWhereCheck"]),
         (
             "domain_check_constraint_safe",
@@ -660,6 +668,41 @@ fn test_delete_without_where_detected() {
 }
 
 #[test]
+fn test_ddl_timeout_detected() {
+    let checker = checker_with_enabled_checks(&["DdlTimeoutCheck"]);
+    let path = fixture_path("ddl_timeout_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(
+        violations[0].1.operation,
+        "DDL without lock_timeout/statement_timeout"
+    );
+    assert!(
+        violations[0]
+            .1
+            .problem
+            .contains("lock_timeout and statement_timeout")
+    );
+}
+
+#[test]
+fn test_ddl_timeout_missing_statement_timeout_detected() {
+    let checker = checker_with_enabled_checks(&["DdlTimeoutCheck"]);
+    let path = fixture_path("ddl_timeout_missing_statement_timeout_unsafe");
+
+    let violations = checker.check_file(Utf8Path::new(&path)).unwrap();
+
+    assert_eq!(violations.len(), 1, "Expected 1 violation");
+    assert_eq!(
+        violations[0].1.operation,
+        "DDL without lock_timeout/statement_timeout"
+    );
+    assert!(violations[0].1.problem.contains("statement_timeout"));
+}
+
+#[test]
 fn test_update_without_where_detected() {
     let checker = checker_with_enabled_checks(&["MutationWithoutWhereCheck"]);
     let path = fixture_path("update_without_where_unsafe");
@@ -672,7 +715,7 @@ fn test_update_without_where_detected() {
 
 #[test]
 fn test_check_entire_fixtures_directory() {
-    let checker = checker_with_disabled_checks(IDEMPOTENCY_CHECKS);
+    let checker = checker_with_disabled_checks(AGGREGATE_DISABLED_CHECKS);
     let results = checker
         .check_directory(Utf8Path::new("tests/fixtures"))
         .unwrap();
@@ -894,7 +937,7 @@ fn test_sqlx_refresh_matview_concurrently_missing_directive_detected() {
 
 #[test]
 fn test_check_all_sqlx_fixtures() {
-    let checker = sqlx_checker_with_disabled_checks(IDEMPOTENCY_CHECKS, false);
+    let checker = sqlx_checker_with_disabled_checks(AGGREGATE_DISABLED_CHECKS, false);
 
     // Check each fixture directory individually and collect results
     let fixture_dirs = vec![
@@ -926,7 +969,7 @@ fn test_check_all_sqlx_fixtures() {
         }
     }
 
-    // Expected violations (with check_down = false and idempotency checks excluded):
+    // Expected violations (with check_down = false and broad aggregate checks excluded):
     // - sqlx_suffix_add_column_unsafe up.sql: 1
     // - sqlx_add_index_unsafe: 1
     // - sqlx_concurrently_missing_directive: 1
@@ -936,7 +979,8 @@ fn test_check_all_sqlx_fixtures() {
     // - sqlx_reindex_missing_directive: 1
     // - sqlx_refresh_matview_unsafe: 1
     // - sqlx_refresh_matview_missing_directive: 1
-    // Note: .down.sql is skipped here, and idempotency has dedicated fixture coverage.
+    // Note: .down.sql is skipped here. Idempotency and DDL timeout checks have
+    // dedicated fixture coverage.
     assert_eq!(
         files_with_violations, 9,
         "Expected 9 files with violations, got {files_with_violations}"

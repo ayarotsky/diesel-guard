@@ -15,6 +15,7 @@ mod char_type;
 mod create_extension;
 mod create_table_serial;
 mod create_table_without_pk;
+mod ddl_timeout;
 mod drop_column;
 mod drop_database;
 mod drop_index;
@@ -58,6 +59,7 @@ pub use char_type::CharTypeCheck;
 pub use create_extension::CreateExtensionCheck;
 pub use create_table_serial::CreateTableSerialCheck;
 pub use create_table_without_pk::CreateTableWithoutPkCheck;
+pub use ddl_timeout::DdlTimeoutCheck;
 pub use drop_column::DropColumnCheck;
 pub use drop_database::DropDatabaseCheck;
 pub use drop_index::DropIndexCheck;
@@ -111,7 +113,7 @@ use crate::checks::add_check_constraint::AddCheckConstraintCheck;
 /// This avoids maintaining a manual list that can drift from the actual checks.
 static BUILTIN_CHECK_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
     let registry = Registry::new();
-    registry.checks.iter().map(|c| c.name()).collect()
+    registry.active_check_names()
 });
 
 /// Trait for implementing safety checks on SQL statements
@@ -127,9 +129,34 @@ pub trait Check: Send + Sync {
     fn check(&self, node: &NodeEnum, config: &Config, ctx: &MigrationContext) -> Vec<Violation>;
 }
 
+/// Trait for safety checks that need ordered statement-list context.
+pub trait StatementListCheck: Send + Sync {
+    /// The check's name, used for config-based disabling.
+    fn name(&self) -> &'static str {
+        let full = std::any::type_name::<Self>();
+        full.rsplit("::").next().unwrap_or(full)
+    }
+
+    /// Run the check across the ordered statements in one SQL input.
+    fn check(
+        &self,
+        statements: &[StatementContext<'_>],
+        config: &Config,
+        ctx: &MigrationContext,
+    ) -> ViolationList;
+}
+
+/// Statement metadata shared with sequence-aware checks.
+pub struct StatementContext<'a> {
+    pub node: &'a NodeEnum,
+    pub line: usize,
+    pub ignored: bool,
+}
+
 /// Registry of all available checks
 pub struct Registry {
     checks: Vec<Box<dyn Check>>,
+    statement_list_checks: Vec<Box<dyn StatementListCheck>>,
 }
 
 impl Registry {
@@ -140,7 +167,10 @@ impl Registry {
 
     /// Create registry with configuration-based filtering
     pub fn with_config(config: &Config) -> Self {
-        let mut registry = Self { checks: vec![] };
+        let mut registry = Self {
+            checks: vec![],
+            statement_list_checks: vec![],
+        };
         registry.register_enabled_checks(config);
         registry
     }
@@ -164,6 +194,7 @@ impl Registry {
         self.register_check(config, CreateExtensionCheck);
         self.register_check(config, CreateTableSerialCheck);
         self.register_check(config, CreateTableWithoutPkCheck);
+        self.register_statement_list_check(config, DdlTimeoutCheck);
         self.register_check(config, DropColumnCheck);
         self.register_check(config, DropDatabaseCheck);
         self.register_check(config, DropIndexCheck);
@@ -194,8 +225,12 @@ impl Registry {
     }
 
     /// Return the names of all currently active checks (built-in + custom, minus disabled).
-    pub fn active_check_names(&self) -> Vec<&str> {
-        self.checks.iter().map(|c| c.name()).collect()
+    pub fn active_check_names(&self) -> Vec<&'static str> {
+        self.checks
+            .iter()
+            .map(|c| c.name())
+            .chain(self.statement_list_checks.iter().map(|c| c.name()))
+            .collect()
     }
 
     /// Register a check if it's enabled in configuration
@@ -204,6 +239,49 @@ impl Registry {
             return;
         }
         self.checks.push(Box::new(check));
+    }
+
+    /// Register a statement-list check if it's enabled in configuration.
+    fn register_statement_list_check(
+        &mut self,
+        config: &Config,
+        check: impl StatementListCheck + 'static,
+    ) {
+        if !config.is_check_enabled(check.name()) {
+            return;
+        }
+        self.statement_list_checks.push(Box::new(check));
+    }
+
+    /// Check the ordered statement list against all registered statement-list checks.
+    fn check_statement_list(
+        &self,
+        statements: &[StatementContext<'_>],
+        config: &Config,
+        ctx: &MigrationContext,
+    ) -> ViolationList {
+        use crate::violation::Severity;
+
+        self.statement_list_checks
+            .iter()
+            .filter(|check| !ctx.disables_check(check.name()))
+            .flat_map(|check| {
+                let severity = if config.is_check_warning(check.name()) {
+                    Severity::Warning
+                } else {
+                    Severity::Error
+                };
+                check
+                    .check(statements, config, ctx)
+                    .into_iter()
+                    .map(move |(line, v)| {
+                        (
+                            line,
+                            v.with_severity(severity).with_check_name(check.name()),
+                        )
+                    })
+            })
+            .collect()
     }
 
     /// Check a single AST node against all registered checks
@@ -256,24 +334,32 @@ impl Registry {
         // statement. Use the scanner to get accurate token positions.
         let token_starts = non_comment_token_starts(sql);
 
-        let mut violations = Vec::new();
+        let statement_contexts = stmts
+            .iter()
+            .filter_map(|raw_stmt| {
+                let node = extract_node(raw_stmt)?;
+                let offset = first_token_at_or_after(
+                    &token_starts,
+                    usize::try_from(raw_stmt.stmt_location).unwrap_or(0),
+                );
+                let line = byte_offset_to_line(sql, offset);
 
-        for raw_stmt in stmts {
-            let Some(node) = extract_node(raw_stmt) else {
-                continue;
-            };
+                Some(StatementContext {
+                    node,
+                    line,
+                    ignored: ignored_lines.contains(&line),
+                })
+            })
+            .collect::<Vec<_>>();
 
-            let offset = first_token_at_or_after(
-                &token_starts,
-                usize::try_from(raw_stmt.stmt_location).unwrap_or(0),
-            );
-            let stmt_line = byte_offset_to_line(sql, offset);
+        let mut violations = self.check_statement_list(&statement_contexts, config, ctx);
 
-            if !ignored_lines.contains(&stmt_line) {
+        for stmt in statement_contexts {
+            if !stmt.ignored {
                 violations.extend(
-                    self.check_node(node, config, ctx)
+                    self.check_node(stmt.node, config, ctx)
                         .into_iter()
-                        .map(|v| (stmt_line, v)),
+                        .map(|v| (stmt.line, v)),
                 );
             }
         }
@@ -339,14 +425,20 @@ mod tests {
     #[test]
     fn test_registry_creation() {
         let registry = Registry::new();
-        assert_eq!(registry.checks.len(), Registry::builtin_check_names().len());
+        assert_eq!(
+            registry.active_check_names().len(),
+            Registry::builtin_check_names().len()
+        );
     }
 
     #[test]
     fn test_registry_includes_all_checks_when_no_version_set() {
         let registry = Registry::new();
         assert!(registry.active_check_names().contains(&"AddColumnCheck"));
-        assert_eq!(registry.checks.len(), Registry::builtin_check_names().len());
+        assert_eq!(
+            registry.active_check_names().len(),
+            Registry::builtin_check_names().len()
+        );
     }
 
     #[test]
@@ -370,7 +462,7 @@ mod tests {
 
         let registry = Registry::with_config(&config);
         assert_eq!(
-            registry.checks.len(),
+            registry.active_check_names().len(),
             Registry::builtin_check_names().len() - 1
         );
     }
@@ -384,7 +476,7 @@ mod tests {
 
         let registry = Registry::with_config(&config);
         assert_eq!(
-            registry.checks.len(),
+            registry.active_check_names().len(),
             Registry::builtin_check_names().len() - 2
         );
     }
@@ -400,7 +492,7 @@ mod tests {
         };
 
         let registry = Registry::with_config(&config);
-        assert_eq!(registry.checks.len(), 0);
+        assert_eq!(registry.active_check_names().len(), 0);
     }
 
     #[test]

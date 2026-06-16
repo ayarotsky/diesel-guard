@@ -14,6 +14,7 @@ diesel-guard ships safety checks covering the most common Postgres migration haz
 | [CHAR Fields](char-field.md) | `CHAR`/`CHARACTER` column types | — (best practice) |
 | [Create Table with SERIAL](create-table-serial.md) | `SERIAL/BIGSERIAL/SMALLSERIAL` in `CREATE TABLE` | — (best practice) |
 | [Creating an Extension](creating-extension.md) | `CREATE EXTENSION` | — (requires superuser) |
+| [DDL Timeouts](ddl-timeouts.md) | DDL before `lock_timeout` and `statement_timeout` are set | Applies to DDL lock waits and statement runtime |
 | [Domain CHECK Constraint](add-domain-check-constraint.md) | `ALTER DOMAIN ... ADD CONSTRAINT ... CHECK` without `NOT VALID` | ACCESS EXCLUSIVE |
 | [Dropping a Column](dropping-column.md) | `ALTER TABLE ... DROP COLUMN` | ACCESS EXCLUSIVE |
 | [Dropping a Constraint](dropping-constraint.md) | Unnamed `UNIQUE`/`FOREIGN KEY`/`CHECK` constraints | — (best practice) |

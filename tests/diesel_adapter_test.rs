@@ -96,6 +96,7 @@ fn test_concurrently_violations_include_diesel_transaction_hint() {
 
     let config = Config {
         framework: "diesel".to_string(),
+        disable_checks: vec!["DdlTimeoutCheck".to_string()],
         ..Default::default()
     };
     let results = SafetyChecker::with_config(config)

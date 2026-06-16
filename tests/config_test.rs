@@ -1,5 +1,5 @@
 use camino::Utf8Path;
-use diesel_guard::{Config, ConfigError, SafetyChecker};
+use diesel_guard::{Config, ConfigError, SafetyChecker, violation::Severity};
 use miette::Diagnostic as _;
 use std::fs;
 use tempfile::tempdir;
@@ -11,7 +11,11 @@ fn test_check_down_single_migration_dir() {
     fs::create_dir(&migration_dir).unwrap();
     fs::write(
         migration_dir.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;",
+        r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
+ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
+",
     )
     .unwrap();
     fs::write(
@@ -100,7 +104,11 @@ fn test_check_down_integration() {
     // Create up.sql with unsafe operation
     fs::write(
         migration_dir.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;",
+        r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
+ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
+",
     )
     .unwrap();
 
@@ -190,10 +198,14 @@ fn test_disable_checks_integration() {
     let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
     fs::create_dir(&migration_dir).unwrap();
 
-    // SQL that would trigger AddColumnCheck
+    // SQL that would trigger AddColumnCheck without also triggering DdlTimeoutCheck.
     fs::write(
         migration_dir.join("up.sql"),
-        "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;",
+        r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
+ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
+",
     )
     .unwrap();
 
@@ -224,6 +236,65 @@ fn test_disable_checks_integration() {
 }
 
 #[test]
+fn test_disable_checks_integration_for_statement_list_check() {
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
+    fs::create_dir(&migration_dir).unwrap();
+
+    fs::write(
+        migration_dir.join("up.sql"),
+        "ALTER TYPE mood ADD VALUE 'sad';",
+    )
+    .unwrap();
+
+    let checker_default = SafetyChecker::with_config(Config {
+        enable_checks: vec!["DdlTimeoutCheck".to_string()],
+        ..Default::default()
+    });
+    let results_default = checker_default
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
+    assert_eq!(results_default.len(), 1);
+    assert_eq!(results_default[0].1.len(), 1);
+
+    let checker_disabled = SafetyChecker::with_config(Config {
+        disable_checks: vec!["DdlTimeoutCheck".to_string()],
+        ..Default::default()
+    });
+    let results_disabled = checker_disabled
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
+    assert_eq!(results_disabled.len(), 0);
+}
+
+#[test]
+fn test_warn_checks_integration_for_statement_list_check() {
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let migration_dir = temp_dir.path().join("2024_01_01_000000_test");
+    fs::create_dir(&migration_dir).unwrap();
+
+    fs::write(
+        migration_dir.join("up.sql"),
+        "ALTER TYPE mood ADD VALUE 'sad';",
+    )
+    .unwrap();
+
+    let checker = SafetyChecker::with_config(Config {
+        enable_checks: vec!["DdlTimeoutCheck".to_string()],
+        warn_checks: vec!["DdlTimeoutCheck".to_string()],
+        ..Default::default()
+    });
+    let results = checker
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].1.len(), 1);
+    assert_eq!(results[0].1[0].1.check_name, "DdlTimeoutCheck");
+    assert_eq!(results[0].1[0].1.severity, Severity::Warning);
+}
+
+#[test]
 fn test_disable_checks_separates_serial_checks() {
     use std::collections::HashSet;
 
@@ -234,6 +305,8 @@ fn test_disable_checks_separates_serial_checks() {
     fs::write(
         migration_dir.join("up.sql"),
         r"
+SET lock_timeout = '2s';
+SET statement_timeout = '60s';
 CREATE TABLE IF NOT EXISTS events (id BIGSERIAL PRIMARY KEY);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS id SERIAL;
 ",
