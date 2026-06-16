@@ -247,10 +247,9 @@ impl Registry {
         config: &Config,
         check: impl StatementListCheck + 'static,
     ) {
-        if !config.is_check_enabled(check.name()) {
-            return;
+        if config.is_check_enabled(check.name()) {
+            self.statement_list_checks.push(Box::new(check));
         }
-        self.statement_list_checks.push(Box::new(check));
     }
 
     /// Check the ordered statement list against all registered statement-list checks.
@@ -465,6 +464,20 @@ mod tests {
             registry.active_check_names().len(),
             Registry::builtin_check_names().len() - 1
         );
+    }
+
+    #[test]
+    fn test_registry_with_disabled_statement_list_check() {
+        let config = Config {
+            disable_checks: vec!["DdlTimeoutCheck".to_string()],
+            ..Default::default()
+        };
+
+        let registry = Registry::with_config(&config);
+        let active = registry.active_check_names();
+
+        assert!(!active.contains(&"DdlTimeoutCheck"));
+        assert_eq!(active.len(), Registry::builtin_check_names().len() - 1);
     }
 
     #[test]

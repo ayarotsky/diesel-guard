@@ -289,6 +289,7 @@ fn missing_timeout_problem(has_lock_timeout: bool, has_statement_timeout: bool) 
 mod tests {
     use super::*;
     use crate::checks::pg_helpers::extract_node;
+    use pg_query::protobuf::{AConst, Boolean, Float, Node, VariableSetStmt, node};
 
     fn check_sql(sql: &str) -> ViolationList {
         let parsed = pg_query::parse(sql).unwrap();
@@ -515,6 +516,50 @@ ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
 
         assert_eq!(violations.len(), 1);
         assert!(violations[0].1.problem.contains("lock_timeout"));
+    }
+
+    #[test]
+    fn test_timeout_parser_ignores_non_assignment_set_variants() {
+        for kind in [
+            VariableSetKind::Undefined,
+            VariableSetKind::VarSetCurrent,
+            VariableSetKind::VarSetMulti,
+        ] {
+            let stmt = NodeEnum::VariableSetStmt(VariableSetStmt {
+                kind: kind as i32,
+                name: "lock_timeout".to_string(),
+                args: vec![],
+                is_local: false,
+            });
+
+            assert!(timeout_transition(&stmt).is_none());
+        }
+    }
+
+    #[test]
+    fn test_timeout_disabled_parser_handles_edge_literals() {
+        assert!(!timeout_value_is_disabled(None));
+        assert!(!is_zeroish_timeout_literal(""));
+
+        let zero_float = Node {
+            node: Some(node::Node::AConst(AConst {
+                val: Some(a_const::Val::Fval(Float {
+                    fval: "0.0".to_string(),
+                })),
+                isnull: false,
+                location: 0,
+            })),
+        };
+        assert!(timeout_value_is_disabled(Some(&zero_float)));
+
+        let boolean = Node {
+            node: Some(node::Node::AConst(AConst {
+                val: Some(a_const::Val::Boolval(Boolean { boolval: false })),
+                isnull: false,
+                location: 0,
+            })),
+        };
+        assert!(!timeout_value_is_disabled(Some(&boolean)));
     }
 
     #[test]
