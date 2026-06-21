@@ -187,6 +187,12 @@ impl SafetyChecker {
     pub fn check_directory(&self, dir: &Utf8Path) -> Result<Vec<(String, ViolationList)>> {
         let adapter = self.adapter()?;
 
+        if let Some(start_after) = self.config.start_after.as_deref() {
+            adapter
+                .validate_timestamp(start_after)
+                .map_err(|e| crate::config::ConfigError::InvalidTimestampFormat(e.to_string()))?;
+        }
+
         let migration_files = adapter
             .collect_migration_files(
                 dir,

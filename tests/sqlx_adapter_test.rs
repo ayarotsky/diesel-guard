@@ -1,7 +1,37 @@
 use camino::Utf8Path;
-use diesel_guard::{Config, SafetyChecker};
+use diesel_guard::error::DieselGuardError;
+use diesel_guard::{Config, ConfigError, SafetyChecker};
 use std::fs;
 use tempfile::tempdir;
+
+#[test]
+fn test_invalid_start_after_returns_error() {
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let mig = temp_dir.path().join("20240101000000_create_users.sql");
+    fs::write(&mig, "SELECT 1;").unwrap();
+
+    let config = Config {
+        framework: "sqlx".to_string(),
+        start_after: Some("not-a-timestamp".to_string()),
+        ..Default::default()
+    };
+    let checker = SafetyChecker::with_config(config);
+    let err = checker
+        .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
+        .unwrap_err();
+
+    assert!(
+        matches!(
+            err,
+            DieselGuardError::ConfigError(ConfigError::InvalidTimestampFormat(_))
+        ),
+        "Expected InvalidTimestampFormat, got: {err:?}"
+    );
+    assert_eq!(
+        err.to_string(),
+        "Invalid timestamp format: Invalid SQLx version format: not-a-timestamp. Expected: one or more digits"
+    );
+}
 
 #[test]
 fn test_concurrently_violations_include_sqlx_transaction_hint() {

@@ -165,9 +165,6 @@ impl Config {
             }
         }
 
-        // Timestamp validation is framework-specific and done by adapters
-        // during migration file collection
-
         if !self.enable_checks.is_empty() && !self.disable_checks.is_empty() {
             return Err(ConfigError::ConflictingCheckConfig);
         }
