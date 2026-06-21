@@ -643,7 +643,7 @@ mod tests {
         let (checks, errors) = load_custom_checks(dir_path, &config);
         assert_eq!(checks.len(), 0);
         assert_eq!(errors.len(), 1);
-        assert!(errors[0].message.contains("Failed to read directory"));
+        assert!(errors[0].message.starts_with("Failed to read directory:"));
     }
 
     #[test]
@@ -695,10 +695,9 @@ mod tests {
         );
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].operation, "CONCURRENTLY in transaction");
-        assert!(
-            violations[0]
-                .safe_alternative
-                .contains("diesel:no-transaction")
+        assert_eq!(
+            violations[0].safe_alternative,
+            "Add -- diesel:no-transaction to the migration file."
         );
     }
 
@@ -717,7 +716,7 @@ mod tests {
 
         assert_eq!(checks.len(), 0);
         assert_eq!(errors.len(), 1);
-        assert!(errors[0].message.contains("Failed to read"));
+        assert!(errors[0].message.starts_with("Failed to read:"));
     }
 
     #[test]
@@ -746,10 +745,9 @@ mod tests {
         );
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].operation, "SCRIPT ERROR: test_check");
-        assert!(
-            violations[0].problem.contains("'problem' must be a string"),
-            "got: {}",
-            violations[0].problem
+        assert_eq!(
+            violations[0].problem,
+            "Custom check returned an invalid map: 'problem' must be a string (got i64)"
         );
     }
 
@@ -761,12 +759,9 @@ mod tests {
         );
         assert_eq!(violations.len(), 1);
         assert_eq!(violations[0].operation, "SCRIPT ERROR: test_check");
-        assert!(
-            violations[0]
-                .problem
-                .contains("'safe_alternative' must be a string"),
-            "got: {}",
-            violations[0].problem
+        assert_eq!(
+            violations[0].problem,
+            "Custom check returned an invalid map: 'safe_alternative' must be a string (got bool)"
         );
     }
 

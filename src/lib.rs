@@ -1,3 +1,19 @@
+//! Safety linter for Diesel and SQLx migration files.
+//!
+//! `diesel-guard` inspects SQL migration files and reports statements that are
+//! unsafe to run on a live PostgreSQL database (e.g. adding a NOT NULL column
+//! without a default, dropping an index non-concurrently, locking a table).
+//!
+//! # Quick start
+//!
+//! ```no_run
+//! use diesel_guard::SafetyChecker;
+//! use camino::Utf8Path;
+//!
+//! let checker = SafetyChecker::default();
+//! let violations = checker.check_path(Utf8Path::new("migrations/")).unwrap();
+//! ```
+
 pub mod adapters;
 pub mod ast_dump;
 pub mod checks;

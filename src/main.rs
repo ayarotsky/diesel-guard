@@ -156,7 +156,7 @@ EXAMPLES:
 
 fn run_check(path: &camino::Utf8Path, format: Format) -> Result<()> {
     let config = Config::load().map_err(|e| miette::miette!(e))?;
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).map_err(|e| miette::miette!(e))?;
     let results = checker.check_path(path)?;
     let total_errors: usize = results
         .iter()
@@ -177,7 +177,8 @@ fn load_all_checks() -> Result<(Config, SafetyChecker)> {
         disable_checks: vec![],
         enable_checks: vec![],
         ..config.clone()
-    });
+    })
+    .map_err(|e| miette::miette!(e))?;
     Ok((config, checker))
 }
 

@@ -49,7 +49,7 @@ impl MigrationAdapter for DieselAdapter {
             return Ok(self.process_migration_directory(dir, None, check_down));
         }
 
-        let entries = collect_and_sort_entries(dir);
+        let entries = collect_and_sort_entries(dir)?;
         let mut files = Vec::new();
 
         for entry in entries {

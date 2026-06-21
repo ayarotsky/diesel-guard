@@ -5,7 +5,7 @@ use tempfile::tempdir;
 
 #[test]
 fn test_invalid_sql_produces_parse_error() {
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::default();
     let result = checker.check_sql("NOT VALID SQL;");
     assert!(result.is_err(), "Invalid SQL should produce an error");
 
@@ -22,7 +22,7 @@ fn test_invalid_sql_in_migration_file_has_file_context() {
     let file_path = temp_dir.path().join("up.sql");
     fs::write(&file_path, "NOT VALID SQL;").unwrap();
 
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::default();
     let utf8_path = Utf8Path::from_path(&file_path).unwrap();
     let result = checker.check_file(utf8_path);
 
@@ -44,7 +44,7 @@ fn test_empty_migration_file() {
     let file_path = temp_dir.path().join("up.sql");
     fs::write(&file_path, "").unwrap();
 
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::default();
     let utf8_path = Utf8Path::from_path(&file_path).unwrap();
     let result = checker.check_file(utf8_path);
 
@@ -62,7 +62,7 @@ fn test_migration_file_with_only_comments() {
     let file_path = temp_dir.path().join("up.sql");
     fs::write(&file_path, "-- comment\n-- another comment\n").unwrap();
 
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::default();
     let utf8_path = Utf8Path::from_path(&file_path).unwrap();
     let result = checker.check_file(utf8_path);
 
@@ -79,14 +79,14 @@ fn test_migration_file_with_only_comments() {
 
 #[test]
 fn test_nonexistent_file_returns_error() {
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::default();
     let result = checker.check_file(Utf8Path::new("/nonexistent/path/to/migration.sql"));
     assert!(result.is_err(), "Nonexistent file should return an error");
 }
 
 #[test]
 fn test_nonexistent_path_returns_error() {
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::default();
     let result = checker.check_path(Utf8Path::new("/nonexistent/path/to/migrations"));
     assert!(result.is_err(), "Nonexistent path should return an error");
 }
@@ -109,7 +109,7 @@ fn test_check_directory_fails_on_invalid_sql_file() {
     fs::create_dir(&invalid_dir).unwrap();
     fs::write(invalid_dir.join("up.sql"), "NOT VALID SQL SYNTAX HERE;").unwrap();
 
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::default();
     let result = checker.check_directory(Utf8Path::from_path(temp_dir.path()).unwrap());
 
     // One bad file should fail the entire batch
@@ -123,7 +123,7 @@ fn test_check_directory_fails_on_invalid_sql_file() {
 fn test_empty_directory_returns_no_results() {
     let temp_dir = tempdir().expect("Failed to create temp dir");
 
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::default();
     let result = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -142,7 +142,7 @@ fn test_directory_with_non_sql_files_ignored() {
     fs::write(temp_dir.path().join("notes.md"), "# Notes").unwrap();
 
     let config = Config::default();
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let result = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();

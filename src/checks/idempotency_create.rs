@@ -64,11 +64,13 @@ mod tests {
         );
 
         assert_eq!(violations.len(), 1);
-        assert!(violations[0].problem.contains("<table_name>"));
-        assert!(
-            violations[0]
-                .safe_alternative
-                .contains("CREATE TABLE IF NOT EXISTS <table_name> (...);")
+        assert_eq!(
+            violations[0].problem,
+            "CREATE TABLE for '<table_name>' is not idempotent. If this migration is retried after a partial failure, it can error because the table already exists."
+        );
+        assert_eq!(
+            violations[0].safe_alternative,
+            "Use IF NOT EXISTS to make retries safe:\n   CREATE TABLE IF NOT EXISTS <table_name> (...);"
         );
     }
 

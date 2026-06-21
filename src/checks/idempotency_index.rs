@@ -87,11 +87,13 @@ mod tests {
         );
 
         assert_eq!(violations.len(), 1);
-        assert!(violations[0].problem.contains("<unnamed>"));
-        assert!(
-            violations[0]
-                .safe_alternative
-                .contains("CREATE INDEX IF NOT EXISTS <index_name> ON <table_name> (...);")
+        assert_eq!(
+            violations[0].problem,
+            "CREATE INDEX '<unnamed>' on table '<table_name>' is not idempotent. If this migration is retried after a partial failure, it can error because the index already exists."
+        );
+        assert_eq!(
+            violations[0].safe_alternative,
+            "Use IF NOT EXISTS to make retries safe:\n   CREATE INDEX IF NOT EXISTS <index_name> ON <table_name> (...);"
         );
     }
 

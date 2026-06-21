@@ -23,7 +23,7 @@ fn test_check_down_single_migration_dir() {
 
     // Point check_path at the single migration directory (the CI use case)
     let config = Config::default(); // check_down = false
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_path(Utf8Path::from_path(&migration_dir).unwrap())
         .unwrap();
@@ -114,7 +114,7 @@ fn test_check_down_integration() {
 
     // Test with check_down = false (default)
     let config_default = Config::default();
-    let checker_default = SafetyChecker::with_config(config_default);
+    let checker_default = SafetyChecker::with_config(config_default).unwrap();
     let results_default = checker_default
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -126,7 +126,7 @@ fn test_check_down_integration() {
         check_down: true,
         ..Default::default()
     };
-    let checker_with_down = SafetyChecker::with_config(config_with_down);
+    let checker_with_down = SafetyChecker::with_config(config_with_down).unwrap();
     let results_with_down = checker_with_down
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -175,7 +175,7 @@ fn test_start_after_integration() {
         start_after: Some("2024_01_01_000000".to_string()),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -200,7 +200,7 @@ fn test_disable_checks_integration() {
 
     // Without disabling - AddColumnCheck and IdempotencyAlterCheck both detect the statement
     let config_default = Config::default();
-    let checker_default = SafetyChecker::with_config(config_default);
+    let checker_default = SafetyChecker::with_config(config_default).unwrap();
     let results_default = checker_default
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -212,7 +212,7 @@ fn test_disable_checks_integration() {
         disable_checks: vec!["AddColumnCheck".to_string()],
         ..Default::default()
     };
-    let checker_disabled = SafetyChecker::with_config(config_disabled);
+    let checker_disabled = SafetyChecker::with_config(config_disabled).unwrap();
     let results_disabled = checker_disabled
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -241,7 +241,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS id SERIAL;
     )
     .unwrap();
 
-    let checker_default = SafetyChecker::with_config(Config::default());
+    let checker_default = SafetyChecker::default();
     let results_default = checker_default
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -259,7 +259,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS id SERIAL;
     let checker_add_disabled = SafetyChecker::with_config(Config {
         disable_checks: vec!["AddSerialColumnCheck".to_string()],
         ..Default::default()
-    });
+    })
+    .unwrap();
     let results_add_disabled = checker_add_disabled
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -273,7 +274,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS id SERIAL;
     let checker_create_disabled = SafetyChecker::with_config(Config {
         disable_checks: vec!["CreateTableSerialCheck".to_string()],
         ..Default::default()
-    });
+    })
+    .unwrap();
     let results_create_disabled = checker_create_disabled
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -324,7 +326,7 @@ fn test_combined_config_features() {
         ..Default::default()
     };
 
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -353,7 +355,7 @@ fn test_standalone_sql_files_always_checked() {
         ..Default::default()
     };
 
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -378,7 +380,7 @@ fn test_check_down_with_missing_down_sql() {
         ..Default::default()
     };
 
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -417,7 +419,7 @@ fn test_multiple_migrations_with_start_after() {
         ..Default::default()
     };
 
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -453,7 +455,7 @@ fn test_migrations_checked_in_alphanumeric_order() {
         .unwrap();
     }
 
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::default();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -498,7 +500,7 @@ fn test_standalone_sql_with_timestamp_respects_start_after() {
         ..Default::default()
     };
 
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -523,7 +525,7 @@ fn test_standalone_sql_with_timestamp_after_start_after() {
         ..Default::default()
     };
 
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -549,7 +551,7 @@ fn test_standalone_sql_without_timestamp_always_checked() {
         ..Default::default()
     };
 
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -577,7 +579,7 @@ fn test_enable_checks_integration() {
         enable_checks: vec!["AddColumnCheck".to_string()],
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -606,7 +608,7 @@ fn test_enable_checks_suppresses_all_when_unmatched() {
         enable_checks: vec!["AddIndexCheck".to_string()],
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -657,7 +659,8 @@ fn test_diesel_concurrently_without_metadata_warns() {
     let checker = SafetyChecker::with_config(Config {
         enable_checks: vec!["AddIndexCheck".to_string()],
         ..Default::default()
-    });
+    })
+    .unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
