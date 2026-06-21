@@ -8,7 +8,8 @@ fn test_safety_assured_block_ignores_violations() {
     let checker = SafetyChecker::with_config(Config {
         enable_checks: vec!["DropColumnCheck".to_string()],
         ..Default::default()
-    });
+    })
+    .unwrap();
     let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
@@ -29,7 +30,8 @@ fn test_without_safety_assured_detects_violations() {
     let checker = SafetyChecker::with_config(Config {
         enable_checks: vec!["DropColumnCheck".to_string()],
         ..Default::default()
-    });
+    })
+    .unwrap();
     let sql = r"
 ALTER TABLE users DROP COLUMN email;
 ALTER TABLE posts DROP COLUMN body;
@@ -48,7 +50,8 @@ fn test_partial_safety_assured() {
     let checker = SafetyChecker::with_config(Config {
         enable_checks: vec!["DropColumnCheck".to_string()],
         ..Default::default()
-    });
+    })
+    .unwrap();
     let sql = r"
 ALTER TABLE users DROP COLUMN email;
 
@@ -79,7 +82,8 @@ fn test_multiple_blocks() {
     let checker = SafetyChecker::with_config(Config {
         enable_checks: vec!["DropColumnCheck".to_string()],
         ..Default::default()
-    });
+    })
+    .unwrap();
     let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
@@ -101,7 +105,8 @@ fn test_case_insensitive() {
     let checker = SafetyChecker::with_config(Config {
         enable_checks: vec!["DropColumnCheck".to_string()],
         ..Default::default()
-    });
+    })
+    .unwrap();
     let sql = r"
 -- SAFETY-ASSURED:START
 ALTER TABLE users DROP COLUMN email;
@@ -121,7 +126,8 @@ fn test_unclosed_block_error() {
     let checker = SafetyChecker::with_config(Config {
         enable_checks: vec!["DropColumnCheck".to_string()],
         ..Default::default()
-    });
+    })
+    .unwrap();
     let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
@@ -138,7 +144,7 @@ ALTER TABLE users DROP COLUMN email;
 
 #[test]
 fn test_unmatched_end_error() {
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::default();
     let sql = r"
 ALTER TABLE users DROP COLUMN email;
 -- safety-assured:end
@@ -169,7 +175,7 @@ ALTER TABLE users DROP COLUMN deprecated_column;
     )
     .unwrap();
 
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::default();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -183,7 +189,7 @@ ALTER TABLE users DROP COLUMN deprecated_column;
 
 #[test]
 fn test_empty_block() {
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::default();
     let sql = r"
 -- safety-assured:start
 -- safety-assured:end
@@ -198,7 +204,8 @@ fn test_comments_within_block() {
     let checker = SafetyChecker::with_config(Config {
         enable_checks: vec!["DropColumnCheck".to_string()],
         ..Default::default()
-    });
+    })
+    .unwrap();
     let sql = r"
 -- safety-assured:start
 -- This column was deprecated 6 months ago
@@ -220,7 +227,8 @@ fn test_multiline_statement_in_block() {
     let checker = SafetyChecker::with_config(Config {
         enable_checks: vec!["DropColumnCheck".to_string()],
         ..Default::default()
-    });
+    })
+    .unwrap();
     let sql = r"
 -- safety-assured:start
 ALTER TABLE users
@@ -241,7 +249,8 @@ fn test_mixed_safe_and_unsafe_operations() {
     let checker = SafetyChecker::with_config(Config {
         enable_checks: vec!["AddColumnCheck".to_string(), "DropColumnCheck".to_string()],
         ..Default::default()
-    });
+    })
+    .unwrap();
     let sql = r"
 -- Safe operation - no default
 ALTER TABLE users ADD COLUMN email VARCHAR(255);
@@ -271,7 +280,8 @@ fn test_per_migration_disable_directive_skips_only_named_check() {
             "IdempotencyAlterCheck".to_string(),
         ],
         ..Default::default()
-    });
+    })
+    .unwrap();
     let sql = r"
 -- diesel-guard:disable AddColumnCheck
 ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
@@ -293,7 +303,8 @@ fn test_per_migration_disable_directive_accepts_multiple_checks() {
             "IdempotencyAlterCheck".to_string(),
         ],
         ..Default::default()
-    });
+    })
+    .unwrap();
     let sql = r"
 -- diesel-guard:disable AddColumnCheck, IdempotencyAlterCheck
 ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
@@ -305,7 +316,7 @@ ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
 
 #[test]
 fn test_nested_blocks() {
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::default();
     let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
@@ -325,7 +336,7 @@ ALTER TABLE posts DROP COLUMN body;
 
 #[test]
 fn test_block_with_multiple_statement_types() {
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::default();
     let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN email;
@@ -345,7 +356,7 @@ CREATE INDEX users_idx ON users(name);
 #[test]
 fn test_block_with_multiple_same_operation_type() {
     // Edge case: Multiple ALTER statements (same keyword) within block
-    let checker = SafetyChecker::new();
+    let checker = SafetyChecker::default();
     let sql = r"
 -- safety-assured:start
 ALTER TABLE users DROP COLUMN deprecated_a;
@@ -368,7 +379,8 @@ fn test_interleaved_blocks_and_statements_same_keyword() {
     let checker = SafetyChecker::with_config(Config {
         enable_checks: vec!["DropColumnCheck".to_string()],
         ..Default::default()
-    });
+    })
+    .unwrap();
     let sql = r"
 ALTER TABLE users DROP COLUMN a;
 
@@ -405,7 +417,8 @@ fn test_safety_assured_with_leading_whitespace() {
     let checker = SafetyChecker::with_config(Config {
         enable_checks: vec!["DropColumnCheck".to_string()],
         ..Default::default()
-    });
+    })
+    .unwrap();
     let sql = r"
 
     -- safety-assured:start

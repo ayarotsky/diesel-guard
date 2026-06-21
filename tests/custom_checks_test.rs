@@ -28,7 +28,7 @@ fn test_custom_check_fires_alongside_builtin() {
         custom_checks_dir: Some(dir.path().to_str().unwrap().to_string()),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
 
     // This SQL triggers both the built-in AddIndexCheck and our custom check
     let violations = checker
@@ -85,7 +85,7 @@ fn test_disable_checks_works_for_custom_check() {
         disable_checks: vec!["my_custom".to_string()],
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
 
     let violations = checker
         .check_sql("CREATE INDEX idx ON users(email);")
@@ -122,7 +122,7 @@ fn test_safety_assured_blocks_skip_custom_checks() {
         custom_checks_dir: Some(dir.path().to_str().unwrap().to_string()),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
 
     let sql = r"
 -- safety-assured:start
@@ -172,7 +172,7 @@ fn test_custom_check_in_migration_directory() {
         custom_checks_dir: Some(checks_dir.path().to_str().unwrap().to_string()),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
 
     let results = checker
         .check_path(Utf8Path::from_path(migrations_dir.path()).unwrap())
@@ -195,7 +195,7 @@ fn test_nonexistent_custom_checks_dir_is_ignored() {
     };
 
     // Should not panic or error — just ignored
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let violations = checker.check_sql("SELECT 1;").unwrap();
     assert!(violations.is_empty());
 }
@@ -250,9 +250,9 @@ fn test_registry_check_names_includes_custom_checks() {
 }
 
 #[test]
-fn test_unknown_check_name_warning_not_emitted_for_custom_check() {
+fn test_unknown_check_name_not_raised_for_custom_check() {
     // When a disable_checks entry matches a custom check script name,
-    // SafetyChecker::with_config() should NOT warn about it.
+    // SafetyChecker::with_config() should NOT error about it.
     // The validation checks .rhai file stems on disk, not just what was
     // loaded into the registry (disabled checks are skipped during loading).
     let dir = tempdir().expect("Failed to create temp dir");
@@ -277,9 +277,8 @@ fn test_unknown_check_name_warning_not_emitted_for_custom_check() {
         ..Default::default()
     };
 
-    // Building SafetyChecker should not panic or error.
-    // The "my_custom" name matches a .rhai file stem so no warning is expected.
-    let checker = SafetyChecker::with_config(config);
+    // Building SafetyChecker should not error: "my_custom" matches a .rhai file stem.
+    let checker = SafetyChecker::with_config(config).unwrap();
 
     // Verify the custom check is actually disabled
     let violations = checker
@@ -294,11 +293,7 @@ fn test_unknown_check_name_warning_not_emitted_for_custom_check() {
 }
 
 #[test]
-fn test_unknown_check_name_detected_after_custom_checks_loaded() {
-    // A truly unknown name (typo) should not match any built-in name or
-    // custom .rhai file stem. SafetyChecker::with_config() will warn about it
-    // on stderr. We verify indirectly: the name doesn't appear in either the
-    // built-in list or the custom check file stems.
+fn test_unknown_check_name_errors_after_custom_checks_loaded() {
     let dir = tempdir().expect("Failed to create temp dir");
 
     fs::write(
@@ -315,42 +310,15 @@ fn test_unknown_check_name_detected_after_custom_checks_loaded() {
     )
     .unwrap();
 
-    let bogus = "TotallyBogusCheckName";
-
-    // Verify it doesn't match any built-in name
-    assert!(
-        !diesel_guard::checks::Registry::builtin_check_names().contains(&bogus),
-        "Typo should not match any built-in check name"
-    );
-
-    // Verify it doesn't match any custom check file stem
-    let rhai_stems: Vec<String> = fs::read_dir(dir.path())
-        .unwrap()
-        .filter_map(|e| {
-            let path = e.ok()?.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("rhai") {
-                path.file_stem()
-                    .and_then(|s| s.to_str())
-                    .map(std::string::ToString::to_string)
-            } else {
-                None
-            }
-        })
-        .collect();
-    assert!(
-        !rhai_stems.contains(&bogus.to_string()),
-        "Typo should not match any custom check file stem"
-    );
-
-    // Building SafetyChecker should still succeed (warning on stderr, not an error)
-    let config = Config {
+    let result = SafetyChecker::with_config(Config {
         custom_checks_dir: Some(dir.path().to_str().unwrap().to_string()),
-        disable_checks: vec![bogus.to_string()],
+        disable_checks: vec!["TotallyBogusCheckName".to_string()],
         ..Default::default()
-    };
-    let checker = SafetyChecker::with_config(config);
-    let violations = checker.check_sql("SELECT 1;").unwrap();
-    assert!(violations.is_empty());
+    });
+    assert_eq!(
+        result.err().unwrap().to_string(),
+        "Invalid check name: TotallyBogusCheckName"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -390,7 +358,10 @@ fn check_with_examples(sql: &str) -> ViolationList {
         ],
         ..Default::default()
     };
-    SafetyChecker::with_config(config).check_sql(sql).unwrap()
+    SafetyChecker::with_config(config)
+        .unwrap()
+        .check_sql(sql)
+        .unwrap()
 }
 
 fn has_violation_containing(violations: &ViolationList, substring: &str) -> bool {
@@ -549,7 +520,7 @@ fn test_custom_check_returning_array_of_violations() {
         custom_checks_dir: Some(dir.path().to_str().unwrap().to_string()),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
 
     let violations = checker
         .check_sql("CREATE INDEX idx ON users(email);")
@@ -596,7 +567,7 @@ fn test_custom_check_using_pg_constants() {
         custom_checks_dir: Some(dir.path().to_str().unwrap().to_string()),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
 
     // DROP TABLE should fire
     let violations_table = checker.check_sql("DROP TABLE users;").unwrap();
@@ -646,7 +617,7 @@ fn test_multiple_custom_checks_loaded_in_sorted_order() {
         custom_checks_dir: Some(dir.path().to_str().unwrap().to_string()),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
 
     let violations = checker
         .check_sql("CREATE INDEX idx ON users(email);")
@@ -703,7 +674,7 @@ fn test_custom_check_name_conflicts_with_builtin() {
         disable_checks: vec!["AddColumnCheck".to_string()],
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
 
     let violations = checker
         .check_sql("ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;")
@@ -748,7 +719,7 @@ fn test_custom_check_compilation_error_nonfatal() {
         custom_checks_dir: Some(dir.path().to_str().unwrap().to_string()),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
 
     // check_sql should still work — broken script is skipped, valid one fires
     let violations = checker
@@ -801,6 +772,7 @@ fn test_custom_check_can_read_postgres_version() {
         ..Default::default()
     };
     let violations = SafetyChecker::with_config(config_pg14)
+        .unwrap()
         .check_sql("CREATE INDEX CONCURRENTLY idx ON users(email);")
         .unwrap();
     assert!(
@@ -817,6 +789,7 @@ fn test_custom_check_can_read_postgres_version() {
         ..Default::default()
     };
     let violations = SafetyChecker::with_config(config_pg13)
+        .unwrap()
         .check_sql("CREATE INDEX CONCURRENTLY idx ON users(email);")
         .unwrap();
     assert!(
@@ -833,6 +806,7 @@ fn test_custom_check_can_read_postgres_version() {
         ..Default::default()
     };
     let violations = SafetyChecker::with_config(config_no_ver)
+        .unwrap()
         .check_sql("CREATE INDEX CONCURRENTLY idx ON users(email);")
         .unwrap();
     assert!(
@@ -853,7 +827,7 @@ fn test_custom_check_runtime_error_yields_script_error_violation() {
         custom_checks_dir: Some(dir.path().to_str().unwrap().to_string()),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     // SELECT doesn't trigger any built-in check, so the only violation comes from the script.
     let violations = checker.check_sql("SELECT 1;").unwrap();
     assert_eq!(
@@ -883,7 +857,7 @@ fn test_custom_check_max_operations_yields_script_error() {
         custom_checks_dir: Some(dir.path().to_str().unwrap().to_string()),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let violations = checker.check_sql("SELECT 1;").unwrap();
     assert_eq!(
         violations.len(),

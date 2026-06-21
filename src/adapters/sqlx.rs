@@ -33,7 +33,7 @@ impl MigrationAdapter for SqlxAdapter {
         start_after: Option<&str>,
         check_down: bool,
     ) -> Result<Vec<MigrationFile>> {
-        let entries = collect_and_sort_entries(dir);
+        let entries = collect_and_sort_entries(dir)?;
         let mut files = Vec::new();
 
         for entry in entries {

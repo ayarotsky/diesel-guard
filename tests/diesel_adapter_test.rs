@@ -24,7 +24,7 @@ fn test_diesel_loose_sql_and_directory_migrations_coexist() {
         framework: "diesel".to_string(),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -49,7 +49,7 @@ fn test_invalid_start_after_returns_error() {
         start_after: Some("not-a-timestamp".to_string()),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let err = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap_err();
@@ -92,7 +92,7 @@ fn test_diesel_mixed_timestamp_separators() {
         start_after: Some("2024_01_01_000000".to_string()),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -130,6 +130,7 @@ fn test_concurrently_violations_include_diesel_transaction_hint() {
         ..Default::default()
     };
     let results = SafetyChecker::with_config(config)
+        .unwrap()
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
 
@@ -178,7 +179,7 @@ fn test_diesel_no_separator_timestamp() {
         framework: "diesel".to_string(),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -218,6 +219,7 @@ disable_checks = ["AddColumnCheck"]
         ..Default::default()
     };
     let results = SafetyChecker::with_config(config)
+        .unwrap()
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
 

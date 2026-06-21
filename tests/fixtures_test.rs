@@ -24,6 +24,7 @@ fn checker_with_enabled_checks(checks: &[&str]) -> SafetyChecker {
         enable_checks: checks.iter().map(|check| (*check).to_string()).collect(),
         ..Default::default()
     })
+    .unwrap()
 }
 
 fn sqlx_checker_with_enabled_checks(checks: &[&str], check_down: bool) -> SafetyChecker {
@@ -33,6 +34,7 @@ fn sqlx_checker_with_enabled_checks(checks: &[&str], check_down: bool) -> Safety
         enable_checks: checks.iter().map(|check| (*check).to_string()).collect(),
         ..Default::default()
     })
+    .unwrap()
 }
 
 fn checker_with_disabled_checks(checks: &[&str]) -> SafetyChecker {
@@ -40,6 +42,7 @@ fn checker_with_disabled_checks(checks: &[&str]) -> SafetyChecker {
         disable_checks: checks.iter().map(|check| (*check).to_string()).collect(),
         ..Default::default()
     })
+    .unwrap()
 }
 
 fn sqlx_checker_with_disabled_checks(checks: &[&str], check_down: bool) -> SafetyChecker {
@@ -49,6 +52,7 @@ fn sqlx_checker_with_disabled_checks(checks: &[&str], check_down: bool) -> Safet
         disable_checks: checks.iter().map(|check| (*check).to_string()).collect(),
         ..Default::default()
     })
+    .unwrap()
 }
 
 #[test]
@@ -212,9 +216,10 @@ fn test_add_unique_index_without_concurrently_detected() {
 
     assert_eq!(violations.len(), 1, "Expected 1 violation");
     assert_eq!(violations[0].1.operation, "ADD INDEX without CONCURRENTLY");
-    assert!(
-        violations[0].1.problem.contains("UNIQUE"),
-        "Expected problem to mention UNIQUE"
+    assert_eq!(
+        violations[0].1.problem,
+        "Creating UNIQUE index 'idx_users_username' on table 'users' without CONCURRENTLY acquires a SHARE lock, \
+blocking writes (INSERT, UPDATE, DELETE). Duration depends on table size. Reads are still allowed."
     );
 }
 

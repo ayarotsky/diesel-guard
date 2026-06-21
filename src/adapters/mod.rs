@@ -161,19 +161,13 @@ pub(crate) fn is_single_migration_dir(dir: &Utf8Path) -> bool {
 /// Collect and sort directory entries from a directory.
 ///
 /// Returns entries sorted by path, with errors filtered out.
-pub(crate) fn collect_and_sort_entries(dir: &Utf8Path) -> Vec<DirEntry> {
+pub(crate) fn collect_and_sort_entries(dir: &Utf8Path) -> Result<Vec<DirEntry>> {
     let mut entries = Vec::new();
     for result in WalkDir::new(dir).max_depth(1).min_depth(1) {
-        match result {
-            Ok(entry) => entries.push(entry),
-            Err(e) => {
-                eprintln!("Warning: Failed to read entry in {dir}: {e}");
-            }
-        }
+        entries.push(result?);
     }
-
     entries.sort_by(|a, b| a.path().cmp(b.path()));
-    entries
+    Ok(entries)
 }
 
 #[cfg(test)]

@@ -49,7 +49,7 @@ DROP TABLE unprotected_table;
         custom_checks_dir: Some(checks_dir.path().to_str().unwrap().to_string()),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(migrations_dir.path()).unwrap())
         .unwrap();
@@ -113,7 +113,7 @@ fn test_disable_builtin_and_custom_checks_simultaneously() {
         disable_checks: vec!["DropColumnCheck".to_string(), "my_check".to_string()],
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
 
     // SQL that triggers DropTableCheck, DropColumnCheck, and my_check
     let violations = checker
@@ -172,7 +172,7 @@ ALTER TABLE users DROP COLUMN phone;
         enable_checks: vec!["DropColumnCheck".to_string()],
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();

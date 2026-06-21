@@ -16,18 +16,14 @@ pub struct SafetyChecker {
 }
 
 impl SafetyChecker {
-    /// Create with configuration loaded from diesel-guard.toml
-    /// Falls back to defaults if config file doesn't exist or has errors
-    pub fn new() -> Self {
-        let config = Config::load().unwrap_or_else(|e| {
-            eprintln!("Warning: Failed to load config: {e}. Using defaults.");
-            Config::default()
-        });
-        Self::with_config(config)
-    }
-
     /// Create with specific configuration (useful for testing)
-    pub fn with_config(config: Config) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`crate::config::ConfigError::InvalidCheckName`] if any name in `enable_checks`,
+    /// `disable_checks`, or `warn_checks` is not a known check name (built-in or
+    /// custom script stem from `custom_checks_dir`).
+    pub fn with_config(config: Config) -> std::result::Result<Self, crate::config::ConfigError> {
         let mut registry = Registry::with_config(&config);
 
         if let Some(ref dir) = config.custom_checks_dir {
@@ -43,10 +39,7 @@ impl SafetyChecker {
             }
         }
 
-        // Warn about unknown check names.
-        // We check against all built-in names (not just enabled ones) and all
-        // custom script stems so that disabling a valid check doesn't trigger
-        // a spurious warning.
+        // Validate check names against all built-in names and custom script stems.
         let builtin_names = Registry::builtin_check_names();
         let custom_names: Vec<String> = config
             .custom_checks_dir
@@ -78,25 +71,26 @@ impl SafetyChecker {
             .chain(custom_names.iter().cloned())
             .collect::<Vec<_>>();
 
-        let warn_unknown = |names: &[String], field: &str| {
+        let validate_names = |names: &[String]| {
             for name in names {
                 if !known_check_names.iter().any(|known| known == name) {
-                    eprintln!(
-                        "Warning: Unknown check name '{name}' in {field}. Run --list-checks to see available checks."
-                    );
+                    return Err(crate::config::ConfigError::InvalidCheckName {
+                        invalid_name: name.clone(),
+                    });
                 }
             }
+            Ok(())
         };
 
-        warn_unknown(&config.disable_checks, "disable_checks");
-        warn_unknown(&config.enable_checks, "enable_checks");
-        warn_unknown(&config.warn_checks, "warn_checks");
+        validate_names(&config.disable_checks)?;
+        validate_names(&config.enable_checks)?;
+        validate_names(&config.warn_checks)?;
 
-        Self {
+        Ok(Self {
             registry,
             config,
             known_check_names,
-        }
+        })
     }
 
     /// Expose the registry for introspection (e.g. list-checks, explain).
@@ -267,7 +261,7 @@ impl SafetyChecker {
 
 impl Default for SafetyChecker {
     fn default() -> Self {
-        Self::new()
+        Self::with_config(Config::default()).unwrap()
     }
 }
 
@@ -283,7 +277,8 @@ mod tests {
         let checker = SafetyChecker::with_config(Config {
             enable_checks: vec!["AddColumnCheck".to_string()],
             ..Default::default()
-        });
+        })
+        .unwrap();
         let sql = "ALTER TABLE users ADD COLUMN email VARCHAR(255);";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 0);
@@ -294,7 +289,8 @@ mod tests {
         let checker = SafetyChecker::with_config(Config {
             enable_checks: vec!["AddColumnCheck".to_string()],
             ..Default::default()
-        });
+        })
+        .unwrap();
         let sql = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 1);
@@ -306,7 +302,7 @@ mod tests {
             disable_checks: vec!["AddColumnCheck".to_string()],
             ..Default::default()
         };
-        let checker = SafetyChecker::with_config(config);
+        let checker = SafetyChecker::with_config(config).unwrap();
 
         let sql = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
         let violations = checker.check_sql(sql).unwrap();
@@ -320,7 +316,7 @@ mod tests {
 
     #[test]
     fn test_reindex_without_concurrently_detected() {
-        let checker = SafetyChecker::new();
+        let checker = SafetyChecker::default();
         let sql = "REINDEX INDEX idx_users_email;";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 1);
@@ -329,7 +325,7 @@ mod tests {
 
     #[test]
     fn test_reindex_table_without_concurrently_detected() {
-        let checker = SafetyChecker::new();
+        let checker = SafetyChecker::default();
         let sql = "REINDEX TABLE users;";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 1);
@@ -340,7 +336,7 @@ mod tests {
     fn test_reindex_concurrently_in_transaction_detected() {
         // check_sql uses MigrationContext::default() (run_in_transaction=true),
         // so REINDEX CONCURRENTLY is flagged as requiring no-transaction context.
-        let checker = SafetyChecker::new();
+        let checker = SafetyChecker::default();
         let sql = "REINDEX INDEX CONCURRENTLY idx_users_email;";
         let violations = checker.check_sql(sql).unwrap();
         assert_eq!(violations.len(), 1);
@@ -356,7 +352,7 @@ mod tests {
             disable_checks: vec!["ReindexCheck".to_string()],
             ..Default::default()
         };
-        let checker = SafetyChecker::with_config(config);
+        let checker = SafetyChecker::with_config(config).unwrap();
 
         let sql = "REINDEX INDEX idx_users_email;";
         let violations = checker.check_sql(sql).unwrap();
@@ -365,7 +361,7 @@ mod tests {
 
     #[test]
     fn test_multiple_reindex_violations() {
-        let checker = SafetyChecker::new();
+        let checker = SafetyChecker::default();
         let sql = r"
             REINDEX INDEX idx_users_email;
             REINDEX TABLE posts;
@@ -380,7 +376,7 @@ mod tests {
             framework: "unknown".to_string(),
             ..Default::default()
         };
-        let checker = SafetyChecker::with_config(config);
+        let checker = SafetyChecker::with_config(config).unwrap();
         let result = checker.check_directory(camino::Utf8Path::new("."));
         assert_eq!(
             result.unwrap_err().to_string(),
@@ -393,7 +389,8 @@ mod tests {
         let checker = SafetyChecker::with_config(Config {
             enable_checks: vec!["AddColumnCheck".to_string()],
             ..Default::default()
-        });
+        })
+        .unwrap();
         let input_data = "ALTER TABLE users ADD COLUMN foo TEXT;";
         let violations = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
@@ -406,7 +403,8 @@ mod tests {
         let checker = SafetyChecker::with_config(Config {
             enable_checks: vec!["AddColumnCheck".to_string()],
             ..Default::default()
-        });
+        })
+        .unwrap();
         let input_data = "ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;";
         let violations = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
@@ -423,7 +421,7 @@ mod tests {
             ..Default::default()
         };
         // Should not panic; .txt file is silently ignored
-        let checker = SafetyChecker::with_config(config);
+        let checker = SafetyChecker::with_config(config).unwrap();
         let violations = checker
             .check_sql("ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;")
             .unwrap();
@@ -436,18 +434,15 @@ mod tests {
     }
 
     #[test]
-    fn test_unknown_check_name_in_enable_checks_warns() {
-        let config = Config {
+    fn test_unknown_check_name_in_enable_checks_errors() {
+        let result = SafetyChecker::with_config(Config {
             enable_checks: vec!["NonExistentCheck".to_string()],
             ..Default::default()
-        };
-        // Should not panic; warning is printed to stderr
-        let checker = SafetyChecker::with_config(config);
-        let violations = checker
-            .check_sql("ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;")
-            .unwrap();
-        // NonExistentCheck is unknown so nothing runs — zero violations
-        assert_eq!(violations.len(), 0);
+        });
+        assert_eq!(
+            result.err().unwrap().to_string(),
+            "Invalid check name: NonExistentCheck"
+        );
     }
 
     #[test]
@@ -462,7 +457,7 @@ mod tests {
         let sql = "CREATE TABLE a ();\nCREATE TABLE b ();\nCREATE TABLE @bad;";
         fs::write(&file_path, sql).unwrap();
 
-        let checker = SafetyChecker::new();
+        let checker = SafetyChecker::default();
         let path = camino::Utf8Path::from_path(&file_path).unwrap();
         let err = checker.check_file(path).unwrap_err();
 
@@ -481,18 +476,32 @@ mod tests {
     }
 
     #[test]
-    fn test_unknown_check_name_in_disable_checks_warns() {
-        let config = Config {
+    fn test_unknown_check_name_in_disable_checks_errors() {
+        let result = SafetyChecker::with_config(Config {
             disable_checks: vec!["NonExistentCheck".to_string()],
             ..Default::default()
-        };
-        // Should not panic; warning is printed to stderr
-        let _checker = SafetyChecker::with_config(config);
+        });
+        assert_eq!(
+            result.err().unwrap().to_string(),
+            "Invalid check name: NonExistentCheck"
+        );
+    }
+
+    #[test]
+    fn test_unknown_check_name_in_warn_checks_errors() {
+        let result = SafetyChecker::with_config(Config {
+            warn_checks: vec!["NonExistentCheck".to_string()],
+            ..Default::default()
+        });
+        assert_eq!(
+            result.err().unwrap().to_string(),
+            "Invalid check name: NonExistentCheck"
+        );
     }
 
     #[test]
     fn test_buffer_empty_string() {
-        let checker: SafetyChecker = SafetyChecker::new();
+        let checker = SafetyChecker::default();
         let input_data = "";
         let violations = checker
             .check_buffer(&mut BufReader::new(Cursor::new(input_data)))
@@ -502,7 +511,7 @@ mod tests {
 
     #[test]
     fn test_buffer_input_multiple_lines() {
-        let checker: SafetyChecker = SafetyChecker::new();
+        let checker = SafetyChecker::default();
         let input_data = r"
             REINDEX INDEX idx_users_email;
             REINDEX TABLE posts;
@@ -534,7 +543,7 @@ mod tests {
             enable_checks: vec!["AddIndexCheck".to_string()],
             ..Default::default()
         };
-        let checker = SafetyChecker::with_config(config);
+        let checker = SafetyChecker::with_config(config).unwrap();
         let dir_path =
             camino::Utf8Path::from_path(temp_dir.path()).expect("path should be valid UTF-8");
 
@@ -573,7 +582,7 @@ mod tests {
             enable_checks: vec!["AddIndexCheck".to_string()],
             ..Default::default()
         };
-        let checker = SafetyChecker::with_config(config);
+        let checker = SafetyChecker::with_config(config).unwrap();
         let dir_path =
             camino::Utf8Path::from_path(temp_dir.path()).expect("path should be valid UTF-8");
 
@@ -601,7 +610,8 @@ mod tests {
             framework: "sqlx".to_string(),
             enable_checks: vec!["AddIndexCheck".to_string()],
             ..Default::default()
-        });
+        })
+        .unwrap();
         let dir_path =
             camino::Utf8Path::from_path(temp_dir.path()).expect("path should be valid UTF-8");
 
@@ -632,7 +642,8 @@ mod tests {
             framework: "sqlx".to_string(),
             enable_checks: vec!["AddIndexCheck".to_string()],
             ..Default::default()
-        });
+        })
+        .unwrap();
         let dir_path =
             camino::Utf8Path::from_path(temp_dir.path()).expect("path should be valid UTF-8");
 
@@ -651,6 +662,7 @@ mod tests {
             enable_checks: vec!["DropColumnCheck".to_string()],
             ..Default::default()
         })
+        .unwrap()
     }
 
     fn violation_lines(checker: &SafetyChecker, sql: &str) -> Vec<usize> {
@@ -709,7 +721,7 @@ mod tests {
 
     #[test]
     fn test_registry_returns_inner_registry() {
-        let checker = SafetyChecker::new();
+        let checker = SafetyChecker::default();
         assert_eq!(
             checker.registry().active_check_names().len(),
             Registry::builtin_check_names().len()
@@ -730,7 +742,8 @@ mod tests {
         let checker = SafetyChecker::with_config(Config {
             enable_checks: vec!["DropTableCheck".to_string()],
             ..Config::default()
-        });
+        })
+        .unwrap();
         let path = Utf8Path::from_path(&file).unwrap();
         let results = checker.check_path(path).unwrap();
         assert!(results.is_empty(), "Safe SQL should produce no violations");
@@ -744,7 +757,8 @@ mod tests {
         let checker = SafetyChecker::with_config(Config {
             enable_checks: vec!["DropTableCheck".to_string()],
             ..Config::default()
-        });
+        })
+        .unwrap();
         let path = Utf8Path::from_path(&file).unwrap();
         let results = checker.check_path(path).unwrap();
         assert_eq!(results.len(), 1, "Expected one file with violations");
@@ -754,7 +768,7 @@ mod tests {
 
     #[test]
     fn test_check_sql_warns_on_duplicate_migration_disabled_checks() {
-        let checker = SafetyChecker::with_config(Config::default());
+        let checker = SafetyChecker::default();
         // Duplicate name in disable directive — warn_unknown_migration_disabled_checks deduplicates.
         let sql = "-- diesel-guard:disable AddColumnCheck,AddColumnCheck\nALTER TABLE t ADD COLUMN x TEXT;";
         // Should not panic or error; just runs (warning goes to stderr).
@@ -763,7 +777,7 @@ mod tests {
 
     #[test]
     fn test_check_sql_warns_on_unknown_migration_disabled_check() {
-        let checker = SafetyChecker::with_config(Config::default());
+        let checker = SafetyChecker::default();
         // FakeCheck is not a known check name — triggers the eprintln warning path.
         let sql =
             "-- diesel-guard:disable FakeCheckThatDoesNotExist\nALTER TABLE t ADD COLUMN x TEXT;";

@@ -6,6 +6,7 @@ fn only(check_name: &str) -> SafetyChecker {
         enable_checks: vec![check_name.to_string()],
         ..Config::default()
     })
+    .unwrap()
 }
 
 #[test]
@@ -393,7 +394,8 @@ fn test_format_json_end_to_end() {
     let checker = SafetyChecker::with_config(Config {
         enable_checks: vec!["DropColumnCheck".to_string()],
         ..Default::default()
-    });
+    })
+    .unwrap();
     let sql = "SELECT 1;\nALTER TABLE users DROP COLUMN email;";
     let violations = checker.check_sql(sql).unwrap();
 
@@ -622,7 +624,7 @@ fn checker_with_custom_checks(
         custom_checks_dir: Some(custom_dir.to_str().unwrap().to_string()),
         ..Config::default()
     };
-    let checker = SafetyChecker::with_config(config.clone());
+    let checker = SafetyChecker::with_config(config.clone()).unwrap();
     // Verify the custom check was loaded
     let check_stem = script_name.trim_end_matches(".rhai");
     let loaded = checker

@@ -15,7 +15,7 @@ fn test_invalid_start_after_returns_error() {
         start_after: Some("not-a-timestamp".to_string()),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let err = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap_err();
@@ -49,6 +49,7 @@ fn test_concurrently_violations_include_sqlx_transaction_hint() {
         ..Default::default()
     };
     let results = SafetyChecker::with_config(config)
+        .unwrap()
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
 
@@ -104,7 +105,7 @@ fn test_sqlx_numeric_version_comparison() {
         start_after: Some("2".to_string()),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -133,7 +134,7 @@ fn test_sqlx_single_file_format_no_markers() {
         framework: "sqlx".to_string(),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -168,7 +169,7 @@ fn test_sqlx_start_after_with_suffix_format() {
         start_after: Some("1".to_string()),
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config);
+    let checker = SafetyChecker::with_config(config).unwrap();
     let results = checker
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -199,7 +200,7 @@ fn test_sqlx_check_down_suffix_format() {
         check_down: false,
         ..Default::default()
     };
-    let checker_no_down = SafetyChecker::with_config(config_no_down);
+    let checker_no_down = SafetyChecker::with_config(config_no_down).unwrap();
     let results_no_down = checker_no_down
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -213,7 +214,7 @@ fn test_sqlx_check_down_suffix_format() {
         check_down: true,
         ..Default::default()
     };
-    let checker_down = SafetyChecker::with_config(config_down);
+    let checker_down = SafetyChecker::with_config(config_down).unwrap();
     let results_down = checker_down
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
@@ -249,6 +250,7 @@ ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;
         ..Default::default()
     };
     let results = SafetyChecker::with_config(config)
+        .unwrap()
         .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap())
         .unwrap();
 
