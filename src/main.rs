@@ -128,11 +128,11 @@ EXAMPLES:
   diesel-guard dump-ast --file migrations/20240101/up.sql")]
     DumpAst {
         /// SQL string to parse
-        #[arg(long)]
+        #[arg(long, conflicts_with = "file", required_unless_present = "file")]
         sql: Option<String>,
 
         /// Path to a .sql file to parse
-        #[arg(long)]
+        #[arg(long, conflicts_with = "sql", required_unless_present = "sql")]
         file: Option<Utf8PathBuf>,
     },
 
@@ -231,10 +231,7 @@ fn main() -> Result<()> {
                 (None, Some(path)) => fs::read_to_string(&path)
                     .into_diagnostic()
                     .map_err(|e| miette::miette!("Failed to read file '{}': {}", path, e))?,
-                (None, None) => {
-                    eprintln!("Error: provide either --sql or --file");
-                    exit(1);
-                }
+                (None, None) => unreachable!(),
             };
 
             let json = ast_dump::dump_ast(&sql_input)?;
