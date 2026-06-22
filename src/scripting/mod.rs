@@ -13,7 +13,7 @@ mod scope;
 
 use discovery::discover_custom_check_files;
 #[cfg(test)]
-use discovery::process_custom_check_dir_entry;
+use discovery::{process_custom_check_dir_entry, readable_custom_check_entry};
 #[cfg(test)]
 use engine::create_engine;
 pub use load::load_custom_checks;

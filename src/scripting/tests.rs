@@ -340,6 +340,20 @@ fn test_load_custom_checks_respects_disable() {
 }
 
 #[test]
+fn test_custom_check_names_lists_rhai_file_stems() {
+    let dir = tempdir().expect("Failed to create temp dir");
+    let dir_path = Utf8Path::from_path(dir.path()).unwrap();
+    fs::write(dir.path().join("zeta.rhai"), "return;").unwrap();
+    fs::write(dir.path().join("alpha.rhai"), "return;").unwrap();
+    fs::write(dir.path().join("notes.txt"), "return;").unwrap();
+
+    assert_eq!(
+        custom_check_names(dir_path),
+        vec!["alpha".to_string(), "zeta".to_string()]
+    );
+}
+
+#[test]
 fn test_load_custom_checks_nonexistent_directory() {
     let dir = tempdir().expect("Failed to create temp dir");
     let missing = dir.path().join("does_not_exist");
@@ -423,6 +437,21 @@ fn test_load_custom_checks_unreadable_file() {
     assert_eq!(checks.len(), 0);
     assert_eq!(errors.len(), 1);
     assert!(errors[0].message.contains("not a regular file"));
+}
+
+#[test]
+fn test_load_custom_checks_reports_invalid_utf8_script_source() {
+    let dir = tempdir().expect("Failed to create temp dir");
+    let dir_path = Utf8Path::from_path(dir.path()).unwrap();
+    fs::write(dir.path().join("invalid_utf8.rhai"), [0xff]).unwrap();
+
+    let config = crate::config::Config::default();
+    let (checks, errors) = load_custom_checks(dir_path, &config);
+
+    assert!(checks.is_empty());
+    assert_eq!(errors.len(), 1);
+    assert!(errors[0].file.contains("invalid_utf8.rhai"));
+    assert!(errors[0].message.contains("Failed to read"));
 }
 
 #[cfg(unix)]
@@ -522,6 +551,51 @@ fn test_process_custom_check_dir_entry_allows_non_rhai_entries() {
     ));
     assert!(files.is_empty());
     assert!(errors.is_empty());
+}
+
+#[test]
+fn test_process_custom_check_dir_entry_stops_at_entry_limit() {
+    let dir = tempdir().expect("Failed to create temp dir");
+    let dir_path = Utf8Path::from_path(dir.path()).unwrap();
+    fs::write(dir.path().join("extra.rhai"), "return;").unwrap();
+    let entry = fs::read_dir(dir.path()).unwrap().next().unwrap();
+    let mut files = Vec::new();
+    let mut errors = Vec::new();
+
+    assert!(!process_custom_check_dir_entry(
+        dir_path,
+        MAX_CUSTOM_CHECK_DIR_ENTRIES,
+        entry,
+        &mut files,
+        &mut errors
+    ));
+    assert!(files.is_empty());
+    assert_eq!(errors.len(), 1);
+    assert!(
+        errors[0]
+            .message
+            .contains("Custom checks directory has more than")
+    );
+    assert!(errors[0].message.contains("entries"));
+}
+
+#[test]
+fn test_readable_custom_check_entry_reports_read_dir_errors() {
+    let dir = tempdir().expect("Failed to create temp dir");
+    let dir_path = Utf8Path::from_path(dir.path()).unwrap();
+    let mut errors = Vec::new();
+    let entry_error = std::io::Error::other("entry read failed");
+
+    let entry = readable_custom_check_entry(dir_path, Err(entry_error), &mut errors);
+
+    assert!(entry.is_none());
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].file, dir_path.to_string());
+    assert!(
+        errors[0]
+            .message
+            .contains("Failed to read directory entry: entry read failed")
+    );
 }
 
 #[test]
