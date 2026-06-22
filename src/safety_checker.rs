@@ -126,7 +126,7 @@ impl SafetyChecker {
                 .any(|known| known.as_str() == name)
             {
                 eprintln!(
-                    "Warning: Unknown check name '{name}' in {source}. Run --list-checks to see available checks."
+                    "Warning: Unknown check name '{name}' in {source}. Run list-checks to see available checks."
                 );
             }
         }
