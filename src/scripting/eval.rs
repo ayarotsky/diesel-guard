@@ -8,7 +8,7 @@ use rhai::Dynamic;
 impl CustomCheck {
     fn evaluate_custom_check(&self, scope: &mut rhai::Scope<'_>) -> Vec<Violation> {
         match self.engine.eval_ast_with_scope::<Dynamic>(scope, &self.ast) {
-            Ok(result) => parse_script_result(&self.name, result),
+            Ok(result) => parse_script_result(self.name, result),
             Err(err) => vec![self.runtime_error_violation(&err)],
         }
     }
