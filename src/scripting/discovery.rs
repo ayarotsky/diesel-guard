@@ -129,7 +129,16 @@ pub(super) fn custom_check_entry_is_regular_file(
     path: &std::path::Path,
     errors: &mut Vec<ScriptError>,
 ) -> bool {
-    let file_type = match entry.file_type() {
+    custom_check_file_type_is_regular(entry.file_type(), path, errors)
+}
+
+/// Verify that a resolved `.rhai` entry type is a regular file.
+pub(super) fn custom_check_file_type_is_regular(
+    file_type: std::io::Result<std::fs::FileType>,
+    path: &std::path::Path,
+    errors: &mut Vec<ScriptError>,
+) -> bool {
+    let file_type = match file_type {
         Ok(file_type) => file_type,
         Err(e) => {
             errors.push(ScriptError {

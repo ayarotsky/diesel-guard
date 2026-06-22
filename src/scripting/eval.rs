@@ -22,6 +22,18 @@ impl CustomCheck {
             "Fix the custom check script to eliminate the runtime error.",
         )
     }
+
+    /// Evaluate this check after preparing its Rhai scope.
+    pub(super) fn check_with_scope_result(
+        &self,
+        scope: std::result::Result<rhai::Scope<'static>, String>,
+    ) -> Vec<Violation> {
+        let mut scope = match scope {
+            Ok(scope) => scope,
+            Err(err) => return self.internal_error(&err),
+        };
+        self.evaluate_custom_check(&mut scope)
+    }
 }
 
 impl Check for CustomCheck {
@@ -52,10 +64,6 @@ impl Check for CustomCheck {
 
     /// Run the custom check against one parsed PostgreSQL AST node.
     fn check(&self, node: &NodeEnum, config: &Config, ctx: &MigrationContext) -> Vec<Violation> {
-        let mut scope = match Self::script_scope(node, config, ctx) {
-            Ok(scope) => scope,
-            Err(err) => return self.internal_error(&err),
-        };
-        self.evaluate_custom_check(&mut scope)
+        self.check_with_scope_result(Self::script_scope(node, config, ctx))
     }
 }

@@ -628,6 +628,27 @@ fn test_readable_custom_check_entry_reports_read_dir_errors() {
 }
 
 #[test]
+/// Verifies that file type inspection failures are recorded.
+fn test_custom_check_file_type_is_regular_reports_inspection_errors() {
+    let mut errors = Vec::new();
+    let path = PathBuf::from("broken.rhai");
+    let inspect_error = std::io::Error::other("metadata unavailable");
+
+    assert!(!custom_check_file_type_is_regular(
+        Err(inspect_error),
+        &path,
+        &mut errors
+    ));
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].file, "broken.rhai");
+    assert!(
+        errors[0]
+            .message
+            .contains("Failed to inspect file type: metadata unavailable")
+    );
+}
+
+#[test]
 /// Verifies that directory scanning stops at the custom check file limit.
 fn test_process_custom_check_dir_entry_stops_at_file_limit() {
     let dir = tempdir().expect("Failed to create temp dir");
@@ -782,6 +803,25 @@ fn test_internal_error_yields_script_error_violation() {
     let v = &violations[0];
     assert_eq!(v.operation, "SCRIPT ERROR: test_check");
     assert_eq!(v.problem, "Error in custom check 'test_check': boom");
+    assert_eq!(
+        v.safe_alternative,
+        "This is likely a diesel-guard bug. Please report it."
+    );
+}
+
+#[test]
+/// Verifies that scope preparation errors stop script evaluation.
+fn test_check_with_scope_result_yields_internal_error_violation() {
+    let check = make_test_check();
+    let violations = check.check_with_scope_result(Err("scope failed".to_string()));
+
+    assert_eq!(violations.len(), 1);
+    let v = &violations[0];
+    assert_eq!(v.operation, "SCRIPT ERROR: test_check");
+    assert_eq!(
+        v.problem,
+        "Error in custom check 'test_check': scope failed"
+    );
     assert_eq!(
         v.safe_alternative,
         "This is likely a diesel-guard bug. Please report it."
