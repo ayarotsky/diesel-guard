@@ -126,6 +126,10 @@ pub trait MigrationAdapter: Send + Sync {
     fn extract_migration_metadata(&self, file_path: &Utf8Path) -> MigrationContext;
 }
 
+pub(crate) fn normalize_timestamp(ts: &str) -> String {
+    ts.replace(['_', '-'], "")
+}
+
 /// Check if migration should be checked based on start_after filter.
 ///
 /// Returns true if the migration should be checked (timestamp is after the filter).
@@ -135,8 +139,8 @@ pub(crate) fn should_check_migration(start_after: Option<&str>, migration_timest
     };
 
     // Normalize both timestamps by removing separators
-    let start_normalized = start_after.replace(['_', '-'], "");
-    let migration_normalized = migration_timestamp.replace(['_', '-'], "");
+    let start_normalized = normalize_timestamp(start_after);
+    let migration_normalized = normalize_timestamp(migration_timestamp);
 
     // If both are purely numeric, compare as integers to handle variable-width
     // version numbers (e.g. "2" vs "10"). Otherwise fall back to string comparison

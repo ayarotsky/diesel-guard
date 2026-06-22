@@ -10,7 +10,7 @@
 
 use super::{
     MigrationAdapter, MigrationContext, MigrationFile, Result, collect_and_sort_entries,
-    is_single_migration_dir, should_check_migration,
+    is_single_migration_dir, normalize_timestamp, should_check_migration,
 };
 use camino::Utf8Path;
 use regex::Regex;
@@ -81,7 +81,7 @@ impl MigrationAdapter for DieselAdapter {
         DIESEL_TIMESTAMP_REGEX
             .captures(name)
             .and_then(|cap| cap.get(1))
-            .map(|m| m.as_str().replace(['_', '-'], ""))
+            .map(|m| normalize_timestamp(m.as_str()))
     }
 
     fn validate_timestamp(&self, timestamp: &str) -> Result<()> {
