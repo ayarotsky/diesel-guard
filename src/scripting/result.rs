@@ -23,6 +23,7 @@ pub(super) fn parse_script_result(check_name: &str, result: Dynamic) -> Vec<Viol
     vec![invalid_script_result_violation(check_name, &result)]
 }
 
+/// Parse an array return value into one violation per element.
 pub(super) fn array_script_violations(check_name: &str, result: Dynamic) -> Vec<Violation> {
     result
         .into_array()
@@ -32,6 +33,7 @@ pub(super) fn array_script_violations(check_name: &str, result: Dynamic) -> Vec<
         .collect()
 }
 
+/// Build a script error violation for an unsupported Rhai return type.
 pub(super) fn invalid_script_result_violation(check_name: &str, result: &Dynamic) -> Violation {
     Violation::new(
         format!("SCRIPT ERROR: {check_name}"),
@@ -53,6 +55,7 @@ pub(super) fn map_to_violation(check_name: &str, value: Dynamic) -> Violation {
     violation_from_map_fields(&map).unwrap_or_else(|| invalid_map_violation(check_name, &map))
 }
 
+/// Convert valid required map fields into a violation.
 pub(super) fn violation_from_map_fields(map: &rhai::Map) -> Option<Violation> {
     let operation = string_map_field(map, "operation");
     let problem = string_map_field(map, "problem");
@@ -64,11 +67,13 @@ pub(super) fn violation_from_map_fields(map: &rhai::Map) -> Option<Violation> {
     }
 }
 
+/// Read a required string field from a Rhai map.
 pub(super) fn string_map_field(map: &rhai::Map, key: &str) -> Option<String> {
     map.get(key)
         .and_then(|value| value.clone().into_string().ok())
 }
 
+/// Build a script error violation for a map with missing or invalid fields.
 pub(super) fn invalid_map_violation(check_name: &str, map: &rhai::Map) -> Violation {
     Violation::new(
         format!("SCRIPT ERROR: {check_name}"),
@@ -80,6 +85,7 @@ pub(super) fn invalid_map_violation(check_name: &str, map: &rhai::Map) -> Violat
     )
 }
 
+/// List all missing or invalid required fields in a Rhai map.
 pub(super) fn invalid_map_issues(map: &rhai::Map) -> Vec<String> {
     ["operation", "problem", "safe_alternative"]
         .into_iter()
@@ -87,6 +93,7 @@ pub(super) fn invalid_map_issues(map: &rhai::Map) -> Vec<String> {
         .collect()
 }
 
+/// Describe why one required map field is invalid.
 pub(super) fn invalid_map_issue(map: &rhai::Map, key: &str) -> Option<String> {
     match map.get(key) {
         None => Some(format!("'{key}' is missing")),
@@ -98,6 +105,7 @@ pub(super) fn invalid_map_issue(map: &rhai::Map, key: &str) -> Option<String> {
     }
 }
 
+/// Build a script error violation for an array element that is not a map.
 pub(super) fn non_map_array_element_violation(check_name: &str, type_name: &str) -> Violation {
     Violation::new(
         format!("SCRIPT ERROR: {check_name}"),

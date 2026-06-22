@@ -6,6 +6,7 @@ use pg_query::protobuf::node::Node as NodeEnum;
 use rhai::Dynamic;
 
 impl CustomCheck {
+    /// Evaluate the compiled Rhai script and parse its return value.
     fn evaluate_custom_check(&self, scope: &mut rhai::Scope<'_>) -> Vec<Violation> {
         match self.engine.eval_ast_with_scope::<Dynamic>(scope, &self.ast) {
             Ok(result) => parse_script_result(self.name, result),
@@ -13,6 +14,7 @@ impl CustomCheck {
         }
     }
 
+    /// Build a violation for a runtime error raised by the Rhai script.
     fn runtime_error_violation(&self, err: &dyn std::fmt::Display) -> Violation {
         Violation::new(
             format!("SCRIPT ERROR: {}", self.name),

@@ -63,6 +63,7 @@ pub struct CustomCheck {
     path: String,
 }
 
+/// Return custom check names discovered from `.rhai` files in a directory.
 pub fn custom_check_names(dir: &Utf8Path) -> Vec<String> {
     let (files, _errors) = discover_custom_check_files(dir);
     files.into_iter().map(|file| file.stem).collect()
