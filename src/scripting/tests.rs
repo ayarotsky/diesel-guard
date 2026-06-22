@@ -585,7 +585,9 @@ fn test_load_custom_checks_rejects_total_source_bytes() {
         "let x = 1;{}",
         " ".repeat(usize::try_from(MAX_CUSTOM_CHECK_SOURCE_BYTES).unwrap() - 10)
     );
-    for index in 0..33 {
+    let script_len = u64::try_from(script.len()).unwrap();
+    let files_needed = (MAX_CUSTOM_CHECK_TOTAL_SOURCE_BYTES / script_len) + 1;
+    for index in 0..files_needed {
         fs::write(dir.path().join(format!("check_{index}.rhai")), &script).unwrap();
     }
 
