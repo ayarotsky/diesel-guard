@@ -48,7 +48,7 @@ impl Check for DropColumnCheck {
    UPDATE {table} SET {column} = NULL;
 
 4. Drop the column in a later migration after confirming it's unused:
-   ALTER TABLE {table} DROP COLUMN {column}{if_exists};
+   ALTER TABLE {table} DROP COLUMN{if_exists} {column};
 
 Note: Postgres doesn't support DROP COLUMN CONCURRENTLY. The rewrite is unavoidable but staging the removal reduces risk.",
                         table = table_name,
@@ -107,6 +107,22 @@ mod tests {
         assert_allows!(
             DropColumnCheck,
             "CREATE TABLE users (id SERIAL PRIMARY KEY);"
+        );
+    }
+
+    #[test]
+    fn test_drop_column_if_exists_remediation_sql() {
+        use crate::checks::test_utils::parse_sql;
+        let stmt = parse_sql("ALTER TABLE users DROP COLUMN IF EXISTS email;");
+        let violations =
+            DropColumnCheck.check(&stmt, &Config::default(), &MigrationContext::default());
+        assert_eq!(violations.len(), 1);
+        assert!(
+            violations[0]
+                .safe_alternative
+                .contains("DROP COLUMN IF EXISTS email"),
+            "Expected 'DROP COLUMN IF EXISTS email' but got:\n{}",
+            violations[0].safe_alternative
         );
     }
 }
