@@ -1,5 +1,5 @@
 use crate::checks::pg_helpers::{NodeEnum, range_var_name};
-use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
+use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc, unique_prefix};
 use crate::violation::Violation;
 
 pub struct IdempotencyIndexCheck;
@@ -34,6 +34,7 @@ impl Check for IdempotencyIndexCheck {
         } else {
             ""
         };
+        let unique_str = unique_prefix(index_stmt.unique);
 
         vec![Violation::new(
             "CREATE INDEX without IF NOT EXISTS",
@@ -41,7 +42,7 @@ impl Check for IdempotencyIndexCheck {
                 "CREATE INDEX '{index}' on table '{table}' is not idempotent. If this migration is retried after a partial failure, it can error because the index already exists.",
             ),
             format!(
-                "Use IF NOT EXISTS to make retries safe:\n   CREATE INDEX{concurrently} IF NOT EXISTS {suggested_index_name} ON {table} (...);"
+                "Use IF NOT EXISTS to make retries safe:\n   CREATE {unique_str}INDEX{concurrently} IF NOT EXISTS {suggested_index_name} ON {table} (...);"
             ),
         )]
     }
@@ -67,6 +68,28 @@ mod tests {
             IdempotencyIndexCheck,
             "CREATE INDEX ON users(email);",
             "CREATE INDEX without IF NOT EXISTS"
+        );
+    }
+
+    #[test]
+    fn test_detects_create_unique_index_without_if_not_exists() {
+        assert_detects_violation!(
+            IdempotencyIndexCheck,
+            "CREATE UNIQUE INDEX idx_users_email ON users(email);",
+            "CREATE INDEX without IF NOT EXISTS"
+        );
+    }
+
+    #[test]
+    fn test_safe_alternative_preserves_unique_keyword() {
+        use crate::checks::test_utils::parse_sql;
+        let stmt = parse_sql("CREATE UNIQUE INDEX idx_users_email ON users(email);");
+        let violations =
+            IdempotencyIndexCheck.check(&stmt, &Config::default(), &MigrationContext::default());
+        assert_eq!(violations.len(), 1);
+        assert_eq!(
+            violations[0].safe_alternative,
+            "Use IF NOT EXISTS to make retries safe:\n   CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (...);"
         );
     }
 
