@@ -444,6 +444,10 @@ mod tests {
             violations[1].problem,
             "Custom check returned a non-map array element: expected a map, got string"
         );
+        assert_eq!(
+            violations[1].safe_alternative,
+            "Fix the custom check script to return maps with operation, problem, and safe_alternative keys."
+        );
     }
 
     #[test]
