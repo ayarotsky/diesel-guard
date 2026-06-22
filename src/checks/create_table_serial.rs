@@ -6,7 +6,7 @@
 
 use crate::checks::pg_helpers::{
     ConstrType, NodeEnum, column_has_constraint, column_type_name, is_serial_pattern,
-    range_var_name,
+    range_var_name, serial_to_integer_type,
 };
 use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
@@ -108,14 +108,6 @@ fn column_constraint_context(
     }
 }
 
-fn identity_sql_type(serial_type: &str) -> &'static str {
-    match serial_type {
-        "smallserial" => "SMALLINT",
-        "bigserial" => "BIGINT",
-        _ => "INTEGER",
-    }
-}
-
 fn safe_alternative(
     table_name: &str,
     column_name: &str,
@@ -124,7 +116,7 @@ fn safe_alternative(
     config: &Config,
     constraint_context: ColumnConstraintContext,
 ) -> String {
-    let data_type = identity_sql_type(serial_type);
+    let data_type = serial_to_integer_type(serial_type);
     let suffix = inline_constraint_suffix(col, constraint_context);
 
     if config.postgres_version.is_some_and(|version| version < 10) {

@@ -13,6 +13,7 @@
 
 use crate::checks::pg_helpers::{
     NodeEnum, alter_table_cmds, cmd_def_as_column_def, column_type_name, is_serial_pattern,
+    serial_to_integer_type,
 };
 use crate::checks::{Check, CheckDoc, Config, MigrationContext, impl_check_doc};
 use crate::violation::Violation;
@@ -36,6 +37,7 @@ impl Check for AddSerialColumnCheck {
 
                 let column_name = &col.colname;
                 let type_name = column_type_name(col);
+                let integer_type = serial_to_integer_type(&type_name);
 
                 Some(Violation::new(
                     "ADD COLUMN with SERIAL",
@@ -47,7 +49,7 @@ impl Check for AddSerialColumnCheck {
    CREATE SEQUENCE {table_name}_{column_name}_seq;
 
 2. Add the column WITHOUT default (fast, no rewrite):
-   ALTER TABLE {table_name} ADD COLUMN {column_name} {type_name};
+   ALTER TABLE {table_name} ADD COLUMN {column_name} {integer_type};
 
 3. Backfill existing rows in batches (outside migration):
    UPDATE {table_name} SET {column_name} = nextval('{table_name}_{column_name}_seq') WHERE {column_name} IS NULL;
@@ -70,6 +72,7 @@ impl Check for AddSerialColumnCheck {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::checks::test_utils::parse_sql;
     use crate::{assert_allows, assert_detects_violation};
 
     #[test]
@@ -121,5 +124,25 @@ mod tests {
             AddSerialColumnCheck,
             "CREATE INDEX idx_users_email ON users(email);"
         );
+    }
+
+    #[test]
+    fn test_remediation_uses_plain_integer_types() {
+        let cases = [
+            ("ALTER TABLE t ADD COLUMN id SERIAL;", "INTEGER"),
+            ("ALTER TABLE t ADD COLUMN id BIGSERIAL;", "BIGINT"),
+            ("ALTER TABLE t ADD COLUMN id SMALLSERIAL;", "SMALLINT"),
+        ];
+        for (sql, expected_type) in cases {
+            let stmt = parse_sql(sql);
+            let violations =
+                AddSerialColumnCheck.check(&stmt, &Config::default(), &MigrationContext::default());
+            assert_eq!(violations.len(), 1);
+            let alt = &violations[0].safe_alternative;
+            assert!(
+                alt.contains(&format!("ADD COLUMN id {expected_type}")),
+                "expected {expected_type} in remediation for `{sql}`, got: {alt}"
+            );
+        }
     }
 }
