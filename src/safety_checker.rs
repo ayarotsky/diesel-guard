@@ -153,10 +153,8 @@ impl SafetyChecker {
     pub fn check_file(&self, path: &Utf8Path) -> Result<ViolationList> {
         let sql = fs::read_to_string(path)?;
 
-        let ctx = self
-            .adapter()
-            .map(|a| a.extract_migration_metadata(path))
-            .unwrap_or_default();
+        let adapter = self.adapter()?;
+        let ctx = adapter.extract_migration_metadata(path);
 
         match parser::parse_with_metadata(&sql) {
             Ok(parsed) => {
@@ -380,6 +378,37 @@ mod tests {
         let result = checker.check_directory(camino::Utf8Path::new("."));
         assert_eq!(
             result.unwrap_err().to_string(),
+            "Invalid framework \"unknown\". Expected \"diesel\" or \"sqlx\"."
+        );
+    }
+
+    #[test]
+    fn test_check_file_unknown_framework_returns_error() {
+        use std::fs;
+
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let file_path = temp_dir.path().join("migration.sql");
+        fs::write(&file_path, "ALTER TABLE users ADD COLUMN email TEXT;").unwrap();
+
+        let checker = SafetyChecker::with_config(Config {
+            framework: "unknown".to_string(),
+            ..Default::default()
+        })
+        .unwrap();
+        let path = camino::Utf8Path::from_path(&file_path).unwrap();
+
+        // check_file must propagate the invalid-framework error rather than
+        // silently falling back to default metadata.
+        let err = checker.check_file(path).unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Invalid framework \"unknown\". Expected \"diesel\" or \"sqlx\"."
+        );
+
+        // check_path on a file routes through check_file, so it must error too.
+        let err = checker.check_path(path).unwrap_err();
+        assert_eq!(
+            err.to_string(),
             "Invalid framework \"unknown\". Expected \"diesel\" or \"sqlx\"."
         );
     }
