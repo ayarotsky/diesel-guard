@@ -50,6 +50,7 @@ fn run_script_with_ctx(
 }
 
 #[test]
+/// Verifies that unit script results produce no violations.
 fn test_script_returns_unit_no_violations() {
     let violations = run_script(
         r"
@@ -63,6 +64,7 @@ fn test_script_returns_unit_no_violations() {
 }
 
 #[test]
+/// Verifies that a map script result produces one violation.
 fn test_script_returns_map_one_violation() {
     let violations = run_script(
         r#"
@@ -84,6 +86,7 @@ fn test_script_returns_map_one_violation() {
 }
 
 #[test]
+/// Verifies that an array of map script results produces multiple violations.
 fn test_script_returns_array_multiple_violations() {
     let violations = run_script(
         r#"
@@ -102,6 +105,7 @@ fn test_script_returns_array_multiple_violations() {
 }
 
 #[test]
+/// Verifies that non-map array elements are reported as script errors.
 fn test_script_array_with_non_map_element_produces_error_violation() {
     let violations = run_script(
         r#"
@@ -126,6 +130,7 @@ fn test_script_array_with_non_map_element_produces_error_violation() {
 }
 
 #[test]
+/// Verifies that unsupported scalar script results produce script errors.
 fn test_script_invalid_return_type_no_crash() {
     // Returning a string instead of map — should produce an error violation
     let violations = run_script(
@@ -139,6 +144,7 @@ fn test_script_invalid_return_type_no_crash() {
 }
 
 #[test]
+/// Verifies that infinite scripts hit the Rhai operation limit.
 fn test_script_infinite_loop_hits_max_operations() {
     // Engine's max_operations limit should kick in and surface as a SCRIPT ERROR
     let violations = run_script(
@@ -156,6 +162,7 @@ fn test_script_infinite_loop_hits_max_operations() {
 }
 
 #[test]
+/// Verifies that scripts ignore nodes of the wrong AST type.
 fn test_script_wrong_node_type_returns_unit() {
     // Script looks for CreateStmt but we give it an IndexStmt
     let violations = run_script(
@@ -170,6 +177,7 @@ fn test_script_wrong_node_type_returns_unit() {
 }
 
 #[test]
+/// Verifies that invalid Rhai source fails compilation.
 fn test_compilation_error_reported() {
     let engine = Arc::new(create_engine());
     let result = engine.compile("this is not valid rhai {{{");
@@ -177,6 +185,7 @@ fn test_compilation_error_reported() {
 }
 
 #[test]
+/// Verifies loading valid scripts and reporting invalid scripts from a directory.
 fn test_load_custom_checks_from_directory() {
     let dir = tempdir().expect("Failed to create temp dir");
     let dir_path = Utf8Path::from_path(dir.path()).unwrap();
@@ -213,6 +222,7 @@ fn test_load_custom_checks_from_directory() {
 }
 
 #[test]
+/// Verifies that an empty script produces no violations.
 fn test_empty_script_no_violations() {
     // An empty .rhai file evaluates to () — should produce no violations
     let violations = run_script("", "CREATE INDEX idx ON users(email);");
@@ -220,6 +230,7 @@ fn test_empty_script_no_violations() {
 }
 
 #[test]
+/// Verifies that maps missing required keys produce script errors.
 fn test_map_with_missing_keys_produces_error_violation() {
     // Map missing "safe_alternative" — should produce an error violation
     let violations = run_script(
@@ -237,6 +248,7 @@ fn test_map_with_missing_keys_produces_error_violation() {
 }
 
 #[test]
+/// Verifies that misspelled required keys are reported as missing keys.
 fn test_map_with_misspelled_key_produces_error_violation() {
     // Unrecognized key "safe_alt" instead of "safe_alternative"
     let violations = run_script(
@@ -254,6 +266,7 @@ fn test_map_with_misspelled_key_produces_error_violation() {
 }
 
 #[test]
+/// Verifies that PostgreSQL object constants are available to scripts.
 fn test_pg_constants_accessible_in_scripts() {
     let violations = run_script(
         r#"
@@ -270,6 +283,7 @@ fn test_pg_constants_accessible_in_scripts() {
 }
 
 #[test]
+/// Verifies that config values are available to scripts.
 fn test_config_postgres_version_accessible_in_scripts() {
     let config = crate::config::Config {
         postgres_version: Some(14),
@@ -307,6 +321,7 @@ fn test_config_postgres_version_accessible_in_scripts() {
 }
 
 #[test]
+/// Verifies that PostgreSQL constants do not match unrelated node types.
 fn test_pg_constants_no_match() {
     // Script checks for OBJECT_TABLE but SQL drops an index — should not match
     let violations = run_script(
@@ -323,6 +338,7 @@ fn test_pg_constants_no_match() {
 }
 
 #[test]
+/// Verifies that disabled custom checks are skipped during loading.
 fn test_load_custom_checks_respects_disable() {
     let dir = tempdir().expect("Failed to create temp dir");
     let dir_path = Utf8Path::from_path(dir.path()).unwrap();
@@ -340,6 +356,7 @@ fn test_load_custom_checks_respects_disable() {
 }
 
 #[test]
+/// Verifies that custom check names come from sorted `.rhai` file stems.
 fn test_custom_check_names_lists_rhai_file_stems() {
     let dir = tempdir().expect("Failed to create temp dir");
     let dir_path = Utf8Path::from_path(dir.path()).unwrap();
@@ -354,6 +371,7 @@ fn test_custom_check_names_lists_rhai_file_stems() {
 }
 
 #[test]
+/// Verifies that missing custom check directories report a read error.
 fn test_load_custom_checks_nonexistent_directory() {
     let dir = tempdir().expect("Failed to create temp dir");
     let missing = dir.path().join("does_not_exist");
@@ -366,6 +384,7 @@ fn test_load_custom_checks_nonexistent_directory() {
 }
 
 #[test]
+/// Verifies that transaction context can suppress a script violation.
 fn test_ctx_run_in_transaction_false_no_violation() {
     // CONCURRENTLY outside a transaction — no violation
     let ctx = crate::checks::MigrationContext {
@@ -389,6 +408,7 @@ fn test_ctx_run_in_transaction_false_no_violation() {
 }
 
 #[test]
+/// Verifies that transaction context can produce a script violation.
 fn test_ctx_run_in_transaction_true_produces_violation() {
     // CONCURRENTLY inside a transaction — should flag it
     let ctx = crate::checks::MigrationContext {
@@ -422,6 +442,7 @@ fn test_ctx_run_in_transaction_true_produces_violation() {
 }
 
 #[test]
+/// Verifies that non-file `.rhai` paths are rejected.
 fn test_load_custom_checks_unreadable_file() {
     let dir = tempdir().expect("Failed to create temp dir");
     let dir_path = Utf8Path::from_path(dir.path()).unwrap();
@@ -440,6 +461,7 @@ fn test_load_custom_checks_unreadable_file() {
 }
 
 #[test]
+/// Verifies that invalid UTF-8 script source is reported as a read error.
 fn test_load_custom_checks_reports_invalid_utf8_script_source() {
     let dir = tempdir().expect("Failed to create temp dir");
     let dir_path = Utf8Path::from_path(dir.path()).unwrap();
@@ -456,6 +478,7 @@ fn test_load_custom_checks_reports_invalid_utf8_script_source() {
 
 #[cfg(unix)]
 #[test]
+/// Verifies that symlinked `.rhai` paths are rejected on Unix.
 fn test_load_custom_checks_rejects_symlink() {
     let dir = tempdir().expect("Failed to create temp dir");
     let dir_path = Utf8Path::from_path(dir.path()).unwrap();
@@ -473,6 +496,7 @@ fn test_load_custom_checks_rejects_symlink() {
 }
 
 #[test]
+/// Verifies that oversized scripts are rejected.
 fn test_load_custom_checks_rejects_oversized_script() {
     let dir = tempdir().expect("Failed to create temp dir");
     let dir_path = Utf8Path::from_path(dir.path()).unwrap();
@@ -496,6 +520,7 @@ fn test_load_custom_checks_rejects_oversized_script() {
 }
 
 #[test]
+/// Verifies that directories with too many scripts report an error.
 fn test_load_custom_checks_rejects_too_many_scripts() {
     let dir = tempdir().expect("Failed to create temp dir");
     let dir_path = Utf8Path::from_path(dir.path()).unwrap();
@@ -514,6 +539,7 @@ fn test_load_custom_checks_rejects_too_many_scripts() {
 }
 
 #[test]
+/// Verifies that discovery sorts `.rhai` files and filters other entries.
 fn test_discover_custom_check_files_sorts_and_filters_entries() {
     let dir = tempdir().expect("Failed to create temp dir");
     let dir_path = Utf8Path::from_path(dir.path()).unwrap();
@@ -534,6 +560,7 @@ fn test_discover_custom_check_files_sorts_and_filters_entries() {
 }
 
 #[test]
+/// Verifies that non-`.rhai` entries are ignored while scanning.
 fn test_process_custom_check_dir_entry_allows_non_rhai_entries() {
     let dir = tempdir().expect("Failed to create temp dir");
     let dir_path = Utf8Path::from_path(dir.path()).unwrap();
@@ -554,6 +581,7 @@ fn test_process_custom_check_dir_entry_allows_non_rhai_entries() {
 }
 
 #[test]
+/// Verifies that directory scanning stops at the entry limit.
 fn test_process_custom_check_dir_entry_stops_at_entry_limit() {
     let dir = tempdir().expect("Failed to create temp dir");
     let dir_path = Utf8Path::from_path(dir.path()).unwrap();
@@ -580,6 +608,7 @@ fn test_process_custom_check_dir_entry_stops_at_entry_limit() {
 }
 
 #[test]
+/// Verifies that directory entry read errors are recorded.
 fn test_readable_custom_check_entry_reports_read_dir_errors() {
     let dir = tempdir().expect("Failed to create temp dir");
     let dir_path = Utf8Path::from_path(dir.path()).unwrap();
@@ -599,6 +628,7 @@ fn test_readable_custom_check_entry_reports_read_dir_errors() {
 }
 
 #[test]
+/// Verifies that directory scanning stops at the custom check file limit.
 fn test_process_custom_check_dir_entry_stops_at_file_limit() {
     let dir = tempdir().expect("Failed to create temp dir");
     let dir_path = Utf8Path::from_path(dir.path()).unwrap();
@@ -624,6 +654,7 @@ fn test_process_custom_check_dir_entry_stops_at_file_limit() {
 }
 
 #[test]
+/// Verifies that scalar parser results are rejected.
 fn test_parse_script_result_rejects_scalar() {
     let violations = parse_script_result("scalar_check", Dynamic::from(42_i64));
 
@@ -633,6 +664,7 @@ fn test_parse_script_result_rejects_scalar() {
 }
 
 #[test]
+/// Verifies that array result parsing reports non-map elements.
 fn test_array_script_violations_reports_non_maps() {
     let mut valid = rhai::Map::new();
     valid.insert("operation".into(), Dynamic::from("op"));
@@ -652,6 +684,7 @@ fn test_array_script_violations_reports_non_maps() {
 }
 
 #[test]
+/// Verifies that cumulative custom check source size is enforced.
 fn test_load_custom_checks_rejects_total_source_bytes() {
     let dir = tempdir().expect("Failed to create temp dir");
     let dir_path = Utf8Path::from_path(dir.path()).unwrap();
@@ -676,6 +709,7 @@ fn test_load_custom_checks_rejects_total_source_bytes() {
 }
 
 #[test]
+/// Verifies that non-string `operation` fields produce script errors.
 fn test_map_with_non_string_operation_field() {
     // operation is an integer, not a string — into_string() returns None,
     // so the match falls through to the error-violation arm in map_to_violation.
@@ -694,6 +728,7 @@ fn test_map_with_non_string_operation_field() {
 }
 
 #[test]
+/// Verifies that non-string `problem` fields produce script errors.
 fn test_map_with_non_string_problem_field() {
     let violations = run_script(
         r#"#{ operation: "op", problem: 42, safe_alternative: "s" }"#,
@@ -709,6 +744,7 @@ fn test_map_with_non_string_problem_field() {
 }
 
 #[test]
+/// Verifies that non-string `safe_alternative` fields produce script errors.
 fn test_map_with_non_string_safe_alternative_field() {
     let violations = run_script(
         r#"#{ operation: "op", problem: "p", safe_alternative: false }"#,
@@ -725,6 +761,7 @@ fn test_map_with_non_string_safe_alternative_field() {
     );
 }
 
+/// Build a minimal custom check for helper-method tests.
 fn make_test_check() -> CustomCheck {
     let engine = Arc::new(create_engine());
     let ast = engine.compile("()").expect("script should compile");
@@ -737,6 +774,7 @@ fn make_test_check() -> CustomCheck {
 }
 
 #[test]
+/// Verifies that internal errors are exposed as script error violations.
 fn test_internal_error_yields_script_error_violation() {
     let check = make_test_check();
     let violations = check.internal_error(&"boom");
@@ -751,6 +789,7 @@ fn test_internal_error_yields_script_error_violation() {
 }
 
 #[test]
+/// Verifies that runtime errors are exposed as script error violations.
 fn test_script_runtime_error_yields_script_error_violation() {
     // Division by zero is a runtime error that does NOT contain "ErrorTerminated".
     // A broken script must not silently disable the safety check — it must surface
@@ -774,6 +813,7 @@ fn test_script_runtime_error_yields_script_error_violation() {
 }
 
 #[test]
+/// Verifies that representative PostgreSQL enum constants are registered.
 fn test_pg_alter_table_constraint_and_drop_constants_accessible() {
     // Verify one representative constant from each untested group:
     // AT_ADD_COLUMN (AlterTableType), CONSTR_PRIMARY (ConstrType), DROP_CASCADE (DropBehavior).
@@ -795,6 +835,7 @@ fn test_pg_alter_table_constraint_and_drop_constants_accessible() {
 }
 
 #[test]
+/// Verifies direct `describe` invocation against a functions-only AST.
 fn test_describe_call_fn_debug() {
     let engine = Arc::new(create_engine());
     // Script with fn describe() AND body that references `node` (like a real check script).
@@ -820,6 +861,7 @@ if stmt == () { return; }
 }
 
 #[test]
+/// Verifies that custom checks expose script-provided descriptions.
 fn test_describe_with_fn_describe_in_script() {
     let engine = Arc::new(create_engine());
     let script = r#"
@@ -845,6 +887,7 @@ if stmt == () { return; }
 }
 
 #[test]
+/// Verifies that custom checks without `describe` return no documentation.
 fn test_describe_without_fn_describe_in_script_falls_back() {
     let engine = Arc::new(create_engine());
     let ast = engine.compile("()").expect("script should compile");
@@ -859,6 +902,7 @@ fn test_describe_without_fn_describe_in_script_falls_back() {
 }
 
 #[test]
+/// Verifies that custom checks expose their source script path.
 fn test_custom_check_script_path_returns_path() {
     let engine = Arc::new(create_engine());
     let ast = engine.compile("()").expect("script should compile");
