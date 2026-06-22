@@ -20,6 +20,12 @@ use std::sync::LazyLock;
 static SQLX_VERSION_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^(\d+)(_|\.)?").expect("valid regex pattern"));
 
+/// Regex for validating `start_after` config values: a plain positive integer, or a
+/// separator-formatted 14-digit timestamp (`YYYY_MM_DD_HHMMSS` / `YYYY-MM-DD-HHMMSS`).
+static SQLX_START_AFTER_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\d+$|^\d{4}[_-]\d{2}[_-]\d{2}[_-]\d{6}$").expect("valid regex pattern")
+});
+
 const NO_TRANSACTION_HINT: &str =
     "Add `-- no-transaction` as the first line of the migration file.";
 
@@ -57,7 +63,7 @@ impl MigrationAdapter for SqlxAdapter {
     }
 
     fn validate_timestamp(&self, timestamp: &str) -> Result<()> {
-        if !timestamp.is_empty() && timestamp.chars().all(|c| c.is_ascii_digit()) {
+        if SQLX_START_AFTER_REGEX.is_match(timestamp) {
             Ok(())
         } else {
             Err(
@@ -212,8 +218,12 @@ mod tests {
         assert!(adapter.validate_timestamp("1").is_ok());
         assert!(adapter.validate_timestamp("001").is_ok());
         assert!(adapter.validate_timestamp("42").is_ok());
+        assert!(adapter.validate_timestamp("2024_01_01_000000").is_ok());
+        assert!(adapter.validate_timestamp("2024-01-01-000000").is_ok());
         assert!(adapter.validate_timestamp("").is_err());
         assert!(adapter.validate_timestamp("invalid").is_err());
+        assert!(adapter.validate_timestamp("-1").is_err());
+        assert!(adapter.validate_timestamp("1-2").is_err());
     }
 
     #[test]

@@ -5,6 +5,32 @@ use std::fs;
 use tempfile::tempdir;
 
 #[test]
+fn test_start_after_accepts_separator_formats() {
+    let temp_dir = tempdir().expect("Failed to create temp dir");
+    fs::write(
+        temp_dir.path().join("20240102000000_add_col.sql"),
+        "ALTER TABLE users ADD COLUMN email TEXT;",
+    )
+    .unwrap();
+
+    for start_after in &["2024_01_01_000000", "2024-01-01-000000", "20240101000000"] {
+        let config = Config {
+            framework: "sqlx".to_string(),
+            start_after: Some((*start_after).to_string()),
+            ..Default::default()
+        };
+        let results = SafetyChecker::with_config(config)
+            .unwrap()
+            .check_directory(Utf8Path::from_path(temp_dir.path()).unwrap());
+        assert!(
+            results.is_ok(),
+            "start_after={start_after} should be accepted, got: {:?}",
+            results.unwrap_err()
+        );
+    }
+}
+
+#[test]
 fn test_invalid_start_after_returns_error() {
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let mig = temp_dir.path().join("20240101000000_create_users.sql");
