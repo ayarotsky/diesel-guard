@@ -104,10 +104,7 @@ fn parse_script_result(check_name: &str, result: Dynamic) -> Vec<Violation> {
     }
 
     if result.is_map() {
-        return match map_to_violation(check_name, result) {
-            Some(v) => vec![v],
-            None => vec![],
-        };
+        return vec![map_to_violation(check_name, result)];
     }
 
     if result.is_array() {
@@ -115,7 +112,7 @@ fn parse_script_result(check_name: &str, result: Dynamic) -> Vec<Violation> {
             .into_array()
             .unwrap_or_default()
             .into_iter()
-            .filter_map(|v| map_to_violation(check_name, v))
+            .map(|v| map_to_violation(check_name, v))
             .collect();
     }
 
@@ -130,8 +127,17 @@ fn parse_script_result(check_name: &str, result: Dynamic) -> Vec<Violation> {
 }
 
 /// Convert a Rhai map Dynamic to a Violation.
-fn map_to_violation(check_name: &str, value: Dynamic) -> Option<Violation> {
-    let map = value.try_cast::<rhai::Map>()?;
+fn map_to_violation(check_name: &str, value: Dynamic) -> Violation {
+    let type_name = value.type_name().to_owned();
+    let Some(map) = value.try_cast::<rhai::Map>() else {
+        return Violation::new(
+            format!("SCRIPT ERROR: {check_name}"),
+            format!(
+                "Custom check returned a non-map array element: expected a map, got {type_name}"
+            ),
+            "Fix the custom check script to return maps with operation, problem, and safe_alternative keys.",
+        );
+    };
 
     let operation = map
         .get("operation")
@@ -144,7 +150,7 @@ fn map_to_violation(check_name: &str, value: Dynamic) -> Option<Violation> {
         .and_then(|v| v.clone().into_string().ok());
 
     if let (Some(op), Some(prob), Some(alt)) = (operation, problem, safe_alternative) {
-        Some(Violation::new(op, prob, alt))
+        Violation::new(op, prob, alt)
     } else {
         let mut issues = Vec::new();
         for key in &["operation", "problem", "safe_alternative"] {
@@ -156,14 +162,14 @@ fn map_to_violation(check_name: &str, value: Dynamic) -> Option<Violation> {
                 _ => {}
             }
         }
-        Some(Violation::new(
+        Violation::new(
             format!("SCRIPT ERROR: {check_name}"),
             format!(
                 "Custom check returned an invalid map: {}",
                 issues.join(", ")
             ),
             "Fix the custom check script to return all three required string keys.",
-        ))
+        )
     }
 }
 
@@ -418,6 +424,26 @@ mod tests {
         assert_eq!(violations.len(), 2);
         assert_eq!(violations[0].operation, "violation 1");
         assert_eq!(violations[1].operation, "violation 2");
+    }
+
+    #[test]
+    fn test_script_array_with_non_map_element_produces_error_violation() {
+        let violations = run_script(
+            r#"
+            [
+                #{ operation: "v1", problem: "p1", safe_alternative: "s1" },
+                "not a map"
+            ]
+            "#,
+            "CREATE INDEX idx ON users(email);",
+        );
+        assert_eq!(violations.len(), 2);
+        assert_eq!(violations[0].operation, "v1");
+        assert_eq!(violations[1].operation, "SCRIPT ERROR: test_check");
+        assert_eq!(
+            violations[1].problem,
+            "Custom check returned a non-map array element: expected a map, got string"
+        );
     }
 
     #[test]
