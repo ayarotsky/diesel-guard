@@ -25,14 +25,17 @@ impl CustomCheck {
 }
 
 impl Check for CustomCheck {
+    /// Return the custom check name.
     fn name(&self) -> &'static str {
         self.name
     }
 
+    /// Return the source path for this custom check script.
     fn script_path(&self) -> Option<&str> {
         Some(&self.path)
     }
 
+    /// Return documentation produced by the script's optional `describe` function.
     fn describe(&self) -> Option<String> {
         // clone_functions_only() strips the script body so call_fn won't
         // try to evaluate statements that reference `node`.
@@ -47,6 +50,7 @@ impl Check for CustomCheck {
         None
     }
 
+    /// Run the custom check against one parsed PostgreSQL AST node.
     fn check(&self, node: &NodeEnum, config: &Config, ctx: &MigrationContext) -> Vec<Violation> {
         let mut scope = match Self::script_scope(node, config, ctx) {
             Ok(scope) => scope,
