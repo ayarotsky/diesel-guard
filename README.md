@@ -8,9 +8,9 @@
 
 ✓ Detects operations that lock tables or cause downtime<br>
 ✓ Provides safe alternatives for each blocking operation<br>
-✓ Works with both Diesel and SQLx migration frameworks<br>
 ✓ Supports safety-assured blocks for verified operations<br>
 ✓ Extensible with custom checks<br>
+✓ Works standalone or with any AI agent (Claude, Codex, Copilot, Gemini)<br>
 
 ## Why diesel-guard?
 
@@ -118,6 +118,16 @@ Pin the diesel-guard binary version for reproducible builds:
   with:
     version: '0.10.0'
 ```
+
+## Use with AI agents
+
+`diesel-guard` works with any AI agent that can run shell commands.
+
+Point your agent at [`skills/diesel-guard/SKILL.md`](skills/diesel-guard/SKILL.md) for full `diesel-guard` workflow coverage.
+
+**Agent discovery:** `diesel-guard check --format json` returns structured findings, each with a ready-to-apply `safe_alternative` (exit `0` clean, `1` on errors). Use `diesel-guard list-checks --format json` for the full catalog of checks, and `diesel-guard explain <CheckName>` for any one.
+
+See [AI Agents](https://ayarotsky.github.io/diesel-guard/agents.html) for the full guide.
 
 ## What It Detects
 
