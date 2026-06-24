@@ -4,9 +4,9 @@ Linter for dangerous Postgres migration patterns in Diesel and SQLx. Prevents do
 
 ✓ Detects operations that lock tables or cause downtime<br>
 ✓ Provides safe alternatives for each blocking operation<br>
-✓ Works with both Diesel and SQLx migration frameworks<br>
-✓ Supports safety-assured blocks for verified operations<br>
+✓ Supports [safety-assured blocks](safety-assured.md) for verified operations<br>
 ✓ Extensible with [custom checks](custom-checks.md)<br>
+✓ Works standalone or with any [AI agent](agents.md) (Claude, Codex, Copilot, Gemini)<br>
 
 > ⭐ If this looks useful, a [star on GitHub](https://github.com/ayarotsky/diesel-guard) helps more developers find it.
 

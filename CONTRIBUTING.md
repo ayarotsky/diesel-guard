@@ -123,11 +123,11 @@ Use `diesel-guard dump-ast --sql "..."` to inspect what AST a statement produces
 
 ## Adding a New Check
 
-1. **Create** `src/checks/your_check.rs` — implement the `Check` trait. Use `_config` if unused, `config` if version-aware. Use `_ctx` if unused, `ctx` if the check needs to know whether the migration runs inside a transaction (e.g. for CONCURRENTLY operations). Add `#[cfg(test)]` unit tests using the macros above.
+1. **Create** `src/checks/your_check.rs` — implement the `Check` trait. Use `_config` if unused, `config` if version-aware. Use `_ctx` if unused, `ctx` if the check needs to know whether the migration runs inside a transaction (e.g. for CONCURRENTLY operations). Also declare `impl_check_doc!(YourCheck, "<doc-file-name>");` (macro from `src/checks/mod.rs`) to wire the check to its markdown doc — this `include_str!`s `docs/src/checks/<doc-file-name>.md` at compile time (the file must exist or the build fails) so `explain` can serve it. Add `#[cfg(test)]` unit tests using the macros above.
 2. **Register** in `src/checks/mod.rs` — add `mod`, `pub use`, and `self.register_check(config, YourCheck)` call inside `Registry::with_config()` (all alphabetically). Check names are derived from struct names automatically. (`register_check` is the private built-in registration path; `add_check` is the public API used only for custom Rhai checks.)
 3. **Create fixtures** — `tests/fixtures/your_operation_{safe,unsafe}/up.sql`. First line MUST be `-- Safe: ...` or `-- Unsafe: ...`.
 4. **Update integration tests** in `tests/fixtures_test.rs` — add to `safe_fixtures` vec, add detection test, update `test_check_entire_fixtures_directory` counts.
-5. **Update docs** — create `docs/src/checks/<check>.md` with bad/good examples and add entry to `docs/src/SUMMARY.md`.
+5. **Update docs** — create `docs/src/checks/<doc-file-name>.md` (semantic kebab-case, e.g. `add-column-default.md`) with bad/good examples and add entry to `docs/src/SUMMARY.md`. The filename must match the `impl_check_doc!` argument from step 1, since `explain` serves this file.
 6. **Verify** — `just check` (fast gate) then `just ci` (full pipeline)
 
 ### Naming Conventions
@@ -164,6 +164,7 @@ Scripts can reference pg_query protobuf enum values via the `pg::` prefix (e.g. 
 - **`check_down`** (optional, default `false`): Include down/rollback migration files in checks.
 - **`disable_checks`** (optional): List of check names to skip. Unknown names produce a warning (not an error). Mutually exclusive with `enable_checks`.
 - **`enable_checks`** (optional): Whitelist — only these checks run. Mutually exclusive with `disable_checks`; setting both is a `ConfigError`.
+- **`warn_checks`** (optional): List of check names reported as warnings instead of errors. Warnings appear in output but do not cause a non-zero exit code.
 - **`postgres_version`** (optional): Target Postgres major version as integer (e.g., `16`). Used by version-aware checks.
 - **`custom_checks_dir`** (optional): Path to directory containing `.rhai` script files for custom checks.
 
@@ -197,7 +198,7 @@ assert_allows_with_config!(Check, sql, config)                     // no violati
 All macros pass `MigrationContext::default()` (`run_in_transaction: true`). For checks that are context-aware (currently `AddIndexCheck`, `DropIndexCheck`, `ReindexCheck`), call `check()` directly with an explicit `MigrationContext` when testing the no-transaction path:
 
 ```rust
-let ctx = MigrationContext { run_in_transaction: false, no_transaction_hint: "" };
+let ctx = MigrationContext { run_in_transaction: false, ..MigrationContext::default() };
 let violations = AddIndexCheck.check(&node, &Config::default(), &ctx);
 assert!(violations.is_empty());
 ```
