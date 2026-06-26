@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.12.0 - 2026-06-25
+
+### Breaking Changes
+
+Several conditions that previously failed silently now abort the run with an error:
+
+- **Unknown check names abort the run.** Typos in `enable_checks`, `disable_checks`, or `warn_checks` now raise an error. Previously a typo in `enable_checks` could whitelist nothing and silently disable the linter entirely.
+- **Invalid `start_after` aborts the run.** An unparsable timestamp now raises an error instead of silently skipping every migration.
+- **`dump-ast` rejects `--sql` and `--file` together** and requires exactly one. Previously passing both silently let one override the other.
+- **Custom Rhai checks that return a non-map array element** now emit a `SCRIPT ERROR` violation instead of silently dropping that element.
+- **No-config runs are silent.** Running with no config file no longer prints a "No config file found" warning; default configuration is applied without output.
+
+The `check` JSON and human-readable output formats are unchanged.
+
+### Added
+
+- **`list-checks` command** - Print the full catalog of active checks with type, severity, and enabled state. Supports `--format text` (default) and `--format json`.
+- **`explain <CheckName>` command** - Print a single check's full documentation, type, severity, and status. Supports `--format text` and `--format json`. Works for built-in checks and for custom Rhai checks (uses the script's `describe()`).
+- **Migration-scoped check disables** - Suppress a check for a single migration without changing global config:
+  - Any framework: inline `-- diesel-guard:disable AddColumnCheck` comment (comma-separated list for multiple checks).
+  - Diesel: `disable_checks = ["AddColumnCheck"]` in that migration's `metadata.toml`.
+- **AI agent support** - Bundled `skills/diesel-guard/SKILL.md` and an AI Agents documentation guide. `list-checks --format json` and `explain` give agents a machine-readable check catalog.
+- **Friendlier panic messages** via `human-panic`.
+
+### Fixed
+
+- SQLx `start_after` now accepts the documented separator formats (`YYYY_MM_DD_HHMMSS`, `YYYY-MM-DD-HHMMSS`) and plain numeric versions, not only bare 14-digit timestamps.
+- Help text no longer references a non-existent `-list-checks` flag.
+- `AddSerialColumnCheck` remediation no longer repeats the unsafe `SERIAL`/`BIGSERIAL` pseudo-type in its suggestion.
+- `IdempotencyIndexCheck` recommendations now preserve the `UNIQUE` prefix.
+- `check_file` no longer swallows invalid-framework errors.
+- `DropColumnCheck` remediation no longer suggests invalid SQL.
+
 ## 0.11.0 - 2026-05-24
 
 ### Added

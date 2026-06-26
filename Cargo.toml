@@ -1,6 +1,6 @@
 [package]
 name = "diesel-guard"
-version = "0.11.0"
+version = "0.12.0"
 edition = "2024"
 authors = ["Alex Yarotsky"]
 description = "Linter for dangerous Postgres migration patterns in Diesel and SQLx. Prevents downtime caused by unsafe schema changes."
