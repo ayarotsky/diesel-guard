@@ -25,8 +25,8 @@ diesel-guard init --force
 framework = "diesel"
 
 # Skip migrations before this timestamp
-# Accepts: YYYYMMDDHHMMSS, YYYY_MM_DD_HHMMSS, or YYYY-MM-DD-HHMMSS
-# Works with any migration directory format
+# Accepts Diesel timestamps and SQLx numeric versions:
+#   42, 20240101000000, 2024_01_01_000000, or 2024-01-01-000000
 start_after = "2024_01_01_000000"
 
 # Also check down.sql files (default: false)

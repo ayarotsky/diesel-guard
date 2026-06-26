@@ -42,7 +42,7 @@ migrations/
 └── 20240101000000_create_users.sql
 ```
 
-SQLx versions are any positive integer (e.g., `1`, `001`, `42`, `20240101000000`). Short numeric versions use numeric comparison for `start_after` filtering; 14-digit timestamps use string comparison.
+SQLx migration versions are any positive integer (e.g., `1`, `001`, `42`, `20240101000000`). Short numeric versions use numeric comparison for `start_after` filtering; separator-formatted timestamp filters such as `2024_01_01_000000` and `2024-01-01-000000` are normalized before comparison.
 
 ## Framework Configuration
 

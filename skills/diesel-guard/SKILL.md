@@ -74,8 +74,9 @@ fixes from memory.
 Run `diesel-guard init` to scaffold the file (use `--force` to overwrite). Keys:
 
 - `framework` (**required**) — `"diesel"` or `"sqlx"`. Case-sensitive.
-- `start_after` — skip migrations older than this timestamp (Diesel accepts `YYYYMMDDHHMMSS`,
-  `YYYY_MM_DD_HHMMSS`, `YYYY-MM-DD-HHMMSS`; SQLx uses the version number). Good for retrofitting.
+- `start_after` — skip migrations older than this timestamp. Diesel accepts `YYYYMMDDHHMMSS`,
+  `YYYY_MM_DD_HHMMSS`, and `YYYY-MM-DD-HHMMSS`; SQLx accepts plain numeric versions like `42`
+  and separator-formatted 14-digit timestamp filters. Good for retrofitting.
 - `check_down` (default `false`) — also check rollback/down migrations.
 - `disable_checks` — blacklist of check names to skip.
 - `enable_checks` — whitelist; only these run. **Mutually exclusive** with `disable_checks`.
