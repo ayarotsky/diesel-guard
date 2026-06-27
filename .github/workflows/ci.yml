@@ -133,3 +133,14 @@ jobs:
       - name: Validate commit messages
         run: |
           npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.sha }} --verbose
+
+  # Build the Docker image on every merge to main (build-only, no push) so a
+  # Dockerfile/.dockerignore break surfaces here instead of at release time.
+  # Manual ad-hoc builds use the Docker workflow's workflow_dispatch trigger.
+  docker-build:
+    name: Docker build
+    needs: tests
+    # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/docker.yml
+    with:
+      push: false
