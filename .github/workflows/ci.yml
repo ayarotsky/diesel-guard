@@ -85,17 +85,13 @@ jobs:
         with:
           toolchain: 1.96.0
 
-      - name: Cache cargo tools
-        uses: actions/cache@v5
-        with:
-          path: ~/.cargo/bin
-          key: ${{ runner.os }}-cargo-tarpaulin-${{ hashFiles('**/Cargo.lock') }}
-
       - name: Install just
         uses: extractions/setup-just@v4
 
       - name: Install tarpaulin
-        run: cargo install --locked cargo-tarpaulin || true
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-tarpaulin
 
       - name: Generate coverage report
         run: just coverage
@@ -133,3 +129,17 @@ jobs:
       - name: Validate commit messages
         run: |
           npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.sha }} --verbose
+
+  # Build the Docker image on every merge to main (build-only, no push) so a
+  # Dockerfile/.dockerignore break surfaces here instead of at release time.
+  # Manual ad-hoc builds use the Docker workflow's workflow_dispatch trigger.
+  docker-build:
+    name: Docker build
+    needs: tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/docker.yml
+    with:
+      push: false
