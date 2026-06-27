@@ -24,6 +24,9 @@ on:
         type: string
         default: ayarotsky/diesel-guard
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
