@@ -1,0 +1,57 @@
+name: Docker
+
+on:
+  workflow_call:
+    inputs:
+      push:
+        type: boolean
+        default: false
+      platforms:
+        type: string
+        default: linux/amd64,linux/arm64
+      image:
+        type: string
+        default: ayarotsky/diesel-guard
+  workflow_dispatch:
+    inputs:
+      push:
+        type: boolean
+        default: false
+      platforms:
+        type: string
+        default: linux/amd64,linux/arm64
+      image:
+        type: string
+        default: ayarotsky/diesel-guard
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    permissions:
+      contents: read
+      id-token: write
+    uses: docker/github-builder/.github/workflows/build.yml@v1
+    with:
+      output: image
+      push: ${{ inputs.push }}
+      platforms: ${{ inputs.platforms }}
+      cache: true
+      cache-mode: max
+      sign: auto
+      sbom: true
+      set-meta-labels: true
+      set-meta-annotations: true
+      meta-images: ${{ inputs.image }}
+      meta-tags: |
+        type=semver,pattern={{version}}
+        type=semver,pattern={{major}}.{{minor}}
+      meta-flavor: |
+        latest=true
+    secrets:
+      # Ignored on build-only runs: the builder only logs in when push is true.
+      registry-auths: |
+        - registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
