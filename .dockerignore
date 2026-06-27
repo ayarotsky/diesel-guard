@@ -1,7 +1,6 @@
 .git
 .github
 target/
-docs/
 tests/
 examples/
 *.md
