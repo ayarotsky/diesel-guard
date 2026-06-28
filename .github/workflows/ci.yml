@@ -36,6 +36,10 @@ jobs:
         with:
           toolchain: 1.96.0
           components: clippy, rustfmt
+          rustflags: "-D warnings -C link-arg=-fuse-ld=mold"
+
+      - name: Install mold
+        uses: rui314/setup-mold@v1
 
       - name: Cache cargo tools
         uses: actions/cache@v5
@@ -75,6 +79,10 @@ jobs:
     timeout-minutes: 15
     if: github.event.action != 'closed'
     needs: tests
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
 
     steps:
       - name: Checkout code
@@ -84,14 +92,21 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: 1.96.0
+          components: llvm-tools-preview
+          cache-key: coverage
+          cache-on-failure: true
+          rustflags: "-C link-arg=-fuse-ld=mold"
+
+      - name: Install mold
+        uses: rui314/setup-mold@v1
 
       - name: Install just
         uses: extractions/setup-just@v4
 
-      - name: Install tarpaulin
+      - name: Install coverage tools
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-tarpaulin
+          tool: cargo-llvm-cov,cargo-nextest
 
       - name: Generate coverage report
         run: just coverage

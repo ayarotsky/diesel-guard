@@ -23,9 +23,9 @@ doc:
 
 # ── Coverage ──────────────────────────────────────────────────────────────────
 
-# Generate an lcov coverage report (requires cargo-tarpaulin; Linux-friendly)
+# Generate an lcov coverage report (requires cargo-llvm-cov + cargo-nextest)
 coverage:
-    cargo tarpaulin --all-features --out lcov --exclude-files src/main.rs src/checks/test_utils.rs
+    cargo llvm-cov nextest --all-features --lcov --output-path lcov.info --ignore-filename-regex '(src/main\.rs|src/checks/test_utils\.rs)'
 
 # ── Composite ─────────────────────────────────────────────────────────────────
 
