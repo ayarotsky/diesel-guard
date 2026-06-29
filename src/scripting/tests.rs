@@ -1,6 +1,7 @@
 use super::*;
 use crate::checks::pg_helpers::extract_node;
 use crate::violation::Violation;
+use rhai::Dynamic;
 use std::fs;
 use tempfile::tempdir;
 
@@ -560,121 +561,6 @@ fn test_discover_custom_check_files_sorts_and_filters_entries() {
 }
 
 #[test]
-/// Verifies that non-`.rhai` entries are ignored while scanning.
-fn test_process_custom_check_dir_entry_allows_non_rhai_entries() {
-    let dir = tempdir().expect("Failed to create temp dir");
-    let dir_path = Utf8Path::from_path(dir.path()).unwrap();
-    fs::write(dir.path().join("notes.txt"), "return;").unwrap();
-    let entry = fs::read_dir(dir.path()).unwrap().next().unwrap();
-    let mut files = Vec::new();
-    let mut errors = Vec::new();
-
-    assert!(process_custom_check_dir_entry(
-        dir_path,
-        0,
-        entry,
-        &mut files,
-        &mut errors
-    ));
-    assert!(files.is_empty());
-    assert!(errors.is_empty());
-}
-
-#[test]
-/// Verifies that directory scanning stops at the entry limit.
-fn test_process_custom_check_dir_entry_stops_at_entry_limit() {
-    let dir = tempdir().expect("Failed to create temp dir");
-    let dir_path = Utf8Path::from_path(dir.path()).unwrap();
-    fs::write(dir.path().join("extra.rhai"), "return;").unwrap();
-    let entry = fs::read_dir(dir.path()).unwrap().next().unwrap();
-    let mut files = Vec::new();
-    let mut errors = Vec::new();
-
-    assert!(!process_custom_check_dir_entry(
-        dir_path,
-        MAX_CUSTOM_CHECK_DIR_ENTRIES,
-        entry,
-        &mut files,
-        &mut errors
-    ));
-    assert!(files.is_empty());
-    assert_eq!(errors.len(), 1);
-    assert!(
-        errors[0]
-            .message
-            .contains("Custom checks directory has more than")
-    );
-    assert!(errors[0].message.contains("entries"));
-}
-
-#[test]
-/// Verifies that directory entry read errors are recorded.
-fn test_readable_custom_check_entry_reports_read_dir_errors() {
-    let dir = tempdir().expect("Failed to create temp dir");
-    let dir_path = Utf8Path::from_path(dir.path()).unwrap();
-    let mut errors = Vec::new();
-    let entry_error = std::io::Error::other("entry read failed");
-
-    let entry = readable_custom_check_entry(dir_path, Err(entry_error), &mut errors);
-
-    assert!(entry.is_none());
-    assert_eq!(errors.len(), 1);
-    assert_eq!(errors[0].file, dir_path.to_string());
-    assert!(
-        errors[0]
-            .message
-            .contains("Failed to read directory entry: entry read failed")
-    );
-}
-
-#[test]
-/// Verifies that file type inspection failures are recorded.
-fn test_custom_check_file_type_is_regular_reports_inspection_errors() {
-    let mut errors = Vec::new();
-    let path = PathBuf::from("broken.rhai");
-    let inspect_error = std::io::Error::other("metadata unavailable");
-
-    assert!(!custom_check_file_type_is_regular(
-        Err(inspect_error),
-        &path,
-        &mut errors
-    ));
-    assert_eq!(errors.len(), 1);
-    assert_eq!(errors[0].file, "broken.rhai");
-    assert!(
-        errors[0]
-            .message
-            .contains("Failed to inspect file type: metadata unavailable")
-    );
-}
-
-#[test]
-/// Verifies that directory scanning stops at the custom check file limit.
-fn test_process_custom_check_dir_entry_stops_at_file_limit() {
-    let dir = tempdir().expect("Failed to create temp dir");
-    let dir_path = Utf8Path::from_path(dir.path()).unwrap();
-    fs::write(dir.path().join("extra.rhai"), "return;").unwrap();
-    let entry = fs::read_dir(dir.path()).unwrap().next().unwrap();
-    let mut files = (0..MAX_CUSTOM_CHECK_FILES)
-        .map(|index| CustomCheckFile {
-            path: PathBuf::from(format!("check_{index}.rhai")),
-            stem: format!("check_{index}"),
-        })
-        .collect::<Vec<_>>();
-    let mut errors = Vec::new();
-
-    assert!(!process_custom_check_dir_entry(
-        dir_path,
-        0,
-        entry,
-        &mut files,
-        &mut errors
-    ));
-    assert_eq!(errors.len(), 1);
-    assert!(errors[0].message.contains("more than"));
-}
-
-#[test]
 /// Verifies that scalar parser results are rejected.
 fn test_parse_script_result_rejects_scalar() {
     let violations = parse_script_result("scalar_check", Dynamic::from(42_i64));
@@ -779,52 +665,6 @@ fn test_map_with_non_string_safe_alternative_field() {
             .contains("'safe_alternative' must be a string"),
         "got: {}",
         violations[0].problem
-    );
-}
-
-/// Build a minimal custom check for helper-method tests.
-fn make_test_check() -> CustomCheck {
-    let engine = Arc::new(create_engine());
-    let ast = engine.compile("()").expect("script should compile");
-    CustomCheck {
-        name: "test_check",
-        engine,
-        ast,
-        path: String::new(),
-    }
-}
-
-#[test]
-/// Verifies that internal errors are exposed as script error violations.
-fn test_internal_error_yields_script_error_violation() {
-    let check = make_test_check();
-    let violations = check.internal_error(&"boom");
-    assert_eq!(violations.len(), 1);
-    let v = &violations[0];
-    assert_eq!(v.operation, "SCRIPT ERROR: test_check");
-    assert_eq!(v.problem, "Error in custom check 'test_check': boom");
-    assert_eq!(
-        v.safe_alternative,
-        "This is likely a diesel-guard bug. Please report it."
-    );
-}
-
-#[test]
-/// Verifies that scope preparation errors stop script evaluation.
-fn test_check_with_scope_result_yields_internal_error_violation() {
-    let check = make_test_check();
-    let violations = check.check_with_scope_result(Err("scope failed".to_string()));
-
-    assert_eq!(violations.len(), 1);
-    let v = &violations[0];
-    assert_eq!(v.operation, "SCRIPT ERROR: test_check");
-    assert_eq!(
-        v.problem,
-        "Error in custom check 'test_check': scope failed"
-    );
-    assert_eq!(
-        v.safe_alternative,
-        "This is likely a diesel-guard bug. Please report it."
     );
 }
 

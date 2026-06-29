@@ -25,7 +25,7 @@ pub(super) fn discover_custom_check_files(
 }
 
 /// Collect and sort custom check files from an open directory iterator.
-pub(super) fn collect_custom_check_files(
+fn collect_custom_check_files(
     dir: &Utf8Path,
     read_dir: std::fs::ReadDir,
 ) -> (Vec<CustomCheckFile>, Vec<ScriptError>) {
@@ -42,7 +42,7 @@ pub(super) fn collect_custom_check_files(
 }
 
 /// Process one directory entry and return whether scanning should continue.
-pub(super) fn process_custom_check_dir_entry(
+fn process_custom_check_dir_entry(
     dir: &Utf8Path,
     index: usize,
     entry: std::io::Result<std::fs::DirEntry>,
@@ -60,12 +60,12 @@ pub(super) fn process_custom_check_dir_entry(
 }
 
 /// Sort custom check files by filename for deterministic loading.
-pub(super) fn sort_custom_check_files(files: &mut [CustomCheckFile]) {
+fn sort_custom_check_files(files: &mut [CustomCheckFile]) {
     files.sort_by(|left, right| left.path.file_name().cmp(&right.path.file_name()));
 }
 
 /// Enforce the maximum number of directory entries inspected.
-pub(super) fn custom_check_entry_limit_allows(
+fn custom_check_entry_limit_allows(
     dir: &Utf8Path,
     index: usize,
     errors: &mut Vec<ScriptError>,
@@ -84,7 +84,7 @@ pub(super) fn custom_check_entry_limit_allows(
 }
 
 /// Convert a readable directory entry into a candidate custom check file.
-pub(super) fn custom_check_file_from_entry(
+fn custom_check_file_from_entry(
     dir: &Utf8Path,
     entry: std::io::Result<std::fs::DirEntry>,
     errors: &mut Vec<ScriptError>,
@@ -98,7 +98,7 @@ pub(super) fn custom_check_file_from_entry(
 }
 
 /// Return a directory entry or record the entry-read error.
-pub(super) fn readable_custom_check_entry(
+fn readable_custom_check_entry(
     dir: &Utf8Path,
     entry: std::io::Result<std::fs::DirEntry>,
     errors: &mut Vec<ScriptError>,
@@ -116,7 +116,7 @@ pub(super) fn readable_custom_check_entry(
 }
 
 /// Return the path for entries with a `.rhai` extension.
-pub(super) fn rhai_entry_path(entry: &std::fs::DirEntry) -> Option<std::path::PathBuf> {
+fn rhai_entry_path(entry: &std::fs::DirEntry) -> Option<std::path::PathBuf> {
     let path = entry.path();
     path.extension()
         .is_some_and(|ext| ext == "rhai")
@@ -124,7 +124,7 @@ pub(super) fn rhai_entry_path(entry: &std::fs::DirEntry) -> Option<std::path::Pa
 }
 
 /// Verify that a `.rhai` entry is a regular file.
-pub(super) fn custom_check_entry_is_regular_file(
+fn custom_check_entry_is_regular_file(
     entry: &std::fs::DirEntry,
     path: &std::path::Path,
     errors: &mut Vec<ScriptError>,
@@ -133,7 +133,7 @@ pub(super) fn custom_check_entry_is_regular_file(
 }
 
 /// Verify that a resolved `.rhai` entry type is a regular file.
-pub(super) fn custom_check_file_type_is_regular(
+fn custom_check_file_type_is_regular(
     file_type: std::io::Result<std::fs::FileType>,
     path: &std::path::Path,
     errors: &mut Vec<ScriptError>,
@@ -160,7 +160,7 @@ pub(super) fn custom_check_file_type_is_regular(
 }
 
 /// Build custom check file metadata from a filesystem path.
-pub(super) fn custom_check_file(path: std::path::PathBuf) -> CustomCheckFile {
+fn custom_check_file(path: std::path::PathBuf) -> CustomCheckFile {
     let stem = path
         .file_stem()
         .and_then(|s| s.to_str())
@@ -170,7 +170,7 @@ pub(super) fn custom_check_file(path: std::path::PathBuf) -> CustomCheckFile {
 }
 
 /// Append a custom check file while enforcing the file count limit.
-pub(super) fn push_custom_check_file(
+fn push_custom_check_file(
     dir: &Utf8Path,
     file: CustomCheckFile,
     files: &mut Vec<CustomCheckFile>,

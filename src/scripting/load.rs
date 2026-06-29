@@ -25,7 +25,7 @@ pub fn load_custom_checks(
 }
 
 /// Load a pre-discovered set of custom check files.
-pub(super) fn load_custom_check_entries(
+fn load_custom_check_entries(
     dir: &Utf8Path,
     config: &Config,
     engine: &Arc<Engine>,
@@ -46,7 +46,7 @@ pub(super) fn load_custom_check_entries(
 }
 
 /// Load one custom check file and return whether loading should continue.
-pub(super) fn load_custom_check_entry(
+fn load_custom_check_entry(
     dir: &Utf8Path,
     config: &Config,
     engine: &Arc<Engine>,
@@ -65,7 +65,7 @@ pub(super) fn load_custom_check_entry(
 }
 
 /// Read source for a custom check entry and update aggregate byte accounting.
-pub(super) fn script_source_for_entry(
+fn script_source_for_entry(
     dir: &Utf8Path,
     entry: &CustomCheckFile,
     state: &mut CustomCheckLoadState,
@@ -86,7 +86,7 @@ pub(super) fn script_source_for_entry(
 }
 
 /// Add script source bytes while enforcing the cumulative source size limit.
-pub(super) fn add_script_source_bytes(
+fn add_script_source_bytes(
     dir: &Utf8Path,
     bytes_read: u64,
     state: &mut CustomCheckLoadState,
@@ -102,7 +102,7 @@ pub(super) fn add_script_source_bytes(
 }
 
 /// Record an error for cumulative custom check source that is too large.
-pub(super) fn push_total_script_size_error(dir: &Utf8Path, errors: &mut Vec<ScriptError>) {
+fn push_total_script_size_error(dir: &Utf8Path, errors: &mut Vec<ScriptError>) {
     errors.push(ScriptError {
         file: dir.to_string(),
         message: format!(
@@ -112,7 +112,7 @@ pub(super) fn push_total_script_size_error(dir: &Utf8Path, errors: &mut Vec<Scri
 }
 
 /// Record an error for a custom check script that exceeds the per-file limit.
-pub(super) fn push_oversized_script_error(entry: &CustomCheckFile, errors: &mut Vec<ScriptError>) {
+fn push_oversized_script_error(entry: &CustomCheckFile, errors: &mut Vec<ScriptError>) {
     errors.push(ScriptError {
         file: entry.path.display().to_string(),
         message: format!(
@@ -122,7 +122,7 @@ pub(super) fn push_oversized_script_error(entry: &CustomCheckFile, errors: &mut 
 }
 
 /// Record an error produced while reading a custom check script.
-pub(super) fn push_script_read_error(
+fn push_script_read_error(
     entry: &CustomCheckFile,
     error: &std::io::Error,
     errors: &mut Vec<ScriptError>,
@@ -134,7 +134,7 @@ pub(super) fn push_script_read_error(
 }
 
 /// Compile a custom check script and append either the check or an error.
-pub(super) fn compile_custom_check(
+fn compile_custom_check(
     engine: &Arc<Engine>,
     entry: CustomCheckFile,
     source: &str,
@@ -148,7 +148,7 @@ pub(super) fn compile_custom_check(
 }
 
 /// Append a successfully compiled custom check.
-pub(super) fn push_compiled_custom_check(
+fn push_compiled_custom_check(
     engine: &Arc<Engine>,
     entry: CustomCheckFile,
     ast: AST,
@@ -165,7 +165,7 @@ pub(super) fn push_compiled_custom_check(
 }
 
 /// Record a Rhai compilation error for a custom check script.
-pub(super) fn push_script_compile_error(
+fn push_script_compile_error(
     entry: &CustomCheckFile,
     error: &rhai::ParseError,
     errors: &mut Vec<ScriptError>,

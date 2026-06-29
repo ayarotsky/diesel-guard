@@ -1,4 +1,4 @@
-use super::{CustomCheck, result::parse_script_result};
+use super::{CustomCheck, result::parse_script_result, scope::script_scope};
 use crate::checks::{Check, MigrationContext};
 use crate::config::Config;
 use crate::violation::Violation;
@@ -23,16 +23,13 @@ impl CustomCheck {
         )
     }
 
-    /// Evaluate this check after preparing its Rhai scope.
-    pub(super) fn check_with_scope_result(
-        &self,
-        scope: std::result::Result<rhai::Scope<'static>, String>,
-    ) -> Vec<Violation> {
-        let mut scope = match scope {
-            Ok(scope) => scope,
-            Err(err) => return self.internal_error(&err),
-        };
-        self.evaluate_custom_check(&mut scope)
+    /// Build a violation for failures preparing script inputs.
+    fn internal_error_violation(&self, err: &dyn std::fmt::Display) -> Violation {
+        Violation::new(
+            format!("SCRIPT ERROR: {}", self.name),
+            format!("Error in custom check '{}': {err}", self.name),
+            "This is likely a diesel-guard bug. Please report it.",
+        )
     }
 }
 
@@ -64,6 +61,10 @@ impl Check for CustomCheck {
 
     /// Run the custom check against one parsed PostgreSQL AST node.
     fn check(&self, node: &NodeEnum, config: &Config, ctx: &MigrationContext) -> Vec<Violation> {
-        self.check_with_scope_result(Self::script_scope(node, config, ctx))
+        let mut scope = match script_scope(node, config, ctx) {
+            Ok(scope) => scope,
+            Err(err) => return vec![self.internal_error_violation(&err)],
+        };
+        self.evaluate_custom_check(&mut scope)
     }
 }

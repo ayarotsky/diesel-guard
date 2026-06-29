@@ -1,6 +1,6 @@
 use crate::checks::{Check, CheckDoc};
 use camino::Utf8Path;
-use rhai::{AST, Dynamic, Engine};
+use rhai::{AST, Engine};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -12,10 +12,6 @@ mod result;
 mod scope;
 
 use discovery::discover_custom_check_files;
-#[cfg(test)]
-use discovery::{
-    custom_check_file_type_is_regular, process_custom_check_dir_entry, readable_custom_check_entry,
-};
 #[cfg(test)]
 use engine::create_engine;
 pub use load::load_custom_checks;
@@ -30,12 +26,6 @@ pub const MAX_CUSTOM_CHECK_TOTAL_SOURCE_BYTES: u64 = 2 * 1024 * 1024;
 struct CustomCheckFile {
     path: PathBuf,
     stem: String,
-}
-
-struct ScriptInputs {
-    node: Dynamic,
-    config: Dynamic,
-    ctx: Dynamic,
 }
 
 struct CustomCheckLoadState {

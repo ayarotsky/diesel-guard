@@ -3,7 +3,7 @@ use rhai::Engine;
 /// Build a Rhai module exposing commonly needed pg_query protobuf enum constants.
 ///
 /// Scripts access these as `pg::OBJECT_TABLE`, `pg::AT_ADD_COLUMN`, etc.
-pub(super) fn create_pg_constants_module() -> rhai::Module {
+fn create_pg_constants_module() -> rhai::Module {
     use pg_query::protobuf::{AlterTableType, ConstrType, DropBehavior, ObjectType};
 
     let mut m = rhai::Module::new();
