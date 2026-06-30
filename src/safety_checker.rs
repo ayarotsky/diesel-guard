@@ -6,8 +6,10 @@ use crate::error::Result;
 use crate::parser;
 use crate::scripting;
 use camino::Utf8Path;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{self, BufRead, BufReader};
+use std::path::Path;
 
 pub struct SafetyChecker {
     registry: Registry,
@@ -22,75 +24,127 @@ impl SafetyChecker {
     ///
     /// Returns [`crate::config::ConfigError::InvalidCheckName`] if any name in `enable_checks`,
     /// `disable_checks`, or `warn_checks` is not a known check name (built-in or
-    /// custom script stem from `custom_checks_dir`).
+    /// custom script stem from `custom_checks_dir`). Returns
+    /// [`crate::config::ConfigError::InvalidCustomCheck`] if an explicitly enabled or warned
+    /// custom check is discovered but cannot be loaded.
     pub fn with_config(config: Config) -> std::result::Result<Self, crate::config::ConfigError> {
         let mut registry = Registry::with_config(&config);
+        let custom_names = Self::custom_check_names_for_config(&config);
+        let known_check_names = Self::known_check_names(&custom_names);
+
+        Self::validate_configured_check_names(&config.disable_checks, &known_check_names)?;
+        Self::validate_configured_check_names(&config.enable_checks, &known_check_names)?;
+        Self::validate_configured_check_names(&config.warn_checks, &known_check_names)?;
+
+        let mut load_errors = Vec::new();
 
         if let Some(ref dir) = config.custom_checks_dir {
             let dir = Utf8Path::new(dir);
             if dir.exists() {
                 let (checks, errors) = scripting::load_custom_checks(dir, &config);
-                for err in errors {
-                    eprintln!("Warning: {err}");
-                }
+                load_errors = errors;
                 for check in checks {
                     registry.add_check(check);
                 }
             }
         }
 
-        // Validate check names against all built-in names and custom script stems.
-        let builtin_names = Registry::builtin_check_names();
-        let custom_names: Vec<String> = config
-            .custom_checks_dir
-            .as_deref()
-            .and_then(|d| {
-                let dir = Utf8Path::new(d);
-                if dir.exists() {
-                    std::fs::read_dir(dir).ok()
-                } else {
-                    None
-                }
-            })
-            .into_iter()
-            .flatten()
-            .filter_map(|entry| {
-                let path = entry.ok()?.path();
-                if path.extension().and_then(|e| e.to_str()) == Some("rhai") {
-                    path.file_stem()
-                        .and_then(|s| s.to_str())
-                        .map(std::string::ToString::to_string)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        let known_check_names = builtin_names
-            .iter()
-            .map(|name| (*name).to_string())
-            .chain(custom_names.iter().cloned())
-            .collect::<Vec<_>>();
+        Self::validate_configured_custom_checks_loaded(
+            &config,
+            &custom_names,
+            &registry,
+            &load_errors,
+        )?;
 
-        let validate_names = |names: &[String]| {
-            for name in names {
-                if !known_check_names.iter().any(|known| known == name) {
-                    return Err(crate::config::ConfigError::InvalidCheckName {
-                        invalid_name: name.clone(),
-                    });
-                }
-            }
-            Ok(())
-        };
-
-        validate_names(&config.disable_checks)?;
-        validate_names(&config.enable_checks)?;
-        validate_names(&config.warn_checks)?;
+        for err in load_errors {
+            eprintln!("Warning: {err}");
+        }
 
         Ok(Self {
             registry,
             config,
             known_check_names,
         })
+    }
+
+    fn custom_check_names_for_config(config: &Config) -> Vec<String> {
+        config
+            .custom_checks_dir
+            .as_deref()
+            .map(Utf8Path::new)
+            .filter(|dir| dir.exists())
+            .map(scripting::custom_check_names)
+            .unwrap_or_default()
+    }
+
+    fn known_check_names(custom_names: &[String]) -> Vec<String> {
+        Registry::builtin_check_names()
+            .iter()
+            .map(|name| (*name).to_string())
+            .chain(custom_names.iter().cloned())
+            .collect()
+    }
+
+    fn validate_configured_check_names(
+        names: &[String],
+        known_check_names: &[String],
+    ) -> std::result::Result<(), crate::config::ConfigError> {
+        for name in names {
+            if !known_check_names.iter().any(|known| known == name) {
+                return Err(crate::config::ConfigError::InvalidCheckName {
+                    invalid_name: name.clone(),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_configured_custom_checks_loaded(
+        config: &Config,
+        custom_names: &[String],
+        registry: &Registry,
+        load_errors: &[scripting::ScriptError],
+    ) -> std::result::Result<(), crate::config::ConfigError> {
+        let custom_names = custom_names
+            .iter()
+            .map(String::as_str)
+            .collect::<HashSet<_>>();
+        let active_names = registry
+            .active_check_names()
+            .into_iter()
+            .collect::<HashSet<_>>();
+        let error_reasons = Self::custom_check_error_reasons(load_errors);
+
+        for name in config.enable_checks.iter().chain(config.warn_checks.iter()) {
+            if !custom_names.contains(name.as_str()) || !config.is_check_enabled(name) {
+                continue;
+            }
+            if active_names.contains(name.as_str()) {
+                continue;
+            }
+
+            return Err(crate::config::ConfigError::InvalidCustomCheck {
+                check_name: name.clone(),
+                reason: error_reasons
+                    .get(name)
+                    .cloned()
+                    .unwrap_or_else(|| "configured custom check was not loaded".to_string()),
+            });
+        }
+
+        Ok(())
+    }
+
+    fn custom_check_error_reasons(
+        load_errors: &[scripting::ScriptError],
+    ) -> HashMap<String, String> {
+        load_errors
+            .iter()
+            .filter_map(|error| {
+                let stem = Path::new(&error.file).file_stem()?.to_str()?.to_string();
+                Some((stem, error.message.clone()))
+            })
+            .collect()
     }
 
     /// Expose the registry for introspection (e.g. list-checks, explain).
@@ -459,6 +513,103 @@ mod tests {
                 .iter()
                 .any(|(_, violation)| violation.operation == "ADD COLUMN with DEFAULT"),
             "Built-in checks should still run"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_enabled_symlink_custom_check_errors() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let target = temp_dir.path().join("target.txt");
+        let link = temp_dir.path().join("linked.rhai");
+        std::fs::write(&target, "return;").unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        let result = SafetyChecker::with_config(Config {
+            custom_checks_dir: Some(temp_dir.path().to_str().unwrap().to_string()),
+            enable_checks: vec!["linked".to_string()],
+            ..Default::default()
+        });
+
+        assert_eq!(
+            result.err().unwrap().to_string(),
+            "Invalid check name: linked"
+        );
+    }
+
+    #[test]
+    fn test_enabled_oversized_custom_check_errors() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        std::fs::write(
+            temp_dir.path().join("too_large.rhai"),
+            " ".repeat(
+                usize::try_from(crate::scripting::MAX_CUSTOM_CHECK_SOURCE_BYTES).unwrap() + 1,
+            ),
+        )
+        .unwrap();
+
+        let result = SafetyChecker::with_config(Config {
+            custom_checks_dir: Some(temp_dir.path().to_str().unwrap().to_string()),
+            enable_checks: vec!["too_large".to_string()],
+            ..Default::default()
+        });
+
+        assert!(
+            result
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("Invalid custom check too_large: Custom check script is larger than")
+        );
+    }
+
+    #[test]
+    fn test_enabled_compile_error_custom_check_errors() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        std::fs::write(
+            temp_dir.path().join("broken.rhai"),
+            "this is not valid rhai {{{",
+        )
+        .unwrap();
+
+        let result = SafetyChecker::with_config(Config {
+            custom_checks_dir: Some(temp_dir.path().to_str().unwrap().to_string()),
+            enable_checks: vec!["broken".to_string()],
+            ..Default::default()
+        });
+
+        assert!(
+            result
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("Invalid custom check broken: Compilation error:")
+        );
+    }
+
+    #[test]
+    fn test_warned_oversized_custom_check_errors() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        std::fs::write(
+            temp_dir.path().join("too_large.rhai"),
+            " ".repeat(
+                usize::try_from(crate::scripting::MAX_CUSTOM_CHECK_SOURCE_BYTES).unwrap() + 1,
+            ),
+        )
+        .unwrap();
+
+        let result = SafetyChecker::with_config(Config {
+            custom_checks_dir: Some(temp_dir.path().to_str().unwrap().to_string()),
+            warn_checks: vec!["too_large".to_string()],
+            ..Default::default()
+        });
+
+        assert!(
+            result
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("Invalid custom check too_large: Custom check script is larger than")
         );
     }
 
