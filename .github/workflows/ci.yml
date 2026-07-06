@@ -145,13 +145,40 @@ jobs:
         run: |
           npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.sha }} --verbose
 
-  # Build the Docker image on every merge to main (build-only, no push) so a
-  # Dockerfile/.dockerignore break surfaces here instead of at release time.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    outputs:
+      docker: ${{ steps.filter.outputs.docker }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Filter changed paths
+        id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            docker:
+              - Dockerfile
+              - .dockerignore
+
+  # Build the Docker image (build-only, no push) so a Dockerfile/.dockerignore
+  # break surfaces in CI instead of at release time. Runs on every merge to main
+  # and on PRs that change the Dockerfile or .dockerignore.
   # Manual ad-hoc builds use the Docker workflow's workflow_dispatch trigger.
   docker-build:
     name: Docker build
-    needs: tests
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [tests, changes]
+    if: >
+      !cancelled() &&
+      needs.tests.result == 'success' &&
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+        (needs.changes.result == 'success' && needs.changes.outputs.docker == 'true')
+      )
     permissions:
       contents: read
       id-token: write
