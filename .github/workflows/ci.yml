@@ -104,7 +104,7 @@ jobs:
         uses: extractions/setup-just@v4
 
       - name: Install coverage tools
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@v2.85.5
         with:
           tool: cargo-llvm-cov,cargo-nextest
 
