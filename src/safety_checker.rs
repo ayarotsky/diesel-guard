@@ -760,7 +760,7 @@ mod tests {
     #[test]
     fn test_default_creates_checker() {
         let checker = SafetyChecker::default();
-        assert!(!checker.registry().active_check_names().is_empty());
+        assert_ne!(checker.registry().active_check_names().len(), 0);
     }
 
     #[test]

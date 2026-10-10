@@ -91,7 +91,7 @@ ALTER TABLE users DROP COLUMN email;
         assert_eq!(result.stmts.len(), 1);
         assert_eq!(result.ignore_ranges.len(), 1);
         assert_eq!(result.disabled_checks.len(), 0);
-        assert!(!result.sql.is_empty());
+        assert_ne!(result.sql, "");
     }
 
     #[test]

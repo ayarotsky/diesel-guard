@@ -34,18 +34,12 @@ jobs:
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
-          toolchain: 1.97.0
           components: clippy, rustfmt
-          rustflags: "-D warnings -C link-arg=-fuse-ld=mold"
+          build-warnings: deny
+          rustflags: "-C link-arg=-fuse-ld=mold"
 
       - name: Install mold
         uses: rui314/setup-mold@v1
-
-      - name: Cache cargo tools
-        uses: actions/cache@v6
-        with:
-          path: ~/.cargo/bin
-          key: ${{ runner.os }}-cargo-tools-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install just
         uses: extractions/setup-just@v4
@@ -91,7 +85,6 @@ jobs:
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
-          toolchain: 1.97.0
           components: llvm-tools-preview
           cache-key: coverage
           cache-on-failure: true
