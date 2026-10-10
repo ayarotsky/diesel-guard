@@ -67,7 +67,7 @@ fn test_format_json_empty_results() {
         .expect("format_results with empty input should return valid JSON");
 
     let arr = parsed.as_array().expect("should be an array");
-    assert!(arr.is_empty());
+    assert_eq!(arr.as_slice(), &[] as &[serde_json::Value]);
 }
 
 #[test]

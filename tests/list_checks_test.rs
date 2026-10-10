@@ -116,7 +116,7 @@ fn test_list_checks_json_includes_enabled_field() {
     assert!(output.status.success());
     let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     let arr = json.as_array().unwrap();
-    assert!(!arr.is_empty());
+    assert_ne!(arr.as_slice(), &[] as &[serde_json::Value]);
     for entry in arr {
         assert!(
             entry.get("enabled").is_some(),

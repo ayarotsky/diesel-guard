@@ -563,6 +563,6 @@ warn_checks = ["TruncateTableCheck", "DropTableCheck"]
     #[test]
     fn test_warn_checks_default_is_empty() {
         let config = Config::default();
-        assert!(config.warn_checks.is_empty());
+        assert_eq!(config.warn_checks, Vec::<String>::new());
     }
 }
