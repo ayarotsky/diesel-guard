@@ -654,7 +654,7 @@ fn test_multiple_custom_checks_loaded_in_sorted_order() {
 }
 
 #[test]
-fn test_custom_check_name_conflicts_with_builtin() {
+fn test_custom_check_name_conflicting_with_builtin_is_rejected() {
     let dir = tempdir().expect("Failed to create temp dir");
 
     // Script with the same name as a built-in check
@@ -668,32 +668,16 @@ fn test_custom_check_name_conflicts_with_builtin() {
     )
     .unwrap();
 
-    // Disabling "AddColumnCheck" should disable BOTH the built-in and the custom check
     let config = Config {
         custom_checks_dir: Some(dir.path().to_str().unwrap().to_string()),
         disable_checks: vec!["AddColumnCheck".to_string()],
         ..Default::default()
     };
-    let checker = SafetyChecker::with_config(config).unwrap();
+    let result = SafetyChecker::with_config(config);
 
-    let violations = checker
-        .check_sql("ALTER TABLE users ADD COLUMN admin BOOLEAN DEFAULT FALSE;")
-        .unwrap();
-
-    // Built-in AddColumnCheck should be disabled
-    assert!(
-        !violations
-            .iter()
-            .any(|(_, v)| v.operation == "ADD COLUMN with DEFAULT"),
-        "Built-in AddColumnCheck should be disabled"
-    );
-
-    // Custom AddColumnCheck.rhai should also be disabled (same name used by is_check_enabled)
-    assert!(
-        !violations
-            .iter()
-            .any(|(_, v)| v.operation == "CUSTOM AddColumnCheck"),
-        "Custom check with same name as built-in should also be disabled"
+    assert_eq!(
+        result.err().unwrap().to_string(),
+        "Invalid custom check AddColumnCheck: custom check name conflicts with a built-in check"
     );
 }
 
