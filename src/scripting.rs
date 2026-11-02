@@ -836,7 +836,7 @@ mod tests {
         assert_eq!(v.operation, "SCRIPT ERROR: test_check");
         assert_eq!(
             v.problem,
-            "Runtime error in custom check 'test_check': Division by zero: 1 / 0"
+            "Runtime error in custom check 'test_check': Division by zero: 1 / 0 (line 1, position 3)"
         );
         assert_eq!(
             v.safe_alternative,
