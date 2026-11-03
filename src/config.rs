@@ -26,6 +26,9 @@ pub enum ConfigError {
     #[error("Invalid check name: {invalid_name}")]
     InvalidCheckName { invalid_name: String },
 
+    #[error("Invalid custom check {check_name}: {reason}")]
+    InvalidCustomCheck { check_name: String, reason: String },
+
     #[error("Invalid timestamp format: {0}")]
     InvalidTimestampFormat(String),
 
@@ -45,6 +48,9 @@ impl Diagnostic for ConfigError {
             Self::IoError(_) => Some(Box::new("diesel_guard::config::io_error")),
             Self::ParseError(_) => Some(Box::new("diesel_guard::config::parse_error")),
             Self::InvalidCheckName { .. } => Some(Box::new("diesel_guard::config::invalid_check")),
+            Self::InvalidCustomCheck { .. } => {
+                Some(Box::new("diesel_guard::config::invalid_custom_check"))
+            }
             Self::InvalidTimestampFormat(_) => {
                 Some(Box::new("diesel_guard::config::invalid_timestamp"))
             }
@@ -61,6 +67,9 @@ impl Diagnostic for ConfigError {
     fn help<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
         match self {
             Self::InvalidCheckName { .. } => Some(Box::new(valid_check_names_help())),
+            Self::InvalidCustomCheck { .. } => Some(Box::new(
+                "Fix or remove the configured custom check script before enabling it.",
+            )),
             Self::InvalidTimestampFormat(_) => Some(Box::new(
                 "Expected format: YYYYMMDDHHMMSS, YYYY_MM_DD_HHMMSS, or YYYY-MM-DD-HHMMSS (e.g., 20240101000000, 2024_01_01_000000, or 2024-01-01-000000)",
             )),
@@ -398,6 +407,17 @@ postgres_version = 14
     }
 
     #[test]
+    fn test_diagnostic_code_invalid_custom_check() {
+        use miette::Diagnostic;
+        let err = ConfigError::InvalidCustomCheck {
+            check_name: "custom".to_string(),
+            reason: "bad script".to_string(),
+        };
+        let code = err.code().unwrap().to_string();
+        assert_eq!(code, "diesel_guard::config::invalid_custom_check");
+    }
+
+    #[test]
     fn test_diagnostic_code_invalid_timestamp_format() {
         use miette::Diagnostic;
         let err = ConfigError::InvalidTimestampFormat("bad-ts".to_string());
@@ -433,6 +453,20 @@ postgres_version = 14
         assert_eq!(
             help,
             "Expected format: YYYYMMDDHHMMSS, YYYY_MM_DD_HHMMSS, or YYYY-MM-DD-HHMMSS (e.g., 20240101000000, 2024_01_01_000000, or 2024-01-01-000000)"
+        );
+    }
+
+    #[test]
+    fn test_diagnostic_help_invalid_custom_check() {
+        use miette::Diagnostic;
+        let err = ConfigError::InvalidCustomCheck {
+            check_name: "custom".to_string(),
+            reason: "bad script".to_string(),
+        };
+        let help = err.help().unwrap().to_string();
+        assert_eq!(
+            help,
+            "Fix or remove the configured custom check script before enabling it."
         );
     }
 
