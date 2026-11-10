@@ -14,7 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 # SQL parsing
-pg_query = "6"
+pg_query = "18"
 
 # CLI
 clap = { version = "4.6", features = ["derive"] }
